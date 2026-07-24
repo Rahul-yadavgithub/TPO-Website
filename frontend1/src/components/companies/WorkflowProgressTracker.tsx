@@ -77,40 +77,38 @@ export function WorkflowProgressTracker({ companyId, currentPhase }: Props) {
 
   // Calculate dynamic activeIndex
   let activeIndex = 0;
-  
-  if (currentPhase !== 'interested') {
-    activeIndex = 1; // Passed Interested, now at Brochure (or custom)
-  }
+  let prevCompleted = true;
 
-  let currentIndexTracker = 1;
-
-  if (brochureProg > 0) {
-    activeIndex = Math.max(activeIndex, currentIndexTracker + brochureProg);
+  if (prevCompleted) {
+    activeIndex += brochureProg;
+    if (brochureProg < 1) prevCompleted = false;
   }
-  currentIndexTracker++;
 
   // Custom workflows progress
   customWorkflows.forEach(cw => {
-    const prog = getWorkflowProgress(cw.workflow_type);
-    if (prog > 0 && brochureProg === 1) {
-       activeIndex = Math.max(activeIndex, currentIndexTracker + prog);
+    if (prevCompleted) {
+      const prog = getWorkflowProgress(cw.workflow_type);
+      activeIndex += prog;
+      if (prog < 1) prevCompleted = false;
     }
-    currentIndexTracker++;
   });
 
-  if (jnfProg > 0 && brochureProg === 1) {
-    activeIndex = Math.max(activeIndex, currentIndexTracker + jnfProg);
+  if (prevCompleted) {
+    activeIndex += jnfProg;
+    if (jnfProg < 1) prevCompleted = false;
   }
-  currentIndexTracker++;
 
-  if (dbProg > 0 && jnfProg === 1) {
-    activeIndex = Math.max(activeIndex, currentIndexTracker + dbProg);
+  if (prevCompleted) {
+    activeIndex += dbProg;
+    if (dbProg < 1) prevCompleted = false;
   }
-  currentIndexTracker++;
 
-  if ((driveProg > 0 && dbProg === 1) || currentPhase === 'completed') {
-    if (currentPhase === 'completed' || driveProg === 1) activeIndex = PHASES.length - 1;
-    else activeIndex = Math.max(activeIndex, currentIndexTracker + driveProg);
+  if (prevCompleted) {
+    if (currentPhase === 'completed' || driveProg === 1) {
+      activeIndex += 1;
+    } else {
+      activeIndex += driveProg;
+    }
   }
 
   return (
@@ -128,8 +126,8 @@ export function WorkflowProgressTracker({ companyId, currentPhase }: Props) {
 
         {/* Steps */}
         {PHASES.map((phase, idx) => {
-          const isCompleted = idx < Math.floor(activeIndex) || (idx === Math.floor(activeIndex) && activeIndex >= PHASES.length - 1 && currentPhase === 'completed');
-          const isCurrent = idx === Math.floor(activeIndex) && !isCompleted;
+          const isCompleted = idx <= Math.floor(activeIndex);
+          const isCurrent = idx === Math.ceil(activeIndex) && activeIndex > Math.floor(activeIndex);
           const isPending = !isCompleted && !isCurrent;
 
           return (

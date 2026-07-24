@@ -71,8 +71,8 @@ export default function MyTasksPage() {
         const staffRes = await adminGet<{ success: boolean; data: StaffRequest[] }>('/staff/requests');
         if (staffRes.success) {
           const reqs = staffRes.data || [];
-          setNewStaffRequests(reqs.filter(r => r.status === 'pending'));
-          setInProgressStaffRequests(reqs.filter(r => r.status !== 'pending' && r.status !== 'completed' && r.status !== 'rejected'));
+          setNewStaffRequests(reqs.filter(r => r.status === 'pending' || r.status === 'pending_send'));
+          setInProgressStaffRequests(reqs.filter(r => r.status !== 'pending' && r.status !== 'pending_send' && r.status !== 'completed' && r.status !== 'rejected'));
         }
       }
     } catch (error) {
@@ -451,10 +451,10 @@ export default function MyTasksPage() {
                     <button 
                       onClick={() => setConfirmSendReq(req)}
                       disabled={executingTask === req.id}
-                      className="w-full py-2 bg-white border-2 border-green-500 text-green-600 hover:bg-green-50 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full py-2 bg-green-500 text-white hover:bg-green-600 text-sm font-bold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
                     >
-                      {executingTask === req.id && executingAction === 'send' ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                      Mark Sent (Waiting Response)
+                      {executingTask === req.id && executingAction === 'send' ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                      Send Email to Company
                     </button>
                     <button 
                       onClick={() => setOverviewModalReq(req)}
