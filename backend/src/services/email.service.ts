@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 export async function sendRecoveryEmail(
   toEmail: string,
   recoveryLink: string
@@ -29,28 +31,25 @@ If you did not expect this email, please ignore it.`;
       return;
     }
 
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
+    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
+      sender: { name: "NITH TPR Portal", email: senderEmail },
+      to: [{ email: toEmail }],
+      subject: subject,
+      htmlContent: htmlBody,
+      textContent: textBody
+    }, {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'api-key': apiKey
-      },
-      body: JSON.stringify({
-        sender: { name: "NITH TPR Portal", email: senderEmail },
-        to: [{ email: toEmail }],
-        subject: subject,
-        htmlContent: htmlBody,
-        textContent: textBody
-      })
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`Brevo API Error: ${errorData}`);
+    if (response.status !== 200 && response.status !== 201) {
+      throw new Error(`Brevo API Error: ${response.statusText}`);
     }
   } catch (error: any) {
-    console.error('Failed to send recovery email:', error.message);
-    throw error;
+    console.error('Failed to send recovery email:', error.response?.data || error.message);
+    throw new Error('Email service configuration error or delivery failed.');
   }
 }

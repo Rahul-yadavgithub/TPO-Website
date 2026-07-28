@@ -81,13 +81,13 @@ export function Sidebar() {
 
   useEffect(() => {
     if (isAuthPage) return;
-    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
-      .then(res => {
-        if (res.data?.data?.portalLogoUrl) {
-          setLogoUrl(res.data.data.portalLogoUrl);
-        }
-      })
-      .catch(console.error);
+    // axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
+    //   .then(res => {
+    //     if (res.data?.data?.portalLogoUrl) {
+    //       setLogoUrl(res.data.data.portalLogoUrl);
+    //     }
+    //   })
+    //   .catch(console.error);
   }, [isAuthPage]);
 
   // Close mobile sidebar on route change

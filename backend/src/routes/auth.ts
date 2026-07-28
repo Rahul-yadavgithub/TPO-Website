@@ -220,7 +220,8 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
 
-    const secret = process.env.JWT_SECRET + user.password;
+    const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
+    const secret = jwtSecret + user.password;
     const token = jwt.sign({ id: user._id, email: user.email }, secret, { expiresIn: '1h' });
 
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -254,7 +255,8 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid or expired token' });
     }
 
-    const secret = process.env.JWT_SECRET + user.password;
+    const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
+    const secret = jwtSecret + user.password;
     try {
       jwt.verify(token, secret);
     } catch (err) {

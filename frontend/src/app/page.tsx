@@ -56,6 +56,19 @@ function AnimatedCounter({ target, duration = 600 }: { target: number; duration?
   return <>{count}</>;
 }
 
+// ─── Course Helper ─────────────────────────────────────────────────────────────
+const getCourseFromEmail = (email: string) => {
+  if (!email) return 'Other';
+  const match = email.match(/^\d{2}([a-z])/i);
+  if (!match) return 'Other';
+  const char = match[1].toLowerCase();
+  if (char === 'b') return 'B.Tech';
+  if (char === 'm') return 'M.Tech';
+  if (char === 'd') return 'Dual Degree';
+  if (char === 'a') return 'B.Arch';
+  return 'Other';
+};
+
 // ─── Skeleton Card ───────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
@@ -166,17 +179,21 @@ function CompanyCard({ company }: { company: CompanyEntry }) {
 
 // ─── Slide-Over Panel ─────────────────────────────────────────────────────────
 function SlideOverPanel({
-  open, onClose, year, title, branchId
-}: { open: boolean; onClose: () => void; year: string; title: string; branchId?: string; }) {
+  open, onClose, year, title, branchId, isAdmin, branches
+}: { open: boolean; onClose: () => void; year: string; title: string; branchId?: string; isAdmin?: boolean; branches?: any[]; }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [driveFilter, setDriveFilter] = useState('All');
+  const [courseFilter, setCourseFilter] = useState('All');
+  const [branchFilter, setBranchFilter] = useState('All');
+
+  const selectedBranchId = branchFilter !== 'All' ? branchFilter : branchId;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['confirmed-companies', year, page, branchId],
+    queryKey: ['confirmed-companies', year, page, selectedBranchId],
     queryFn: async () => {
       const params: any = { year, page };
-      if (branchId) params.branchId = branchId;
+      if (selectedBranchId) params.branchId = selectedBranchId;
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/confirmed-companies`, {
         params
       });
@@ -226,6 +243,30 @@ function SlideOverPanel({
               onChange={e => setSearch(e.target.value)}
             />
           </div>
+          {isAdmin && (
+            <div className="flex gap-2">
+              <select 
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                value={courseFilter}
+                onChange={e => { setCourseFilter(e.target.value); setBranchFilter('All'); }}
+              >
+                <option value="All">All Courses</option>
+                <option value="B.Tech">B.Tech</option>
+                <option value="M.Tech">M.Tech</option>
+                <option value="Dual Degree">Dual Degree</option>
+              </select>
+              <select 
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                value={branchFilter}
+                onChange={e => setBranchFilter(e.target.value)}
+              >
+                <option value="All">All Branches</option>
+                {branches?.map(b => (
+                  <option key={b._id} value={b._id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {!year?.includes('-') && (
             <div className="flex gap-2 flex-wrap">
               {['All', 'Pool', 'In-Campus'].map(f => (
@@ -286,13 +327,15 @@ function SlideOverPanel({
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({
-  title, description, summaryData, isCurrentYear, branchId
+  title, description, summaryData, isCurrentYear, branchId, isAdmin, branches
 }: {
   title: string;
   description: string;
   summaryData: DashboardSummary | null;
   isCurrentYear: boolean;
   branchId?: string;
+  isAdmin?: boolean;
+  branches?: any[];
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
   const data = isCurrentYear ? summaryData?.confirmed_this_year : summaryData?.confirmed_last_year;
@@ -355,6 +398,8 @@ function StatCard({
         year={isCurrentYear ? (summaryData?.confirmed_this_year?.academic_year || '') : (summaryData?.confirmed_last_year?.academic_year || '')}
         title={title}
         branchId={branchId}
+        isAdmin={isAdmin}
+        branches={branches}
       />
     </>
   );
@@ -432,6 +477,18 @@ export default function Dashboard() {
     refetchInterval: 60000,
   });
 
+  const { data: branchesData } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`, { withCredentials: true });
+      return res.data.data;
+    },
+    enabled: isAdmin
+  });
+
+  const [tprCourseFilter, setTprCourseFilter] = useState('All');
+  const [tprBranchFilter, setTprBranchFilter] = useState('All');
+
   const upgradeTpr = async (id: string) => {
     try {
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/upgrade-tpr/${id}`);
@@ -484,7 +541,7 @@ export default function Dashboard() {
                       </div>
                       <button 
                         onClick={() => approveTpr(tpr._id)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
+                        className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
                       >
                         <CheckCircle className="w-4 h-4" /> Approve
                       </button>
@@ -509,7 +566,7 @@ export default function Dashboard() {
                       </div>
                       <button 
                         onClick={() => approveContact(contact._id)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
+                        className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
                       >
                         <CheckCircle className="w-4 h-4" /> Approve & Send Details
                       </button>
@@ -523,16 +580,50 @@ export default function Dashboard() {
       )}
 
       {/* TPR Directory & Access Management (Admin Only) */}
-      {isAdmin && allTprs && allTprs.length > 0 && (
+      {isAdmin && allTprs && (
         <div className="mb-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="p-5 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-indigo-600" /> TPR Directory & Access Management
             </h2>
-            <span className="text-sm font-medium text-slate-500">{allTprs.length} Registered TPRs</span>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+              <select 
+                className="w-full sm:w-auto bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={tprCourseFilter}
+                onChange={e => { setTprCourseFilter(e.target.value); setTprBranchFilter('All'); }}
+              >
+                <option value="All">All Courses</option>
+                <option value="B.Tech">B.Tech</option>
+                <option value="M.Tech">M.Tech</option>
+                <option value="Dual Degree">Dual Degree</option>
+                <option value="B.Arch">B.Arch</option>
+              </select>
+              <select 
+                className="w-full sm:w-auto bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={tprBranchFilter}
+                onChange={e => setTprBranchFilter(e.target.value)}
+              >
+                <option value="All">All Branches</option>
+                {branchesData?.map((b: any) => (
+                  <option key={b._id} value={b._id}>{b.name}</option>
+                ))}
+              </select>
+              <span className="text-sm font-medium text-slate-500 whitespace-nowrap shrink-0 ml-1">
+                {allTprs?.filter((tpr: any) => {
+                  const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
+                  const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
+                  return courseMatch && branchMatch;
+                }).length} TPRs
+              </span>
+            </div>
           </div>
           <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-            {allTprs.map((tpr: any) => (
+            {allTprs?.filter((tpr: any) => {
+              const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
+              const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
+              return courseMatch && branchMatch;
+            }).map((tpr: any) => (
               <div key={tpr._id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
                 <div>
                   <div className="flex items-center gap-3">
@@ -554,13 +645,23 @@ export default function Dashboard() {
                         upgradeTpr(tpr._id);
                       }
                     }}
-                    className="px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors shrink-0"
+                    className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors shrink-0"
                   >
                     Upgrade to Admin
                   </button>
                 )}
               </div>
             ))}
+            
+            {allTprs?.filter((tpr: any) => {
+              const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
+              const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
+              return courseMatch && branchMatch;
+            }).length === 0 && (
+              <div className="text-center py-10 text-slate-500 text-sm">
+                No TPRs found matching the selected filters.
+              </div>
+            )}
           </div>
         </div>
       )}

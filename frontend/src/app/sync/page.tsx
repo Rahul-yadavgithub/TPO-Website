@@ -220,31 +220,28 @@ export default function SyncCenterPage() {
         {/* Decorative background element */}
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 opacity-50 blur-3xl pointer-events-none"></div>
 
-        <div className="max-w-xl relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 font-semibold text-xs border border-indigo-100 mb-4">
+        <div className="relative z-10 mb-4 lg:mb-0">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 font-semibold text-xs border border-indigo-100 mb-3">
             <CloudUpload className="w-3.5 h-3.5" />
             <span>Master Synchronization</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">Sync Center</h1>
-          <p className="text-slate-500 mt-3 text-base leading-relaxed">
-            Manage and push assigned companies seamlessly to their respective Google Sheets for your placement drives. Keep your master records in perfect sync.
-          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row flex-wrap xl:flex-nowrap items-stretch sm:items-center gap-4 relative z-10 w-full lg:w-auto mt-6 lg:mt-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10 w-full lg:w-auto">
           {settings?.currentAcademicYearSheetId ? (
             <a
               href={`https://docs.google.com/spreadsheets/d/${settings.currentAcademicYearSheetId}/edit`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium py-2.5 px-5 rounded-lg transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
+              className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold py-2.5 px-5 rounded-lg transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
             >
               <ExternalLink className="w-4 h-4" />
               Open Master Sheet
             </a>
           ) : (
             <span
-              className="flex items-center justify-center gap-2 bg-slate-100 text-slate-400 border border-slate-200 font-medium py-2.5 px-5 rounded-lg cursor-not-allowed shadow-sm flex-1 sm:flex-none whitespace-nowrap"
+              className="flex items-center justify-center gap-2 bg-slate-100 text-slate-400 border border-slate-200 font-semibold py-2.5 px-5 rounded-lg cursor-not-allowed shadow-sm flex-1 sm:flex-none whitespace-nowrap"
               title="Configure Master Database Sheet ID in Settings"
             >
               <ExternalLink className="w-4 h-4" />
@@ -252,11 +249,11 @@ export default function SyncCenterPage() {
             </span>
           )}
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-none">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-none w-full sm:w-auto">
             <select
               value={selectedInboundBranch}
               onChange={(e) => setSelectedInboundBranch(e.target.value)}
-              className="flex-1 sm:flex-none text-sm border border-slate-200 bg-white rounded-lg py-2.5 px-4 text-slate-700 shadow-sm min-w-[160px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
             >
               <option value="">All Branches</option>
               {branches?.map((b: any) => (
@@ -266,9 +263,9 @@ export default function SyncCenterPage() {
             <button
               onClick={() => inboundSyncMutation.mutate(selectedInboundBranch)}
               disabled={inboundSyncMutation.isPending}
-              className="flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-slate-400 disabled:to-slate-500 text-white font-semibold py-2.5 px-6 rounded-lg transition-all shadow-md hover:shadow-lg flex-1 sm:flex-none whitespace-nowrap"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors shadow-sm whitespace-nowrap"
             >
-              {inboundSyncMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <DownloadCloud className="w-5 h-5" />}
+              {inboundSyncMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <DownloadCloud className="w-4 h-4" />}
               Pull Updates
             </button>
           </div>

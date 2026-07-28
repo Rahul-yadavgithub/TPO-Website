@@ -116,6 +116,9 @@ export const hrValidationController = {
         });
       }
 
+      company.syncStatus = 'pending';
+      await company.save();
+
       res.status(200).json({
         success: true,
         message: 'HR Contact committed successfully',

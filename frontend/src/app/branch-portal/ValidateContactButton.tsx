@@ -83,7 +83,7 @@ export default function ValidateContactButton({ companyId, branchId }: ValidateC
 
   return (
     <>
-      <div className="relative w-full mt-4 group">
+      <div className="relative w-full group">
         <button
           onClick={() => validateMutation.mutate()}
           disabled={isDisabled || validateMutation.isPending}
@@ -100,7 +100,7 @@ export default function ValidateContactButton({ companyId, branchId }: ValidateC
           ) : (
             <Search className="w-4 h-4" />
           )}
-          {validateMutation.isPending ? 'Validating...' : 'Validate Contact Info'}
+          {validateMutation.isPending ? 'Validating...' : 'Validate'}
         </button>
 
         {/* Tooltip for disabled state */}

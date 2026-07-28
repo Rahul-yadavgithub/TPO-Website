@@ -30,14 +30,14 @@ export default function RegisterPage() {
     setCurrentTime(new Date());
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
     
-    // Fetch custom logo
-    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
-      .then(res => {
-        if (res.data?.data?.portalLogoUrl) {
-          setLogoUrl(res.data.data.portalLogoUrl);
-        }
-      })
-      .catch(console.error);
+    // Fetch custom logo (disabled to force default logo)
+    // axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
+    //   .then(res => {
+    //     if (res.data?.data?.portalLogoUrl) {
+    //       setLogoUrl(res.data.data.portalLogoUrl);
+    //     }
+    //   })
+    //   .catch(console.error);
 
     return () => clearInterval(t);
   }, []);

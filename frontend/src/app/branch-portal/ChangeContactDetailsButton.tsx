@@ -62,7 +62,7 @@ export default function ChangeContactDetailsButton({ companyId, branchId, branch
 
   return (
     <>
-      <div className="relative w-full mt-2 group">
+      <div className="relative w-full group">
         <button
           onClick={() => setShowModal(true)}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all shadow-sm bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:shadow-md hover:-translate-y-0.5"
