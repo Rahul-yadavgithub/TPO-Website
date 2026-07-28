@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface ISettings extends Document {
   currentAcademicYearSheetId: string;
+  mtechCurrentAcademicYearSheetId: string;
   pastAcademicYearSheetId: string;
   serviceAccountEmail: string; // Stored just for UI display
   lastSyncDate?: Date;
@@ -14,6 +15,7 @@ export interface ISettings extends Document {
 const SettingsSchema: Schema = new Schema(
   {
     currentAcademicYearSheetId: { type: String, default: '' },
+    mtechCurrentAcademicYearSheetId: { type: String, default: '' },
     pastAcademicYearSheetId: { type: String, default: '' },
     serviceAccountEmail: { type: String, default: '' },
     lastSyncDate: { type: Date },

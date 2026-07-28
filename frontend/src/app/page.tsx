@@ -14,17 +14,14 @@ import { toast } from 'sonner';
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface DashboardSummary {
   pending_review_count: number;
+  contact_today_count: number;
   confirmed_this_year: {
     academic_year: string;
     total: number;
-    by_drive_type: Record<string, number>;
-    by_role: { role: string; count: number }[];
   };
   confirmed_last_year: {
     academic_year: string;
     total: number;
-    by_drive_type: Record<string, number>;
-    by_role: { role: string; count: number }[];
   };
 }
 
@@ -38,6 +35,7 @@ interface CompanyEntry {
   expected_year: string | null;
   assignedBranch: string | null;
   hr: { name?: string; email?: string; mobile?: string } | null;
+  isPreviousCompany?: boolean;
 }
 
 // ─── Animated Counter ────────────────────────────────────────────────────────
@@ -121,18 +119,22 @@ function CompanyCard({ company }: { company: CompanyEntry }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-bold text-slate-900 text-base leading-tight truncate">{company.company_name}</h3>
-            {company.drive_type && (
+            {company.drive_type && !company.isPreviousCompany && (
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${driveColor}`}>{driveLabel}</span>
             )}
           </div>
-          <p className="text-sm text-slate-600 mt-0.5">{company.role || 'General Application'}</p>
-          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-            {dateStr && <span className="text-xs text-slate-500">{dateStr}</span>}
-            {company.package && <span className="text-xs font-bold text-emerald-600">{company.package}</span>}
-            {company.assignedBranch && (
-              <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{company.assignedBranch}</span>
-            )}
-          </div>
+          {!company.isPreviousCompany && (
+            <p className="text-sm text-slate-600 mt-0.5">{company.role || 'General Application'}</p>
+          )}
+          {!company.isPreviousCompany && (
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+              {dateStr && <span className="text-xs text-slate-500">{dateStr}</span>}
+              {company.package && <span className="text-xs font-bold text-emerald-600">{company.package}</span>}
+              {company.assignedBranch && (
+                <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">{company.assignedBranch}</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="border-t border-slate-100 pt-3">
@@ -164,17 +166,19 @@ function CompanyCard({ company }: { company: CompanyEntry }) {
 
 // ─── Slide-Over Panel ─────────────────────────────────────────────────────────
 function SlideOverPanel({
-  open, onClose, year, title
-}: { open: boolean; onClose: () => void; year: string; title: string }) {
+  open, onClose, year, title, branchId
+}: { open: boolean; onClose: () => void; year: string; title: string; branchId?: string; }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [driveFilter, setDriveFilter] = useState('All');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['confirmed-companies', year, page],
+    queryKey: ['confirmed-companies', year, page, branchId],
     queryFn: async () => {
+      const params: any = { year, page };
+      if (branchId) params.branchId = branchId;
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/confirmed-companies`, {
-        params: { year, page }
+        params
       });
       return res.data;
     },
@@ -222,14 +226,16 @@ function SlideOverPanel({
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {['All', 'Pool', 'In-Campus'].map(f => (
-              <button key={f} onClick={() => setDriveFilter(f)}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${driveFilter === f ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                {f}
-              </button>
-            ))}
-          </div>
+          {!year?.includes('-') && (
+            <div className="flex gap-2 flex-wrap">
+              {['All', 'Pool', 'In-Campus'].map(f => (
+                <button key={f} onClick={() => setDriveFilter(f)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${driveFilter === f ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* List */}
@@ -280,21 +286,16 @@ function SlideOverPanel({
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
 function StatCard({
-  title, description, data, isCurrentYear
+  title, description, summaryData, isCurrentYear, branchId
 }: {
   title: string;
   description: string;
-  data: DashboardSummary['confirmed_this_year'] | null;
+  summaryData: DashboardSummary | null;
   isCurrentYear: boolean;
+  branchId?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<'drive' | 'role'>('drive');
   const [panelOpen, setPanelOpen] = useState(false);
-
-  const poolCount = data?.by_drive_type?.['Pool'] || 0;
-  const campusCount = data?.by_drive_type?.['In-Campus'] || 0;
-  const maxDrive = Math.max(poolCount, campusCount, 1);
-  const topRoles = (data?.by_role || []).slice(0, 6);
-  const maxRole = topRoles[0]?.count || 1;
+  const data = isCurrentYear ? summaryData?.confirmed_this_year : summaryData?.confirmed_last_year;
 
   return (
     <>
@@ -311,62 +312,32 @@ function StatCard({
             )}
           </div>
 
-          {/* Hero Number */}
-          <div className="mt-4 mb-3">
-            <span className="text-[56px] font-extrabold text-slate-900 leading-none">
-              {data ? <AnimatedCounter target={data.total} /> : '0'}
-            </span>
+          {/* Stats Area */}
+          <div className="mt-4 mb-2">
+            {isCurrentYear ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-sm font-medium text-slate-500 mb-1">Contact Today</p>
+                  <span className="text-3xl font-extrabold text-blue-600 leading-none">
+                    {summaryData ? <AnimatedCounter target={summaryData.contact_today_count} /> : '0'}
+                  </span>
+                </div>
+                <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100">
+                  <p className="text-sm font-medium text-emerald-700 mb-1">Confirmed</p>
+                  <span className="text-3xl font-extrabold text-emerald-600 leading-none">
+                    {data ? <AnimatedCounter target={data.total} /> : '0'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 text-center">
+                <p className="text-sm font-medium text-slate-500 mb-2">Total Companies</p>
+                <span className="text-5xl font-extrabold text-slate-800 leading-none">
+                  {data ? <AnimatedCounter target={data.total} /> : '0'}
+                </span>
+              </div>
+            )}
           </div>
-
-          {/* Drive Pills */}
-          <div className="flex gap-2 flex-wrap">
-            <span className="flex items-center gap-1.5 text-sm font-semibold bg-blue-50 text-blue-700 px-3 py-1 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />Pool: {poolCount}
-            </span>
-            <span className="flex items-center gap-1.5 text-sm font-semibold bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />In-Campus: {campusCount}
-            </span>
-          </div>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="px-6 pb-2">
-          <div className="inline-flex bg-slate-100 rounded-lg p-1">
-            {(['drive', 'role'] as const).map(t => (
-              <button key={t} onClick={() => setActiveTab(t)}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${activeTab === t ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                {t === 'drive' ? 'By Drive Type' : 'By Role'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Chart Area */}
-        <div className="px-6 py-4 flex-1 min-h-[140px]">
-          {!data || data.total === 0 ? (
-            <div className="flex flex-col items-center justify-center h-32 text-slate-400">
-              <Users className="w-8 h-8 mb-2 text-slate-200" />
-              <p className="text-sm font-medium">No confirmed companies yet for {data?.academic_year}</p>
-              <p className="text-xs mt-0.5 text-slate-400">Companies appear once coordinators confirm them</p>
-            </div>
-          ) : activeTab === 'drive' ? (
-            <div className="space-y-3">
-              <BarRow label="Pool" value={poolCount} max={maxDrive} color="bg-blue-500" />
-              <BarRow label="In-Campus" value={campusCount} max={maxDrive} color="bg-emerald-500" />
-              {Object.entries(data.by_drive_type).filter(([k]) => k !== 'Pool' && k !== 'In-Campus').map(([k, v]) => (
-                <BarRow key={k} label={k} value={v} max={maxDrive} color="bg-slate-400" />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {topRoles.map(({ role, count }) => (
-                <BarRow key={role} label={role} value={count} max={maxRole} color="bg-indigo-400" />
-              ))}
-              {(data.by_role?.length || 0) > 6 && (
-                <p className="text-xs text-slate-400 pl-1">+{data.by_role.length - 6} more roles</p>
-              )}
-            </div>
-          )}
         </div>
 
         {/* View List Button */}
@@ -381,8 +352,9 @@ function StatCard({
       <SlideOverPanel
         open={panelOpen}
         onClose={() => setPanelOpen(false)}
-        year={data?.academic_year || ''}
+        year={isCurrentYear ? (summaryData?.confirmed_this_year?.academic_year || '') : (summaryData?.confirmed_last_year?.academic_year || '')}
         title={title}
+        branchId={branchId}
       />
     </>
   );
@@ -392,16 +364,6 @@ function StatCard({
 export default function Dashboard() {
   const [lastUpdated] = useState(new Date());
 
-  const { data: summary, isLoading, error, refetch, isFetching } = useQuery<DashboardSummary>({
-    queryKey: ['dashboard-summary'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/summary`);
-      return res.data;
-    },
-    staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
-  });
-
   const { data: userProfile } = useQuery({
     queryKey: ['auth-me'],
     queryFn: async () => {
@@ -409,6 +371,24 @@ export default function Dashboard() {
       return res.data.data;
     }
   });
+
+  const { data: summary, isLoading, error, refetch, isFetching } = useQuery<DashboardSummary>({
+    queryKey: ['dashboard-summary', userProfile?.branchId],
+    queryFn: async () => {
+      let branchId = '';
+      if (userProfile?.branchId) {
+        branchId = typeof userProfile.branchId === 'object' ? userProfile.branchId._id : userProfile.branchId;
+      }
+      const params = branchId ? { branchId } : {};
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/summary`, { params });
+      return res.data;
+    },
+    enabled: !!userProfile,
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const branchId = userProfile?.branchId ? (typeof userProfile.branchId === 'object' ? userProfile.branchId._id : userProfile.branchId) : '';
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
 
@@ -632,14 +612,16 @@ export default function Dashboard() {
             <StatCard
               title="Target Companies This Year"
               description="Companies expected to visit for placement drives this academic year."
-              data={summary?.confirmed_this_year || null}
+              summaryData={summary || null}
               isCurrentYear={true}
+              branchId={branchId}
             />
             <StatCard
               title="Confirmed Placements Last Year"
               description="Companies confirmed to have hired students in the previous academic year."
-              data={summary?.confirmed_last_year || null}
+              summaryData={summary || null}
               isCurrentYear={false}
+              branchId={branchId}
             />
           </>
         )}

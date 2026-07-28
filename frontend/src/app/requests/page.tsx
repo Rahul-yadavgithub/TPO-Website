@@ -27,6 +27,12 @@ export default function RequestsPage() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
+  // Replace modal state
+  const [replaceModalOpen, setReplaceModalOpen] = useState(false);
+  const [targetNewUserId, setTargetNewUserId] = useState<string | null>(null);
+  const [targetBranchId, setTargetBranchId] = useState<string | null>(null);
+  const [selectedOldUserId, setSelectedOldUserId] = useState('');
+
   const { data: requests, isLoading } = useQuery({
     queryKey: ['admin-requests'],
     queryFn: async () => {
@@ -46,6 +52,28 @@ export default function RequestsPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-requests'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to approve TPR')
+  });
+
+  const { data: activeTprs, isLoading: loadingActiveTprs } = useQuery({
+    queryKey: ['active-tprs', targetBranchId],
+    queryFn: async () => {
+      if (!targetBranchId) return [];
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/active-tprs/${targetBranchId}`, { withCredentials: true });
+      return res.data.data;
+    },
+    enabled: !!targetBranchId && replaceModalOpen
+  });
+
+  const replaceTprMutation = useMutation({
+    mutationFn: async ({ newUserId, oldUserId }: { newUserId: string, oldUserId: string }) => {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/replace-tpr/${newUserId}`, { replaceUserId: oldUserId }, { withCredentials: true });
+    },
+    onSuccess: () => {
+      toast.success('TPR Replaced and Work Handed Over successfully!');
+      queryClient.invalidateQueries({ queryKey: ['admin-requests'] });
+      closeReplaceModal();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to replace TPR')
   });
 
   const rejectTprMutation = useMutation({
@@ -95,6 +123,20 @@ export default function RequestsPage() {
     setRejectType(null);
     setRejectId(null);
     setRejectReason('');
+  };
+
+  const openReplaceModal = (userId: string, branchId: string) => {
+    setTargetNewUserId(userId);
+    setTargetBranchId(branchId);
+    setSelectedOldUserId('');
+    setReplaceModalOpen(true);
+  };
+
+  const closeReplaceModal = () => {
+    setReplaceModalOpen(false);
+    setTargetNewUserId(null);
+    setTargetBranchId(null);
+    setSelectedOldUserId('');
   };
 
   const handleRejectSubmit = (e: React.FormEvent) => {
@@ -182,17 +224,23 @@ export default function RequestsPage() {
                   <div className="flex w-full md:w-auto gap-3 shrink-0">
                     <button
                       onClick={() => openRejectModal('tpr', tpr._id)}
-                      className="flex-1 md:flex-none px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
+                      className="px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
                     >
                       Reject
                     </button>
                     <button
+                      onClick={() => openReplaceModal(tpr._id, tpr.branchId?._id)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      Replace TPR
+                    </button>
+                    <button
                       onClick={() => approveTprMutation.mutate(tpr._id)}
                       disabled={approveTprMutation.isPending}
-                      className="flex-1 md:flex-none px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       {approveTprMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                      Approve
+                      Approve as New
                     </button>
                   </div>
                 </div>
@@ -295,6 +343,71 @@ export default function RequestsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Replace TPR Modal */}
+      {replaceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden relative animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                Handover & Replace TPR
+              </h3>
+              <button onClick={closeReplaceModal} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-slate-600 mb-4">
+                Select an existing TPR to replace. All of their currently assigned companies and contact requests will be automatically transferred to this new TPR. The old TPR's account will be deactivated.
+              </p>
+              
+              {loadingActiveTprs ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                </div>
+              ) : activeTprs && activeTprs.length > 0 ? (
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">Select Old TPR to Replace:</label>
+                  <select
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                    value={selectedOldUserId}
+                    onChange={(e) => setSelectedOldUserId(e.target.value)}
+                  >
+                    <option value="">-- Select TPR --</option>
+                    {activeTprs.map((t: any) => (
+                      <option key={t._id} value={t._id}>{t.name} ({t.rollNumber}) - {t.email}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-4 bg-amber-50 text-amber-700 rounded-lg text-sm font-medium border border-amber-100">
+                  No active TPRs found in this branch to replace. You can only approve as a new TPR.
+                </div>
+              )}
+            </div>
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                type="button"
+                onClick={closeReplaceModal}
+                className="flex-1 py-2.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => targetNewUserId && selectedOldUserId && replaceTprMutation.mutate({ newUserId: targetNewUserId, oldUserId: selectedOldUserId })}
+                disabled={!selectedOldUserId || replaceTprMutation.isPending}
+                className="flex-1 py-2.5 font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {replaceTprMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirm Handover
+              </button>
+            </div>
           </div>
         </div>
       )}

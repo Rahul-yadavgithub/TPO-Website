@@ -198,7 +198,11 @@ export class GoogleSheetProvider {
     };
 
     try {
-      await syncBatch(companies, settings.currentAcademicYearSheetId);
+      let sheetId = settings.currentAcademicYearSheetId;
+      if (branchName.startsWith('M.Tech')) {
+        sheetId = settings.mtechCurrentAcademicYearSheetId;
+      }
+      await syncBatch(companies, sheetId);
 
       return { success: true };
     } catch (error) {
@@ -217,51 +221,110 @@ export class GoogleSheetProvider {
 
     const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
     const sheets = spreadsheet.data.sheets || [];
-    if (sheets.length === 0 || !sheets[0].properties?.title) {
-      throw new Error('No worksheets found in the target spreadsheet');
-    }
-    const sheetTab = sheets[0].properties.title;
+    const sheetTitles = sheets.map(s => s.properties?.title).filter(Boolean) as string[];
 
-    // Fetch existing data to find duplicates/updates
-    const existingRows = await this.fetchInboundData(sheetId, sheetTab);
-    const companyRowMap = new Map<string, number>();
+    // Group companies by section
+    const bySection: Record<string, any[]> = {};
+    for (const c of companies) {
+      const section = c.section || 'Uncategorized';
+      if (!bySection[section]) bySection[section] = [];
+      bySection[section].push(c);
+    }
+
+    const updates: { range: string, values: string[][] }[] = [];
     
-    for (let i = 0; i < existingRows.length; i++) {
-      const row = existingRows[i];
-      if (i === 0 && row[0]?.toLowerCase().includes('company')) continue;
-      
-      const hiddenId = row[6]?.trim(); // ID is at index 6 (Col G)
-      if (hiddenId) {
-        companyRowMap.set(hiddenId, i);
+    // Ensure all required sections exist as tabs
+    const addSheetRequests: any[] = [];
+    for (const section of Object.keys(bySection)) {
+      if (!sheetTitles.includes(section)) {
+        addSheetRequests.push({
+          addSheet: { properties: { title: section } }
+        });
+        sheetTitles.push(section); // Mark as created
       }
     }
 
-    const valuesToAppend: string[][] = [];
-    const updates: { range: string, values: string[][] }[] = [];
-
-    for (const company of companies) {
-      const rowData = [
-        company.companyName || '',
-        company.hrName || '',
-        company.hrPhone || '',
-        company.hrEmail || '',
-        company.academicYear || '',
-        company.notes || '',
-        company._id.toString()
-      ];
-
-      const hiddenIdStr = company._id.toString();
-      const existingRowIndex = companyRowMap.get(hiddenIdStr);
-
-      if (existingRowIndex !== undefined) {
-        // Update existing row
-        updates.push({
-          range: `${sheetTab}!A${existingRowIndex + 1}:G${existingRowIndex + 1}`,
-          values: [rowData]
+    if (addSheetRequests.length > 0) {
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: { requests: addSheetRequests }
+      });
+      
+      // Initialize headers for newly created sheets
+      for (const req of addSheetRequests) {
+        const title = req.addSheet.properties.title;
+        await this.sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: `${title}!A1:H1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON']] },
         });
-      } else {
-        // Append new row
-        valuesToAppend.push(rowData);
+      }
+    }
+
+    for (const section of Object.keys(bySection)) {
+      const sectionCompanies = bySection[section];
+      const existingRows = await this.fetchInboundData(sheetId, section);
+      const companyRowMap = new Map<string, number>();
+      
+      for (let i = 0; i < existingRows.length; i++) {
+        const row = existingRows[i];
+        if (i === 0 && row[0]?.toLowerCase().includes('company')) continue;
+        
+        const companyName = row[0]?.trim();
+        const hiddenId = row[6]?.trim(); // ID is at index 6 (Col G)
+        
+        if (hiddenId) {
+          companyRowMap.set(hiddenId, i);
+        }
+        if (companyName) {
+          const normalized = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          companyRowMap.set(normalized, i);
+        }
+      }
+
+      const valuesToAppend: string[][] = [];
+
+      for (const company of sectionCompanies) {
+        const extraDataStr = company.extraData && Object.keys(company.extraData).length > 0 
+          ? JSON.stringify(company.extraData) 
+          : '';
+
+        const rowData = [
+          company.companyName || '',
+          company.hrName || '',
+          company.hrPhone || '',
+          company.hrEmail || '',
+          company.academicYear || '',
+          company.notes || '',
+          company._id.toString(),
+          extraDataStr
+        ];
+
+        const hiddenIdStr = company._id.toString();
+        const normalizedName = company.companyName?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+        
+        const existingRowIndex = companyRowMap.has(hiddenIdStr) 
+          ? companyRowMap.get(hiddenIdStr) 
+          : companyRowMap.get(normalizedName);
+
+        if (existingRowIndex !== undefined) {
+          updates.push({
+            range: `${section}!A${existingRowIndex + 1}:H${existingRowIndex + 1}`,
+            values: [rowData]
+          });
+        } else {
+          valuesToAppend.push(rowData);
+        }
+      }
+
+      if (valuesToAppend.length > 0) {
+        await this.sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: `${section}!A:H`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: valuesToAppend },
+        });
       }
     }
 
@@ -276,16 +339,6 @@ export class GoogleSheetProvider {
       });
     }
 
-    // Execute appends
-    if (valuesToAppend.length > 0) {
-      await this.sheets.spreadsheets.values.append({
-        spreadsheetId: sheetId,
-        range: `${sheetTab}!A:G`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: valuesToAppend },
-      });
-    }
-
     return { success: true };
   }
 
@@ -296,58 +349,66 @@ export class GoogleSheetProvider {
 
     const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
     const sheets = spreadsheet.data.sheets || [];
-    if (sheets.length === 0 || !sheets[0].properties?.title) {
+    const sheetTitles = sheets.map(s => s.properties?.title).filter(Boolean) as string[];
+
+    if (sheetTitles.length === 0) {
       throw new Error('No worksheets found in the target spreadsheet');
     }
-    const sheetTab = sheets[0].properties.title;
 
-    // Fetch existing data from sheet
-    const existingRows = await this.fetchInboundData(sheetId, sheetTab);
-    
-    // Dynamically import PreviousCompany model to avoid circular deps or keep it clean
     const PreviousCompany = (await import('../../models/PreviousCompany')).default;
-
     let syncedCount = 0;
 
-    // Process Sheet -> MongoDB (One-way sync based on normalized name)
-    for (let i = 0; i < existingRows.length; i++) {
-      const row = existingRows[i];
-      if (i === 0 && row[0]?.toLowerCase().includes('company')) continue; // skip header
-      
-      const companyName = row[0]?.trim();
-      if (!companyName) continue; // Skip empty rows
+    for (const sectionTab of sheetTitles) {
+      const existingRows = await this.fetchInboundData(sheetId, sectionTab);
 
-      const hrName = row[1]?.trim() || '';
-      const hrPhone = row[2]?.trim() || '';
-      const hrEmail = row[3]?.trim() || '';
-      const academicYear = row[4]?.trim() || 'Unknown';
-      const notes = row[5]?.trim() || '';
+      // Process Sheet -> MongoDB (One-way sync based on normalized name)
+      for (let i = 0; i < existingRows.length; i++) {
+        const row = existingRows[i];
+        if (i === 0 && row[0]?.toLowerCase().includes('company')) continue; // skip header
+        
+        const companyName = row[0]?.trim();
+        if (!companyName) continue; // Skip empty rows
 
-      const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const hrName = row[1]?.trim() || '';
+        const hrPhone = row[2]?.trim() || '';
+        const hrEmail = row[3]?.trim() || '';
+        const academicYear = row[4]?.trim() || 'Unknown';
+        const notes = row[5]?.trim() || '';
+        const extraDataStr = row[7]?.trim() || '{}';
+        
+        let extraData = {};
+        try {
+          extraData = JSON.parse(extraDataStr);
+        } catch(e) {}
 
-      try {
-        let existing = await PreviousCompany.findOne({ normalizedName });
-        if (existing) {
-          existing.companyName = companyName;
-          existing.hrName = hrName;
-          existing.hrPhone = hrPhone;
-          existing.hrEmail = hrEmail;
-          if (row[4]?.trim()) existing.academicYear = academicYear;
-          existing.notes = notes;
-          existing.syncStatus = 'synced';
-          existing.lastSynced = new Date();
-          await existing.save();
-          syncedCount++;
-        } else {
-          const newCompany = new PreviousCompany({
-            companyName, normalizedName, hrName, hrPhone, hrEmail, academicYear, notes,
-            syncStatus: 'synced', lastSynced: new Date()
-          });
-          await newCompany.save();
-          syncedCount++;
+        const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        try {
+          let existing = await PreviousCompany.findOne({ normalizedName });
+          if (existing) {
+            existing.companyName = companyName;
+            existing.hrName = hrName;
+            existing.hrPhone = hrPhone;
+            existing.hrEmail = hrEmail;
+            if (row[4]?.trim()) existing.academicYear = academicYear;
+            existing.notes = notes;
+            existing.extraData = { ...existing.extraData, ...extraData };
+            existing.syncStatus = 'synced';
+            existing.lastSynced = new Date();
+            await existing.save();
+            syncedCount++;
+          } else {
+            const newCompany = new PreviousCompany({
+              companyName, normalizedName, hrName, hrPhone, hrEmail, academicYear, notes,
+              section: sectionTab, extraData,
+              syncStatus: 'synced', lastSynced: new Date()
+            });
+            await newCompany.save();
+            syncedCount++;
+          }
+        } catch (e) {
+          console.error('Error syncing previous company row:', e);
         }
-      } catch (e) {
-        console.error('Error syncing previous company row:', e);
       }
     }
 

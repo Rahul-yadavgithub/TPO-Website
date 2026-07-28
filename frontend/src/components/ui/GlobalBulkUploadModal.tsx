@@ -19,9 +19,12 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
     validCount: number;
     duplicateCount: number;
     validCompanies: any[];
+    duplicateCompanies?: any[];
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedProgram, setSelectedProgram] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState('');
+  const [section, setSection] = useState('Uncategorized');
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
@@ -87,6 +90,16 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
           companyData.linkedinProfile = linkedinKey ? String(row[linkedinKey]).trim() : '';
         } else {
           companyData.academicYear = yearKey ? String(row[yearKey]).trim() : new Date().getFullYear().toString();
+          companyData.section = section;
+          
+          const extraData: Record<string, any> = {};
+          const standardKeys = [companyKey, hrNameKey, phoneKey, emailKey, yearKey].filter(Boolean);
+          keys.forEach(k => {
+            if (!standardKeys.includes(k)) {
+              extraData[k] = row[k];
+            }
+          });
+          companyData.extraData = extraData;
         }
 
         return companyData;
@@ -144,21 +157,62 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
           {!validationResult ? (
             <div className="space-y-4">
               {mode === 'current' && (
+                <div className="flex gap-4">
+                  <div className="w-1/2">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                      Program *
+                    </label>
+                    <select
+                      required
+                      value={selectedProgram}
+                      onChange={(e) => {
+                        setSelectedProgram(e.target.value);
+                        setSelectedBranchId(''); // Reset branch on program change
+                      }}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    >
+                      <option value="">-- Select Program --</option>
+                      <option value="B.Tech">B.Tech</option>
+                      <option value="M.Tech">M.Tech</option>
+                    </select>
+                  </div>
+                  <div className="w-1/2">
+                    <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                      Branch *
+                    </label>
+                    <select
+                      required
+                      value={selectedBranchId}
+                      onChange={(e) => setSelectedBranchId(e.target.value)}
+                      disabled={!selectedProgram}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                    >
+                      <option value="">-- Select Branch --</option>
+                      {branches
+                        ?.filter((b: any) => selectedProgram === 'M.Tech' ? b.name.startsWith('M.Tech') : !b.name.startsWith('M.Tech'))
+                        .map((b: any) => (
+                          <option key={b._id} value={b._id}>{b.name}</option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+              
+              {mode === 'previous' && (
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
-                    Branch *
+                    <FileSpreadsheet className="w-4 h-4 text-slate-400" /> Section Name
                   </label>
-                  <select
-                    required
-                    value={selectedBranchId}
-                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                  <input
+                    type="text"
+                    placeholder="e.g. IIT Patna Data"
+                    value={section}
+                    onChange={(e) => setSection(e.target.value)}
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  >
-                    <option value="">-- Select Branch --</option>
-                    {branches?.map((b: any) => (
-                      <option key={b._id} value={b._id}>{b.name}</option>
-                    ))}
-                  </select>
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Unmapped columns from your sheet will automatically be saved.
+                  </p>
                 </div>
               )}
               
@@ -219,6 +273,50 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
                   <p className="text-sm font-medium">No new companies to import. All companies in the file already exist or the file was empty.</p>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white border border-emerald-100 rounded-xl flex flex-col h-64 overflow-hidden shadow-sm">
+                  <div className="bg-emerald-50 border-b border-emerald-100 p-3 shrink-0">
+                    <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> Valid Companies
+                    </h4>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {validationResult.validCompanies.length === 0 ? (
+                      <p className="text-xs text-slate-400 p-2 text-center">None</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {validationResult.validCompanies.map((c: any, i: number) => (
+                          <li key={i} className="text-xs text-slate-700 p-2 hover:bg-slate-50 rounded">
+                            {c.companyName} <span className="text-slate-400">({c.academicYear || mode})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white border border-amber-100 rounded-xl flex flex-col h-64 overflow-hidden shadow-sm">
+                  <div className="bg-amber-50 border-b border-amber-100 p-3 shrink-0">
+                    <h4 className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" /> Duplicate Companies
+                    </h4>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {validationResult.duplicateCompanies?.length === 0 ? (
+                      <p className="text-xs text-slate-400 p-2 text-center">None</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {validationResult.duplicateCompanies?.map((c: any, i: number) => (
+                          <li key={i} className="text-xs text-slate-700 p-2 hover:bg-slate-50 rounded">
+                            {c.companyName} <span className="text-slate-400">({c.academicYear || mode})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               <div className="flex gap-4 pt-4">
                 <button 

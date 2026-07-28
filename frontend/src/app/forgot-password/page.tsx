@@ -49,18 +49,18 @@ export default function ForgotPasswordPage() {
 
       {/* Main Header */}
       <div className="w-full bg-white border-b-[3px] border-[#1a3a6e] shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex-1 text-right hidden sm:block pr-4">
-            <div className="text-[1.1rem] font-bold text-[#1a1a1a] leading-tight">राष्ट्रीय प्रौद्योगिकी संस्थान हमीरपुर</div>
-            <div className="text-[0.72rem] text-[#555] mt-0.5">हमीरपुर, हिमाचल प्रदेश (भारत) – 177 005</div>
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex flex-col md:flex-row lg:grid lg:grid-cols-[1fr_auto_1fr] items-center justify-center lg:justify-between gap-4 md:gap-6 lg:gap-8">
+          <div className="hidden lg:block text-right">
+            <div className="text-[1.35rem] lg:text-[1.45rem] font-bold text-[#1a1a1a] leading-tight tracking-wide">राष्ट्रीय प्रौद्योगिकी संस्थान हमीरपुर</div>
+            <div className="text-[0.9rem] text-[#555] mt-1.5 font-medium">हमीरपुर, हिमाचल प्रदेश (भारत) – 177 005</div>
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex justify-center">
             <img src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp"
-              alt="NITH Logo" className="w-20 h-20 object-contain" />
+              alt="NITH Logo" className="w-24 h-24 md:w-28 md:h-28 object-contain drop-shadow-sm" />
           </div>
-          <div className="flex-1 pl-4">
-            <div className="text-[1.1rem] font-bold text-[#1a3a6e] leading-tight">National Institute of Technology Hamirpur</div>
-            <div className="text-[0.72rem] text-[#555] mt-0.5">Hamirpur, Himachal Pradesh (India) – 177 005</div>
+          <div className="text-center md:text-left">
+            <div className="text-xl md:text-2xl lg:text-[1.45rem] font-black text-[#1a3a6e] leading-tight tracking-wide whitespace-normal lg:whitespace-nowrap">National Institute of Technology Hamirpur</div>
+            <div className="text-sm md:text-[0.9rem] text-[#555] mt-1.5 font-medium">Hamirpur, Himachal Pradesh (India) – 177 005</div>
           </div>
         </div>
         <div className="bg-[#1a3a6e] text-center py-1.5">
@@ -87,11 +87,10 @@ export default function ForgotPasswordPage() {
       )}
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center py-10 px-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat animate-bg-zoom z-0" style={{ backgroundImage: "url('/nith.jpg')" }} />
-        <div className="absolute inset-0 bg-[#0d1f3c]/65 z-0" />
+      <div className="flex-1 flex items-start sm:items-center justify-center py-6 sm:py-10 px-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat animate-float-bg z-0" style={{ backgroundImage: "url('https://res.cloudinary.com/dzbliymin/image/upload/v1785260141/nith27_zlbbxm.jpg')" }} />
 
-        <div className="relative z-10 w-full max-w-[440px]">
+        <div className="relative z-10 w-full max-w-[440px] mt-4 sm:mt-0 sm:my-8">
           <div className="bg-white/95 backdrop-blur-xl shadow-2xl border border-white/40 overflow-hidden">
 
             {/* Card header */}

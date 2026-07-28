@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2 } from 'lucide-react';
+import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -18,9 +18,11 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
     hrEmail: '',
     linkedinProfile: '',
     website: '',
-    academicYear: new Date().getFullYear().toString()
+    academicYear: new Date().getFullYear().toString(),
+    section: 'Uncategorized'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState('');
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
@@ -78,21 +80,44 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
         <div className="overflow-y-auto p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'current' && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-slate-400" /> Branch *
-                </label>
-                <select
-                  required
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                >
-                  <option value="">-- Select Branch --</option>
-                  {branches?.map((b: any) => (
-                    <option key={b._id} value={b._id}>{b.name}</option>
-                  ))}
-                </select>
+              <div className="flex gap-4">
+                <div className="w-1/2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-slate-400" /> Program *
+                  </label>
+                  <select
+                    required
+                    value={selectedProgram}
+                    onChange={(e) => {
+                      setSelectedProgram(e.target.value);
+                      setSelectedBranchId(''); // Reset branch on program change
+                    }}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  >
+                    <option value="">-- Select Program --</option>
+                    <option value="B.Tech">B.Tech</option>
+                    <option value="M.Tech">M.Tech</option>
+                  </select>
+                </div>
+                <div className="w-1/2">
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-slate-400" /> Branch *
+                  </label>
+                  <select
+                    required
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    disabled={!selectedProgram}
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
+                  >
+                    <option value="">-- Select Branch --</option>
+                    {branches
+                      ?.filter((b: any) => selectedProgram === 'M.Tech' ? b.name.startsWith('M.Tech') : !b.name.startsWith('M.Tech'))
+                      .map((b: any) => (
+                        <option key={b._id} value={b._id}>{b.name}</option>
+                      ))}
+                  </select>
+                </div>
               </div>
             )}
             
@@ -122,6 +147,21 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   value={formData.academicYear}
                   onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
+                />
+              </div>
+            )}
+
+            {mode === 'previous' && (
+              <div className="mt-4">
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-slate-400" /> Section Name
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. IIT Patna Data"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  value={formData.section}
+                  onChange={(e) => setFormData({ ...formData, section: e.target.value })}
                 />
               </div>
             )}

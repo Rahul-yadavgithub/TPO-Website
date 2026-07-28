@@ -3,24 +3,27 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 import ApiKeyConfig from './ApiKeyConfig';
 import ValidateContactButton from './ValidateContactButton';
 import { BulkUploadModal } from '@/components/ui/BulkUploadModal';
-import { PreviousCompanyRequestModal } from '@/components/ui/PreviousCompanyRequestModal';
+import { PreviousContactsView } from '@/components/ui/PreviousContactsView';
 
 export default function BranchPortalPage() {
   const queryClient = useQueryClient();
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [activeView, setActiveView] = useState<'dashboard' | 'contact' | 'single_contact' | 'confirmed' | 'not_confirmed'>('dashboard');
-  const [previousView, setPreviousView] = useState<'dashboard' | 'contact' | 'confirmed' | 'not_confirmed'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'contact' | 'single_contact' | 'confirmed' | 'not_confirmed' | 'previous_requests'>('dashboard');
+  const [previousView, setPreviousView] = useState<'dashboard' | 'contact' | 'confirmed' | 'not_confirmed' | 'previous_requests'>('dashboard');
   const [dashboardTab, setDashboardTab] = useState<'companies' | 'api'>('companies');
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [lastVisitedCompanyId, setLastVisitedCompanyId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<'not_contacted' | 'call_again' | 'pending' | null>(null);
+  
+  // Fast Client-Side List Search
+  const [listSearchQuery, setListSearchQuery] = useState('');
   
   // Manual Add Form State
   const [manualForm, setManualForm] = useState({ companyName: '', hrName: '', hrPhone: '', hrEmail: '', linkedinProfile: '' });
@@ -49,7 +52,7 @@ export default function BranchPortalPage() {
   // Auto-select branch if standard TPR
   useEffect(() => {
     if (userProfile && !isAdmin && userProfile.branchId && !selectedBranchId) {
-      setSelectedBranchId(userProfile.branchId);
+      setSelectedBranchId(userProfile.branchId._id || userProfile.branchId);
     }
   }, [userProfile, isAdmin, selectedBranchId]);
 
@@ -464,7 +467,7 @@ export default function BranchPortalPage() {
                 </div>
                 <div className="border-t border-slate-100 bg-slate-50 p-4">
                   <button 
-                    onClick={() => setShowPreviousCompanyModal(true)}
+                    onClick={() => setActiveView('previous_requests')}
                     className="w-full flex items-center justify-center gap-2 text-purple-600 font-medium hover:text-purple-800 transition-colors"
                   >
                     Make Request <ArrowRight className="w-4 h-4" />
@@ -594,16 +597,10 @@ export default function BranchPortalPage() {
         />
       )}
 
-      {selectedBranchId && showPreviousCompanyModal && (
-        <PreviousCompanyRequestModal 
-          branchId={selectedBranchId}
-          onClose={() => setShowPreviousCompanyModal(false)}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['previous-requests', selectedBranchId] });
-            // Don't close modal immediately so they can see success or make another request if they want, 
-            // wait we can close it or keep it open. Let's just close it for simplicity.
-            setShowPreviousCompanyModal(false);
-          }}
+      {selectedBranchId && activeView === 'previous_requests' && (
+        <PreviousContactsView 
+          branchId={selectedBranchId} 
+          onBack={() => setActiveView('dashboard')}
         />
       )}
 
@@ -627,6 +624,17 @@ export default function BranchPortalPage() {
             </h2>
           </div>
 
+          <div className="mb-6 relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search companies in this list..." 
+              value={listSearchQuery}
+              onChange={(e) => setListSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+            />
+          </div>
+
           <div className="space-y-6">
             {(() => {
               if (activeView === 'single_contact' && activeCompanyId) {
@@ -634,7 +642,9 @@ export default function BranchPortalPage() {
                                  .find(c => c._id === activeCompanyId);
                 return company ? [company] : [];
               }
-              return contactTodayList || [];
+              const list = contactTodayList || [];
+              if (!listSearchQuery.trim()) return list;
+              return list.filter((c: any) => c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()));
             })()?.map((company: any) => (
               <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col md:flex-row">
                 {/* Company Info & HR */}
@@ -946,6 +956,17 @@ export default function BranchPortalPage() {
             </button>
           </div>
 
+          <div className="mb-6 relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search confirmed companies..." 
+              value={listSearchQuery}
+              onChange={(e) => setListSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+            />
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
@@ -957,7 +978,9 @@ export default function BranchPortalPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {confirmedList?.map((company: any) => (
+                {(confirmedList || [])
+                  .filter((c: any) => !listSearchQuery.trim() || c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()))
+                  .map((company: any) => (
                   <tr key={company._id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 font-semibold text-slate-900">{company.companyName}</td>
                     <td className="px-6 py-4 text-slate-700">{company.role || '-'}</td>
@@ -1048,7 +1071,10 @@ export default function BranchPortalPage() {
             }
 
             // Expanded List View
-            const activeData = activeCategory === 'not_contacted' ? notContacted : activeCategory === 'call_again' ? callAgain : pendingResponse;
+            const activeDataRaw = activeCategory === 'not_contacted' ? notContacted : activeCategory === 'call_again' ? callAgain : pendingResponse;
+            const activeData = listSearchQuery.trim() 
+              ? activeDataRaw.filter((c: any) => c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()))
+              : activeDataRaw;
             const title = activeCategory === 'not_contacted' ? 'Not Contacted' : activeCategory === 'call_again' ? 'Call Again' : 'Pending Response';
 
             return (
@@ -1081,6 +1107,19 @@ export default function BranchPortalPage() {
                   >
                     <ArrowLeft className="w-4 h-4" /> Back to Categories
                   </button>
+                </div>
+
+                <div className="p-4 bg-white border-b border-slate-100">
+                  <div className="relative max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder={`Search ${title.toLowerCase()} companies...`}
+                      value={listSearchQuery}
+                      onChange={(e) => setListSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="p-6 bg-slate-50/30">

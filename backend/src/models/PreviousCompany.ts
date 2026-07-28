@@ -10,6 +10,11 @@ export interface IPreviousCompany extends Document {
   notes?: string;
   syncStatus?: 'pending' | 'synced' | 'failed';
   lastSynced?: Date;
+  contactStatus?: 'not_contacted' | 'requested' | 'contacted';
+  contactedByBranchId?: mongoose.Types.ObjectId;
+  contactedByBranchName?: string;
+  section: string;
+  extraData?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,8 +28,13 @@ const PreviousCompanySchema: Schema = new Schema({
   hrPhone: { type: String },
   notes: { type: String },
   syncStatus: { type: String, enum: ['pending', 'synced', 'failed'], default: 'pending' },
-  lastSynced: { type: Date }
-}, { timestamps: true });
+  lastSynced: { type: Date },
+  contactStatus: { type: String, enum: ['not_contacted', 'requested', 'contacted'], default: 'not_contacted' },
+  contactedByBranchId: { type: Schema.Types.ObjectId, ref: 'Branch' },
+  contactedByBranchName: { type: String },
+  section: { type: String, required: true, default: 'Uncategorized' },
+  extraData: { type: Schema.Types.Mixed, default: {} }
+}, { timestamps: true, collection: 'PreviousCompany' });
 
 PreviousCompanySchema.index({ companyName: 'text' });
 

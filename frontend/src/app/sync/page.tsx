@@ -80,7 +80,7 @@ export default function SyncCenterPage() {
 
   const bulkAssignMutation = useMutation({
     mutationFn: async (branch_id: string) => {
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/companies/bulk-assign`, { 
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/companies/bulk-assign`, {
         companyIds: selectedCompanies,
         branch_id
       });
@@ -119,9 +119,9 @@ export default function SyncCenterPage() {
   };
 
   const toggleBranch = (branchName: string) => {
-    setExpandedBranches(prev => 
-      prev.includes(branchName) 
-        ? prev.filter(b => b !== branchName) 
+    setExpandedBranches(prev =>
+      prev.includes(branchName)
+        ? prev.filter(b => b !== branchName)
         : [...prev, branchName]
     );
   };
@@ -161,65 +161,65 @@ export default function SyncCenterPage() {
             )}
           </div>
         </div>
-        
+
         {showCompanies && (
           <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 bg-slate-50/30">
-        {item.companies?.map((company: any) => (
-          <div key={company._id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow relative">
-            <div className="flex items-start gap-3 mb-6">
-              <input 
-                type="checkbox" 
-                className="w-5 h-5 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer" 
-                checked={selectedCompanies.includes(company._id)}
-                onChange={() => toggleSelection(company._id)}
-              />
-              <div className="flex-1 min-w-0">
-                <span className="font-bold text-slate-800 block truncate text-base" title={company.companyName}>{company.companyName}</span>
-                <span className={`inline-block mt-2 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider ${isHistory ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-yellow-50 text-yellow-700 border border-yellow-200'}`}>
-                  {isHistory ? 'Synced' : 'Pending'}
-                </span>
-              </div>
-            </div>
-            
-            <div className="mt-auto grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
-              <Link href={`/companies/${company._id}`} className="flex items-center justify-center text-sm text-slate-700 hover:text-blue-700 font-semibold py-2 bg-slate-50 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 hover:border-blue-200 shadow-sm">
-                Details
-              </Link>
-              {!isHistory ? (
-                <button 
-                  onClick={() => {
-                    if (selectedCompanies.includes(company._id)) {
-                      bulkSyncMutation.mutate();
-                    } else {
-                      setSelectedCompanies([company._id]);
-                      setTimeout(() => bulkSyncMutation.mutate(), 0);
-                    }
-                  }}
-                  disabled={bulkSyncMutation.isPending}
-                  className="flex items-center justify-center text-sm text-blue-700 hover:text-blue-800 font-semibold py-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 hover:border-blue-300 shadow-sm disabled:opacity-50"
-                >
-                  Sync
-                </button>
-              ) : (
-                <div className="flex items-center justify-center text-sm text-green-700 font-semibold py-2 bg-green-50 rounded-lg border border-green-200 shadow-sm">
-                  Completed
+            {item.companies?.map((company: any) => (
+              <div key={company._id} className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col hover:shadow-md transition-shadow relative">
+                <div className="flex items-start gap-3 mb-6">
+                  <input
+                    type="checkbox"
+                    className="w-5 h-5 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    checked={selectedCompanies.includes(company._id)}
+                    onChange={() => toggleSelection(company._id)}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-slate-800 block truncate text-base" title={company.companyName}>{company.companyName}</span>
+                    <span className={`inline-block mt-2 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider ${isHistory ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-yellow-50 text-yellow-700 border border-yellow-200'}`}>
+                      {isHistory ? 'Synced' : 'Pending'}
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="mt-auto grid grid-cols-2 gap-3 pt-4 border-t border-slate-100">
+                  <Link href={`/companies/${company._id}`} className="flex items-center justify-center text-sm text-slate-700 hover:text-blue-700 font-semibold py-2 bg-slate-50 hover:bg-blue-50 rounded-lg transition-colors border border-slate-200 hover:border-blue-200 shadow-sm">
+                    Details
+                  </Link>
+                  {!isHistory ? (
+                    <button
+                      onClick={() => {
+                        if (selectedCompanies.includes(company._id)) {
+                          bulkSyncMutation.mutate();
+                        } else {
+                          setSelectedCompanies([company._id]);
+                          setTimeout(() => bulkSyncMutation.mutate(), 0);
+                        }
+                      }}
+                      disabled={bulkSyncMutation.isPending}
+                      className="flex items-center justify-center text-sm text-blue-700 hover:text-blue-800 font-semibold py-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-200 hover:border-blue-300 shadow-sm disabled:opacity-50"
+                    >
+                      Sync
+                    </button>
+                  ) : (
+                    <div className="flex items-center justify-center text-sm text-green-700 font-semibold py-2 bg-green-50 rounded-lg border border-green-200 shadow-sm">
+                      Completed
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
         )}
-    </div>
-  );
-};
+      </div>
+    );
+  };
 
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 md:space-y-12">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
         {/* Decorative background element */}
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-gradient-to-br from-blue-50 to-indigo-50 opacity-50 blur-3xl pointer-events-none"></div>
-        
+
         <div className="max-w-xl relative z-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-600 font-semibold text-xs border border-indigo-100 mb-4">
             <CloudUpload className="w-3.5 h-3.5" />
@@ -230,12 +230,12 @@ export default function SyncCenterPage() {
             Manage and push assigned companies seamlessly to their respective Google Sheets for your placement drives. Keep your master records in perfect sync.
           </p>
         </div>
-        
+
         <div className="flex flex-col sm:flex-row flex-wrap xl:flex-nowrap items-stretch sm:items-center gap-4 relative z-10 w-full lg:w-auto mt-6 lg:mt-0">
           {settings?.currentAcademicYearSheetId ? (
-            <a 
-              href={`https://docs.google.com/spreadsheets/d/${settings.currentAcademicYearSheetId}/edit`} 
-              target="_blank" 
+            <a
+              href={`https://docs.google.com/spreadsheets/d/${settings.currentAcademicYearSheetId}/edit`}
+              target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-medium py-2.5 px-5 rounded-lg transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
             >
@@ -243,7 +243,7 @@ export default function SyncCenterPage() {
               Open Master Sheet
             </a>
           ) : (
-            <span 
+            <span
               className="flex items-center justify-center gap-2 bg-slate-100 text-slate-400 border border-slate-200 font-medium py-2.5 px-5 rounded-lg cursor-not-allowed shadow-sm flex-1 sm:flex-none whitespace-nowrap"
               title="Configure Master Database Sheet ID in Settings"
             >
@@ -251,9 +251,9 @@ export default function SyncCenterPage() {
               Open Master Sheet
             </span>
           )}
-          
+
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-none">
-            <select 
+            <select
               value={selectedInboundBranch}
               onChange={(e) => setSelectedInboundBranch(e.target.value)}
               className="flex-1 sm:flex-none text-sm border border-slate-200 bg-white rounded-lg py-2.5 px-4 text-slate-700 shadow-sm min-w-[160px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
@@ -283,7 +283,7 @@ export default function SyncCenterPage() {
           </div>
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center w-full md:w-auto">
             <div className="flex flex-1 sm:flex-none items-center gap-2 bg-white p-1.5 rounded-lg border border-indigo-200 shadow-sm">
-              <select 
+              <select
                 value={selectedBulkBranch}
                 onChange={(e) => setSelectedBulkBranch(e.target.value)}
                 className="flex-1 text-sm border-none bg-transparent rounded-md py-1.5 px-2 text-slate-700 focus:ring-0 outline-none min-w-[130px]"
@@ -293,7 +293,7 @@ export default function SyncCenterPage() {
                   <option key={b._id} value={b._id}>{b.name} ({b.category})</option>
                 ))}
               </select>
-              <button 
+              <button
                 onClick={() => bulkAssignMutation.mutate(selectedBulkBranch)}
                 disabled={!selectedBulkBranch || bulkAssignMutation.isPending}
                 className="bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold py-1.5 px-4 rounded-md transition-colors disabled:opacity-50 whitespace-nowrap"
@@ -302,7 +302,7 @@ export default function SyncCenterPage() {
               </button>
             </div>
             <div className="hidden sm:block w-px h-8 bg-indigo-200 mx-1"></div>
-            <button 
+            <button
               onClick={() => bulkSyncMutation.mutate()}
               disabled={bulkSyncMutation.isPending}
               className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold py-2.5 px-6 rounded-lg transition-colors shadow-md disabled:opacity-50"

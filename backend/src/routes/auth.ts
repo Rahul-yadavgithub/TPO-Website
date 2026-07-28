@@ -165,7 +165,9 @@ router.get('/portal-settings', async (req, res) => {
 router.get('/me', protect, async (req: AuthRequest, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   try {
-    const user = await User.findById(req.user.id).select('-password');
+    const user = await User.findById(req.user.id)
+      .select('-password')
+      .populate('branchId', 'name category');
     res.status(200).json({ success: true, data: user });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server Error' });

@@ -7,6 +7,7 @@ import { Loader2, Lock, Mail, User, BookOpen, AlertCircle, ShieldCheck, CheckCir
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({ name: '', rollNumber: '', email: '', password: '', branchName: '' });
+  const [program, setProgram] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,8 @@ export default function RegisterPage() {
     return () => clearInterval(t);
   }, []);
 
-  const predefinedBranches = ['MNC', 'CSE', 'EE', 'EP', 'ECE', 'MSE', 'ME', 'CH', 'CE'];
+  const btechBranches = ['MNC', 'CSE', 'EE', 'EP', 'ECE', 'MSE', 'ME', 'CH', 'CE'];
+  const mtechBranches = ['CSE', 'ECE', 'MNC', 'EE', 'CE'];
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,18 +71,18 @@ export default function RegisterPage() {
 
       {/* Main Header */}
       <div className="w-full bg-white border-b-[3px] border-[#1a3a6e] shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex-1 text-right hidden sm:block pr-4">
-            <div className="text-[1.1rem] font-bold text-[#1a1a1a] leading-tight">राष्ट्रीय प्रौद्योगिकी संस्थान हमीरपुर</div>
-            <div className="text-[0.72rem] text-[#555] mt-0.5">हमीरपुर, हिमाचल प्रदेश (भारत) – 177 005</div>
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex flex-col md:flex-row lg:grid lg:grid-cols-[1fr_auto_1fr] items-center justify-center lg:justify-between gap-4 md:gap-6 lg:gap-8">
+          <div className="hidden lg:block text-right">
+            <div className="text-[1.35rem] lg:text-[1.45rem] font-bold text-[#1a1a1a] leading-tight tracking-wide">राष्ट्रीय प्रौद्योगिकी संस्थान हमीरपुर</div>
+            <div className="text-[0.9rem] text-[#555] mt-1.5 font-medium">हमीरपुर, हिमाचल प्रदेश (भारत) – 177 005</div>
           </div>
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 flex justify-center">
             <img src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp"
-              alt="NITH Logo" className="w-20 h-20 object-contain" />
+              alt="NITH Logo" className="w-24 h-24 md:w-28 md:h-28 object-contain drop-shadow-sm" />
           </div>
-          <div className="flex-1 pl-4">
-            <div className="text-[1.1rem] font-bold text-[#1a3a6e] leading-tight">National Institute of Technology Hamirpur</div>
-            <div className="text-[0.72rem] text-[#555] mt-0.5">Hamirpur, Himachal Pradesh (India) – 177 005</div>
+          <div className="text-center md:text-left">
+            <div className="text-xl md:text-2xl lg:text-[1.45rem] font-black text-[#1a3a6e] leading-tight tracking-wide whitespace-normal lg:whitespace-nowrap">National Institute of Technology Hamirpur</div>
+            <div className="text-sm md:text-[0.9rem] text-[#555] mt-1.5 font-medium">Hamirpur, हिमाचल प्रदेश (India) – 177 005</div>
           </div>
         </div>
         <div className="bg-[#1a3a6e] text-center py-1.5">
@@ -107,11 +109,11 @@ export default function RegisterPage() {
       )}
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center py-8 px-4 relative overflow-hidden">
-        {/* Animated Background Gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 to-indigo-900/60 z-0 mix-blend-overlay" />
+      <div className="flex-1 flex items-start sm:items-center justify-center py-6 sm:py-8 px-4 relative overflow-hidden">
+        {/* Animated Background Image */}
+        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat animate-float-bg z-0" style={{ backgroundImage: "url('https://res.cloudinary.com/dzbliymin/image/upload/v1785260141/nith27_zlbbxm.jpg')" }} />
 
-        <div className="relative z-10 w-full max-w-[480px]">
+        <div className="relative z-10 w-full max-w-[480px] mt-4 sm:mt-0 sm:my-8">
           <div className="bg-white/95 backdrop-blur-xl shadow-2xl border border-white/40 overflow-hidden">
 
             {/* Card header */}
@@ -176,17 +178,34 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Branch */}
+              {/* Program */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Department / Branch *</label>
-                <select name="branchName" required
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Program *</label>
+                <select name="program" required
                   className="w-full px-4 py-2.5 border border-slate-300 bg-slate-50 text-slate-800 text-[13px] focus:outline-none focus:border-[#1a3a6e] focus:ring-1 focus:ring-[#1a3a6e] appearance-none cursor-pointer"
-                  value={formData.branchName} onChange={handleChange}
+                  value={program} onChange={(e) => { setProgram(e.target.value); setFormData({ ...formData, branchName: '' }); }}
                   disabled={loading || !!success}>
-                  <option value="" disabled>-- Select your Department --</option>
-                  {predefinedBranches.map(b => <option key={b} value={b}>{b}</option>)}
+                  <option value="" disabled>-- Select your Program --</option>
+                  <option value="B.Tech">B.Tech</option>
+                  <option value="M.Tech">M.Tech</option>
                 </select>
               </div>
+
+              {/* Branch */}
+              {program && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Department / Branch *</label>
+                  <select name="branchName" required
+                    className="w-full px-4 py-2.5 border border-slate-300 bg-slate-50 text-slate-800 text-[13px] focus:outline-none focus:border-[#1a3a6e] focus:ring-1 focus:ring-[#1a3a6e] appearance-none cursor-pointer"
+                    value={formData.branchName} onChange={handleChange}
+                    disabled={loading || !!success}>
+                    <option value="" disabled>-- Select your Department --</option>
+                    {(program === 'B.Tech' ? btechBranches : mtechBranches).map(b => (
+                      <option key={b} value={program === 'M.Tech' ? `M.Tech ${b}` : b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Password */}
               <div>

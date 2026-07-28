@@ -1,5 +1,6 @@
 import express from 'express';
 import User from '../models/User';
+import Company from '../models/Company';
 import PreviousCompanyContactRequest from '../models/PreviousCompanyContactRequest';
 import PreviousCompany from '../models/PreviousCompany';
 import { protect, AuthRequest } from '../middleware/auth';
@@ -55,6 +56,65 @@ router.post('/approve-tpr/:id', async (req, res) => {
     await user.save();
 
     res.status(200).json({ success: true, message: 'TPR Approved' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   GET /api/admin/active-tprs/:branchId
+// @desc    Get active TPRs for a specific branch
+router.get('/active-tprs/:branchId', async (req, res) => {
+  try {
+    const tprs = await User.find({
+      role: 'tpr',
+      branchId: req.params.branchId,
+      status: 'approved'
+    }).select('name email rollNumber');
+    
+    res.status(200).json({ success: true, data: tprs });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   POST /api/admin/replace-tpr/:newUserId
+// @desc    Approve a new TPR and hand over work from an old TPR
+router.post('/replace-tpr/:newUserId', async (req, res) => {
+  try {
+    const { replaceUserId } = req.body;
+    if (!replaceUserId) {
+      return res.status(400).json({ success: false, message: 'Old TPR ID is required for replacement' });
+    }
+
+    const newUser = await User.findById(req.params.newUserId);
+    const oldUser = await User.findById(replaceUserId);
+
+    if (!newUser || !oldUser) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // 1. Transfer active companies
+    await Company.updateMany(
+      { assignedBranchId: newUser.branchId, contactOwner: oldUser.name },
+      { $set: { contactOwner: newUser.name } }
+    );
+
+    // 2. Transfer previous company contact requests (pending & approved)
+    await PreviousCompanyContactRequest.updateMany(
+      { requestedBy: oldUser._id, status: { $in: ['pending', 'approved'] } },
+      { $set: { requestedBy: newUser._id } }
+    );
+
+    // 3. Approve new user, replace old user
+    newUser.status = 'approved';
+    await newUser.save();
+
+    oldUser.status = 'replaced';
+    await oldUser.save();
+
+    res.status(200).json({ success: true, message: 'TPR Replaced & Work Handed Over Successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error' });
@@ -116,6 +176,10 @@ router.post('/approve-contact/:id', async (req, res) => {
     request.status = 'approved';
     await request.save();
 
+    // Update the PreviousCompany record to show it is now fully contacted/approved
+    company.contactStatus = 'contacted';
+    await company.save();
+
     res.status(200).json({ success: true, message: 'Contact Request Approved & Sent to TPR' });
   } catch (error) {
     console.error(error);
@@ -143,6 +207,15 @@ router.post('/reject-contact/:id', async (req, res) => {
     request.status = 'rejected';
     request.rejectionReason = reason;
     await request.save();
+
+    // Reset the PreviousCompany record so it can be requested by someone else
+    const company = await PreviousCompany.findById(request.companyId);
+    if (company) {
+      company.contactStatus = 'not_contacted';
+      company.contactedByBranchId = undefined;
+      company.contactedByBranchName = undefined;
+      await company.save();
+    }
 
     res.status(200).json({ success: true, message: 'Contact Request Rejected' });
   } catch (error) {

@@ -30,6 +30,6 @@ const PreviousCompanyContactRequestSchema: Schema = new Schema({
     phone: { type: String },
     notes: { type: String }
   }
-}, { timestamps: true });
+}, { timestamps: true, collection: 'PreviousCompanyContactRequest' });
 
 export default mongoose.models.PreviousCompanyContactRequest || mongoose.model<IPreviousCompanyContactRequest>('PreviousCompanyContactRequest', PreviousCompanyContactRequestSchema);

@@ -8,6 +8,7 @@ import Source from '../models/Source';
 import Settings from '../models/Settings';
 import CompanyStatusHistory from '../models/CompanyStatusHistory';
 import Branch from '../models/Branch';
+import PreviousCompany from '../models/PreviousCompany';
 
 import HrContact from '../models/HrContact';
 import ContactLog from '../models/ContactLog';
@@ -19,6 +20,7 @@ import { hrValidationController } from '../controllers/hrValidationController';
 import { AgentPipeline } from '../services/agents/AgentPipeline';
 import { protect } from '../middleware/auth';
 import { uploadLogo } from '../utils/cloudinary';
+import { acquireLock, releaseLock } from '../utils/lock';
 
 const router = Router();
 
@@ -83,25 +85,25 @@ router.get('/stats', async (req, res) => {
 router.post('/scan/trigger', async (req, res) => {
   try {
     const activeSources = await Source.find({ isEnabled: true });
-    
+
     if (activeSources.length === 0) {
       await scrapeQueue.add('wellfound-scan', { platform: 'Wellfound' });
       return res.json({ message: 'Scan triggered for Wellfound (default)' });
     }
 
     for (const source of activeSources) {
-       const history = await ScanHistory.create({
-         platform: source.platformName,
-         status: 'QUEUED',
-         phase: 'Queued for processing',
-         date: new Date(),
-       });
+      const history = await ScanHistory.create({
+        platform: source.platformName,
+        status: 'QUEUED',
+        phase: 'Queued for processing',
+        date: new Date(),
+      });
 
-       await scrapeQueue.add(`${source.platformName}-scan`, { 
-         platform: source.platformName,
-         sourceUrl: source.sourceUrl,
-         scanHistoryId: history._id
-       });
+      await scrapeQueue.add(`${source.platformName}-scan`, {
+        platform: source.platformName,
+        sourceUrl: source.sourceUrl,
+        scanHistoryId: history._id
+      });
     }
 
     res.json({ message: 'Scans triggered successfully' });
@@ -114,9 +116,9 @@ router.post('/scan/trigger/:sourceId', async (req, res) => {
   try {
     const source = await Source.findById(req.params.sourceId);
     if (!source) {
-       return res.status(404).json({ error: 'Source not found' });
+      return res.status(404).json({ error: 'Source not found' });
     }
-    
+
     const history = await ScanHistory.create({
       platform: source.platformName,
       status: 'QUEUED',
@@ -124,7 +126,7 @@ router.post('/scan/trigger/:sourceId', async (req, res) => {
       date: new Date(),
     });
 
-    await scrapeQueue.add(`${source.platformName}-scan`, { 
+    await scrapeQueue.add(`${source.platformName}-scan`, {
       platform: source.platformName,
       sourceUrl: source.sourceUrl,
       scanHistoryId: history._id
@@ -218,7 +220,7 @@ router.post('/companies/manual-company', async (req: any, res) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
-  
+
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -253,10 +255,10 @@ router.post('/companies/manual-company', async (req: any, res) => {
       confirmation_status: 'not_confirmed',
       contact_status: 'not_contacted'
     });
-    
+
     // Auto-approve if admin adds it manually
     company.status = CompanyStatus.APPROVED;
-    
+
     await company.save({ session });
 
     if (hrName || hrPhone || hrEmail || linkedinProfile) {
@@ -342,7 +344,7 @@ router.post('/companies/bulk-import-companies', async (req: any, res) => {
     for (const c of companies) {
       const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
       const companyId = new mongoose.Types.ObjectId();
-      
+
       companyDocs.push({
         _id: companyId,
         companyName: c.companyName,
@@ -443,7 +445,7 @@ router.put('/companies/:id/assignment', async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-    
+
     res.json(company);
   } catch (error) {
     await session.abortTransaction();
@@ -455,7 +457,7 @@ router.put('/companies/:id/assignment', async (req, res) => {
 router.patch('/companies/:id/review', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     const { action, reviewed_by } = req.body;
     const companyId = req.params.id;
@@ -469,7 +471,7 @@ router.patch('/companies/:id/review', async (req, res) => {
 
     if (action === 'approve') {
       const oldReviewStatus = company.review_status || 'scanned';
-      
+
       company.status = CompanyStatus.APPROVED;
       company.review_status = 'approved';
       company.reviewed_by = reviewed_by;
@@ -537,17 +539,18 @@ router.get('/sync/pending', async (req, res) => {
       { $match: { syncStatus: 'pending', assignedBranch: { $exists: true, $ne: null } } },
       { $lookup: { from: 'branches', localField: 'assignedBranch', foreignField: 'name', as: 'branchDetails' } },
       { $unwind: { path: '$branchDetails', preserveNullAndEmptyArrays: true } },
-      { $group: { 
-          _id: { name: '$assignedBranch', category: '$branchDetails.category' }, 
-          count: { $sum: 1 }, 
-          companies: { 
-            $push: { 
-              _id: '$_id', 
+      {
+        $group: {
+          _id: { name: '$assignedBranch', category: '$branchDetails.category' },
+          count: { $sum: 1 },
+          companies: {
+            $push: {
+              _id: '$_id',
               companyName: '$companyName',
               sync_status: '$syncStatus'
-            } 
-          } 
-        } 
+            }
+          }
+        }
       },
       { $project: { _id: 0, branch_name: '$_id.name', branch_category: { $ifNull: ['$_id.category', 'Other'] }, count: 1, companies: 1 } },
       { $sort: { branch_category: 1, branch_name: 1 } }
@@ -565,19 +568,20 @@ router.get('/sync/history', async (req, res) => {
       { $lookup: { from: 'branches', localField: 'assignedBranch', foreignField: 'name', as: 'branchDetails' } },
       { $unwind: { path: '$branchDetails', preserveNullAndEmptyArrays: true } },
       { $sort: { lastSynced: -1 } },
-      { $group: { 
-          _id: { name: '$assignedBranch', category: '$branchDetails.category' }, 
-          count: { $sum: 1 }, 
+      {
+        $group: {
+          _id: { name: '$assignedBranch', category: '$branchDetails.category' },
+          count: { $sum: 1 },
           lastSynced: { $max: '$lastSynced' },
-          companies: { 
-            $push: { 
-              _id: '$_id', 
+          companies: {
+            $push: {
+              _id: '$_id',
               companyName: '$companyName',
               sync_status: '$syncStatus',
               synced_at: '$lastSynced'
-            } 
-          } 
-        } 
+            }
+          }
+        }
       },
       { $project: { _id: 0, branch_name: '$_id.name', branch_category: { $ifNull: ['$_id.category', 'Other'] }, count: 1, lastSynced: 1, companies: { $slice: ['$companies', 20] } } },
       { $sort: { branch_category: 1, branch_name: 1 } }
@@ -593,7 +597,7 @@ router.post('/companies/bulk-assign', async (req, res) => {
   session.startTransaction();
   try {
     const { companyIds, branch_id, assigned_by } = req.body;
-    
+
     if (!companyIds || !companyIds.length || !branch_id) {
       await session.abortTransaction();
       session.endSession();
@@ -633,7 +637,7 @@ router.post('/companies/bulk-assign', async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-    
+
     res.json({ message: 'Bulk assignment successful', count: historyLogs.length });
   } catch (error) {
     await session.abortTransaction();
@@ -647,8 +651,8 @@ router.post('/companies/sync-sheet', async (req, res) => {
   session.startTransaction();
   try {
     // Sync all companies that have an assigned branch
-    const companiesToSync = await Company.find({ 
-      assignedBranch: { $exists: true, $ne: null } 
+    const companiesToSync = await Company.find({
+      assignedBranch: { $exists: true, $ne: null }
     }).session(session);
 
     if (companiesToSync.length === 0) {
@@ -672,7 +676,7 @@ router.post('/companies/sync-sheet', async (req, res) => {
     // Sync per branch
     for (const [branchName, companiesGroup] of branchMap.entries()) {
       const syncResult = await googleSheetService.appendCompaniesToSheet(companiesGroup, branchName);
-      
+
       if (syncResult.success) {
         for (const company of companiesGroup) {
           if (company.contact_outcome === 'rejected') {
@@ -713,15 +717,15 @@ router.post('/companies/sync-sheet', async (req, res) => {
     const totalSyncedInDb = await Company.countDocuments({ syncStatus: 'synced' }).session(session);
 
     await Settings.updateOne({}, {
-      $set: { 
+      $set: {
         lastSyncDate: now,
-        totalSynced: totalSyncedInDb 
+        totalSynced: totalSyncedInDb
       }
     }, { session, upsert: true });
 
     await session.commitTransaction();
     session.endSession();
-    
+
     res.json({ message: 'Global sync successful', syncedCount: totalSynced });
   } catch (error) {
     console.error('Global sync error:', error);
@@ -736,7 +740,7 @@ router.post('/sync/bulk-sync', async (req, res) => {
   session.startTransaction();
   try {
     const { companyIds } = req.body;
-    
+
     if (!companyIds || !companyIds.length) {
       await session.abortTransaction();
       session.endSession();
@@ -744,7 +748,7 @@ router.post('/sync/bulk-sync', async (req, res) => {
     }
 
     // Find all pending companies
-    const pendingCompanies = await Company.find({ 
+    const pendingCompanies = await Company.find({
       _id: { $in: companyIds },
       syncStatus: 'pending',
       assignedBranch: { $exists: true, $ne: null }
@@ -771,7 +775,7 @@ router.post('/sync/bulk-sync', async (req, res) => {
     // Sync per branch
     for (const [branchName, companiesGroup] of branchMap.entries()) {
       const syncResult = await googleSheetService.appendCompaniesToSheet(companiesGroup, branchName);
-      
+
       if (syncResult.success) {
         for (const company of companiesGroup) {
           await Company.updateOne(
@@ -800,7 +804,7 @@ router.post('/sync/bulk-sync', async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
-    
+
     res.json({ message: 'Bulk sync successful', count: totalSynced });
   } catch (error) {
     await session.abortTransaction();
@@ -815,23 +819,23 @@ router.post('/sync/branch/:branch_identifier', async (req, res) => {
   try {
     const param = req.params.branch_identifier;
     let branch;
-    
+
     if (mongoose.Types.ObjectId.isValid(param)) {
       branch = await Branch.findById(param).session(session);
     }
     if (!branch) {
       branch = await Branch.findOne({ name: param }).session(session);
     }
-    
+
     if (!branch) {
       await session.abortTransaction();
       session.endSession();
       return res.status(404).json({ error: 'Branch not found' });
     }
 
-    const pendingCompanies = await Company.find({ 
-      assignedBranch: branch.name, 
-      syncStatus: 'pending' 
+    const pendingCompanies = await Company.find({
+      assignedBranch: branch.name,
+      syncStatus: 'pending'
     }).session(session);
 
     if (pendingCompanies.length === 0) {
@@ -875,14 +879,14 @@ router.post('/sync/branch/:branch_identifier', async (req, res) => {
         new_value: 'synced',
         changed_by: 'System'
       }));
-      
+
     if (historyLogs.length > 0) {
       await CompanyStatusHistory.insertMany(historyLogs, { session });
     }
 
     await session.commitTransaction();
     session.endSession();
-    
+
     res.json({ message: 'Sync successful', count: pendingCompanies.length });
   } catch (error) {
     await session.abortTransaction();
@@ -901,7 +905,7 @@ router.get('/sync/history/:branch_id/companies', async (req, res) => {
       assignedBranch: branch.name,
       syncStatus: 'synced'
     });
-    
+
     res.json(companies);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch synced companies' });
@@ -919,7 +923,7 @@ router.post('/sync/inbound', async (req, res) => {
     } else {
       branches = await Branch.find();
     }
-    
+
     const allBranches = await Branch.find();
     const branchCategoryMap = new Map(allBranches.map(b => [b.name, b.category]));
 
@@ -932,7 +936,7 @@ router.post('/sync/inbound', async (req, res) => {
     // Helper to parse dates like 1/03/2026, 01/03/2026, 1-Mar-2026, March 1 2026
     const parseNextCallDate = (dateStr: string): Date | null => {
       if (!dateStr) return null;
-      
+
       // Try to handle DD/MM/YYYY, DD/MM/YY, DD-MM-YYYY, DD-MM-YY
       const parts = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
       if (parts) {
@@ -979,13 +983,13 @@ router.post('/sync/inbound', async (req, res) => {
           if (hiddenId && mongoose.Types.ObjectId.isValid(hiddenId)) {
             company = await Company.findById(hiddenId);
           }
-          
+
           if (!company) {
             const normalized = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
             const possibleCompanies = await Company.find({
               $or: [{ companyName }, { normalizedName: normalized }]
             });
-            
+
             // Deduplicate only within the SAME category (Circuital vs Core)
             company = possibleCompanies.find(c => {
               const cCat = branchCategoryMap.get(c.assignedBranch || '');
@@ -994,11 +998,11 @@ router.post('/sync/inbound', async (req, res) => {
           }
 
           if (!company) {
-             if (statusText?.toUpperCase() === 'REJECTED') {
-                 // The user requested that REJECTED ghost companies in the sheet should NOT be imported.
-                 continue;
-             }
-             
+            if (statusText?.toUpperCase() === 'REJECTED') {
+              // The user requested that REJECTED ghost companies in the sheet should NOT be imported.
+              continue;
+            }
+
             // Create the missing company from sheet data
             company = new Company({
               companyName,
@@ -1036,7 +1040,7 @@ router.post('/sync/inbound', async (req, res) => {
           let newContactStatus = 'not_contacted';
           let newContactOutcome = null;
           let newConfirmationStatus = company.confirmation_status;
-          
+
           if (statusText) {
             const statusUpper = statusText.toUpperCase();
             if (statusUpper === 'REJECTED') {
@@ -1105,10 +1109,10 @@ router.post('/sync/inbound', async (req, res) => {
               updated = true;
             }
           } else if (nextCallText === '') {
-             if (company.nextFollowupDate) {
-               company.nextFollowupDate = undefined;
-               updated = true;
-             }
+            if (company.nextFollowupDate) {
+              company.nextFollowupDate = undefined;
+              updated = true;
+            }
           }
 
           if (updated) {
@@ -1190,7 +1194,7 @@ router.post('/contact-logs', async (req, res) => {
         company.contact_outcome = 'accepted';
         company.confirmation_status = 'confirmed';
       }
-      
+
       company.syncStatus = 'pending';
       await company.save({ session });
 
@@ -1216,7 +1220,7 @@ router.post('/contact-logs', async (req, res) => {
 router.get('/branch/:branch_id/confirmed', async (req, res) => {
   try {
     const branchId = new mongoose.Types.ObjectId(req.params.branch_id);
-    
+
     const branch = await Branch.findById(branchId);
     if (!branch) return res.status(404).json({ error: 'Branch not found' });
 
@@ -1284,26 +1288,29 @@ router.get('/branch/:branch_id/not-confirmed', async (req, res) => {
 
 // POST /api/branch/:branch_id/manual-company
 router.post('/branch/:branch_id/manual-company', async (req, res) => {
+  const branchIdParam = req.params.branch_id;
+
+  let branchInfo;
+  if (mongoose.Types.ObjectId.isValid(branchIdParam)) {
+    branchInfo = await Branch.findById(branchIdParam);
+  } else {
+    branchInfo = await Branch.findOne({ name: branchIdParam });
+  }
+
+  if (!branchInfo) {
+    return res.status(404).json({ error: 'Branch not found' });
+  }
+
+  const lockKey = `sync_lock_${branchInfo.name}`;
+  const locked = await acquireLock(lockKey, 30);
+  if (!locked) {
+    return res.status(409).json({ error: 'Another user is currently modifying this branch. Please try again in a moment.' });
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const branchIdParam = req.params.branch_id;
-    let branch;
-    
-    if (mongoose.Types.ObjectId.isValid(branchIdParam)) {
-      branch = await Branch.findById(branchIdParam).session(session);
-    }
-    if (!branch) {
-      branch = await Branch.findOne({ name: branchIdParam }).session(session);
-    }
-    
-    if (!branch) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ error: 'Branch not found' });
-    }
-
     const { companyName, hrName, hrPhone, hrEmail, linkedinProfile } = req.body;
     if (!companyName) {
       await session.abortTransaction();
@@ -1315,6 +1322,14 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
     let company = await Company.findOne({ normalizedName }).session(session);
 
     if (company) {
+      // Check if it belongs to another branch
+      if (company.assignedBranch && company.assignedBranch !== branchInfo.name) {
+        if (session.inTransaction()) await session.abortTransaction();
+        session.endSession();
+        await releaseLock(lockKey);
+        return res.status(409).json({ error: `This company is already contacted by the ${company.assignedBranch} department (Contact Person: ${company.contactOwner || 'Unknown'}). Please do not duplicate outreach.` });
+      }
+
       // Update existing company
       company.syncStatus = 'pending'; // Queue for sheet sync
       await company.save({ session });
@@ -1323,7 +1338,7 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
       company = new Company({
         companyName,
         normalizedName,
-        assignedBranch: branch.name,
+        assignedBranch: branchInfo.name,
         syncStatus: 'pending',
         status: CompanyStatus.DISCOVERED,
         placementScore: 0,
@@ -1337,7 +1352,8 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
         discoveryHistory: [],
         startupSignals: [],
         confirmation_status: 'not_confirmed',
-        contact_status: 'not_contacted'
+        contact_status: 'not_contacted',
+        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown'
       });
       await company.save({ session });
     }
@@ -1363,12 +1379,30 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Now auto-sync to Google Sheets
+    try {
+      const syncResult = await googleSheetService.appendCompaniesToSheet([company as any], branchInfo.name);
+      if (syncResult.success) {
+        await Company.updateOne(
+          { _id: company._id },
+          { $set: { syncStatus: 'synced', lastSynced: new Date() } }
+        );
+        company.syncStatus = 'synced';
+      }
+    } catch (syncError) {
+      console.error('Immediate sync failed:', syncError);
+    }
+
     res.json({ success: true, company });
   } catch (error) {
     console.error('Manual company add error:', error);
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
     res.status(500).json({ error: 'Failed to add or update company' });
+  } finally {
+    await releaseLock(lockKey);
   }
 });
 
@@ -1387,28 +1421,46 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
     const { companies } = req.body;
     if (!Array.isArray(companies)) return res.status(400).json({ error: 'Companies array is required' });
 
-    const existingCompanies = await Company.find({ assignedBranch: branch.name }).select('normalizedName').lean();
-    const existingNames = new Set(existingCompanies.map((c: any) => c.normalizedName));
+    const existingCompanies = await Company.find().select('normalizedName assignedBranch contactOwner').lean();
+    const existingMap = new Map(existingCompanies.map((c: any) => [c.normalizedName, c]));
 
     const validCompanies = [];
     const duplicateCompanies = [];
+    const conflictCompanies = [];
+    const newNamesAdded = new Set();
 
     for (const c of companies) {
       if (!c.companyName) continue;
       const normalized = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (existingNames.has(normalized)) {
-        duplicateCompanies.push(c);
+
+      const existing = existingMap.get(normalized);
+      if (existing) {
+        if (existing.assignedBranch && existing.assignedBranch !== branch.name) {
+          conflictCompanies.push({
+            ...c,
+            conflictBranch: existing.assignedBranch,
+            conflictOwner: existing.contactOwner || 'Unknown'
+          });
+        } else {
+          duplicateCompanies.push(c);
+        }
       } else {
-        validCompanies.push(c);
-        existingNames.add(normalized); // Prevent duplicates within the same batch
+        if (newNamesAdded.has(normalized)) {
+          duplicateCompanies.push(c);
+        } else {
+          validCompanies.push(c);
+          newNamesAdded.add(normalized);
+        }
       }
     }
 
     res.json({
       validCount: validCompanies.length,
       duplicateCount: duplicateCompanies.length,
+      conflictCount: conflictCompanies.length,
       validCompanies,
-      duplicateCompanies
+      duplicateCompanies,
+      conflictCompanies
     });
   } catch (error) {
     console.error('Bulk validate error:', error);
@@ -1417,23 +1469,29 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
 });
 
 router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
+  const branchIdParam = req.params.branch_id;
+
+  let branchInfo;
+  if (mongoose.Types.ObjectId.isValid(branchIdParam)) {
+    branchInfo = await Branch.findById(branchIdParam);
+  } else {
+    branchInfo = await Branch.findOne({ name: branchIdParam });
+  }
+
+  if (!branchInfo) {
+    return res.status(404).json({ error: 'Branch not found' });
+  }
+
+  const lockKey = `sync_lock_${branchInfo.name}`;
+  const locked = await acquireLock(lockKey, 30);
+  if (!locked) {
+    return res.status(409).json({ error: 'Another user is currently modifying this branch. Please try again in a moment.' });
+  }
+
   const session = await mongoose.startSession();
   session.startTransaction();
-  try {
-    const branchIdParam = req.params.branch_id;
-    let branch;
-    if (mongoose.Types.ObjectId.isValid(branchIdParam)) {
-      branch = await Branch.findById(branchIdParam).session(session);
-    }
-    if (!branch) {
-      branch = await Branch.findOne({ name: branchIdParam }).session(session);
-    }
-    if (!branch) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ error: 'Branch not found' });
-    }
 
+  try {
     const { companies } = req.body;
     if (!Array.isArray(companies)) {
       await session.abortTransaction();
@@ -1441,18 +1499,18 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
       return res.status(400).json({ error: 'Companies array is required' });
     }
 
-    const newCompanies = [];
-    const newHrContacts = [];
+    const newCompanies: any[] = [];
+    const newHrContacts: any[] = [];
 
     for (const c of companies) {
       const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      
+
       const companyId = new mongoose.Types.ObjectId();
       newCompanies.push({
         _id: companyId,
         companyName: c.companyName,
         normalizedName,
-        assignedBranch: branch.name,
+        assignedBranch: branchInfo.name,
         syncStatus: 'pending',
         status: CompanyStatus.DISCOVERED,
         placementScore: 0,
@@ -1466,7 +1524,8 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
         discoveryHistory: [],
         startupSignals: [],
         confirmation_status: 'not_confirmed',
-        contact_status: 'not_contacted'
+        contact_status: 'not_contacted',
+        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown'
       });
 
       if (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile) {
@@ -1490,12 +1549,32 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    // Now auto-sync to Google Sheets
+    if (newCompanies.length > 0) {
+      try {
+        const syncResult = await googleSheetService.appendCompaniesToSheet(newCompanies as any[], branchInfo.name);
+        if (syncResult.success) {
+          const companyIds = newCompanies.map(c => c._id);
+          await Company.updateMany(
+            { _id: { $in: companyIds } },
+            { $set: { syncStatus: 'synced', lastSynced: new Date() } }
+          );
+        }
+      } catch (syncError) {
+        console.error('Immediate bulk sync failed:', syncError);
+      }
+    }
+
     res.json({ success: true, importedCount: newCompanies.length });
   } catch (error) {
     console.error('Bulk import error:', error);
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
     res.status(500).json({ error: 'Failed to bulk import companies' });
+  } finally {
+    await releaseLock(lockKey);
   }
 });
 
@@ -1633,7 +1712,7 @@ async function getScanStats(fromDate?: Date, toDate?: Date) {
 
   const totalScanned = await Company.countDocuments(companyQuery);
   const scannedCompanies = await Company.find(companyQuery).lean();
-  
+
   let internship = 0;
   let fullTime = 0;
   let startup = 0;
@@ -1724,7 +1803,7 @@ router.put('/sources/:id/toggle', async (req, res) => {
   try {
     const source = await Source.findById(req.params.id);
     if (!source) return res.status(404).json({ error: 'Source not found' });
-    
+
     source.isEnabled = !source.isEnabled;
     await source.save();
     res.json(source);
@@ -1772,7 +1851,7 @@ function aggregateCompanyGroups(companies: any[]) {
     let dt = (c.drive_type || 'Unknown').trim();
     if (dt.toLowerCase() === 'pool') dt = 'Pool';
     if (dt.toLowerCase() === 'in-campus' || dt.toLowerCase() === 'incampus') dt = 'In-Campus';
-    
+
     drive_types[dt] = (drive_types[dt] || 0) + 1;
 
     let r = (c.role || 'General Application').trim();
@@ -1788,7 +1867,7 @@ router.post('/target-companies/import', async (req, res) => {
     if (!Array.isArray(companies)) {
       return res.status(400).json({ error: 'Payload must be an array' });
     }
-    
+
     // Clear out target companies matching the academic years provided in the payload
     const years = new Set(companies.map(c => c.academic_year).filter(Boolean));
     for (const year of years) {
@@ -1807,7 +1886,7 @@ router.get('/dashboard/target-companies', async (req, res) => {
   try {
     const { current } = getAcademicYears(req.query.override_year as string);
     const companies = await TargetCompany.find({ academic_year: current }).lean();
-    
+
     // Normalize data shape to match company response
     const normalizedCompanies = companies.map(c => ({
       ...c,
@@ -1823,9 +1902,9 @@ router.get('/dashboard/target-companies', async (req, res) => {
 router.get('/dashboard/confirmed-last-year', async (req, res) => {
   try {
     const { last } = getAcademicYears(req.query.override_year as string);
-    const companies = await Company.find({ 
+    const companies = await Company.find({
       confirmation_status: 'confirmed',
-      academic_year: last 
+      academic_year: last
     }).lean();
     res.json({ academic_year: last, ...aggregateCompanyGroups(companies) });
   } catch (error) {
@@ -1836,51 +1915,64 @@ router.get('/dashboard/confirmed-last-year', async (req, res) => {
 router.get('/dashboard/summary', async (req, res) => {
   try {
     const { current, last } = getAcademicYears(req.query.override_year as string);
+    const branchId = req.query.branchId as string;
 
-    // Query confirmed companies. If academic_year is null/empty/missing, fallback to current year.
-    const [pendingReview, thisYearCompanies, lastYearCompanies] = await Promise.all([
-      Company.countDocuments({ data_source: 'scanned', review_status: 'scanned' }),
-      Company.find({
-        confirmation_status: 'confirmed',
-        $or: [
-          { academic_year: current },
-          { academic_year: null },
-          { academic_year: '' },
-          { academic_year: { $exists: false } }
-        ]
-      }).lean(),
-      Company.find({ confirmation_status: 'confirmed', academic_year: last }).lean(),
-    ]);
+    let branchName = '';
+    if (branchId) {
+      const branch = await Branch.findById(branchId);
+      if (branch) branchName = branch.name;
+    }
 
-    const buildGroup = (companies: any[]) => {
-      const by_drive_type: Record<string, number> = {};
-      const by_role: Record<string, number> = {};
-      companies.forEach(c => {
-        let dt = (c.drive_type || '').trim().toLowerCase();
-        if (dt === 'pool') {
-          dt = 'Pool';
-        } else {
-          // If no status or not Pool, consider in the on-campus calculation
-          dt = 'In-Campus';
-        }
-        by_drive_type[dt] = (by_drive_type[dt] || 0) + 1;
-
-        const r = (c.role || 'General Application').trim();
-        by_role[r] = (by_role[r] || 0) + 1;
-      });
-      return {
-        total: companies.length,
-        by_drive_type,
-        by_role: Object.entries(by_role)
-          .sort((a, b) => b[1] - a[1])
-          .map(([role, count]) => ({ role, count }))
-      };
+    // Base query for current year active companies
+    const currentYearBaseQuery = {
+      $or: [
+        { academic_year: current },
+        { academic_year: null },
+        { academic_year: '' },
+        { academic_year: { $exists: false } }
+      ]
     };
+
+    // If branchName is provided, we filter confirmed and contact today counts for that branch.
+    // If not, we count globally (e.g. for admin)
+    const confirmedQuery: any = {
+      ...currentYearBaseQuery,
+      confirmation_status: 'confirmed'
+    };
+    if (branchName) {
+      confirmedQuery.assignedBranch = branchName;
+    }
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    
+    const contactTodayQuery: any = {
+      ...currentYearBaseQuery,
+      confirmation_status: { $ne: 'confirmed' },
+      nextFollowupDate: { $lte: endOfToday }
+    };
+    if (branchName) {
+      contactTodayQuery.assignedBranch = branchName;
+    }
+
+    const [pendingReview, confirmedThisYear, contactToday, previousCompanyCount] = await Promise.all([
+      Company.countDocuments({ data_source: 'scanned', review_status: 'scanned' }),
+      Company.countDocuments(confirmedQuery),
+      Company.countDocuments(contactTodayQuery),
+      PreviousCompany.countDocuments({ academicYear: last })
+    ]);
 
     res.json({
       pending_review_count: pendingReview,
-      confirmed_this_year: { academic_year: current, ...buildGroup(thisYearCompanies) },
-      confirmed_last_year: { academic_year: last, ...buildGroup(lastYearCompanies) },
+      contact_today_count: contactToday,
+      confirmed_this_year: {
+        academic_year: current,
+        total: confirmedThisYear
+      },
+      confirmed_last_year: {
+        academic_year: last,
+        total: previousCompanyCount
+      },
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch dashboard summary' });
@@ -1890,48 +1982,80 @@ router.get('/dashboard/summary', async (req, res) => {
 router.get('/dashboard/confirmed-companies', async (req, res) => {
   try {
     const year = req.query.year as string;
+    const branchId = req.query.branchId as string;
     const page = parseInt(req.query.page as string) || 1;
     const limit = 20;
     const skip = (page - 1) * limit;
 
-    const { current } = getAcademicYears();
+    const { current, last } = getAcademicYears();
     const isCurrentYear = year === current;
+    const isLastYear = year === last;
 
-    let companies: any[];
-    let total: number;
-
-    if (isCurrentYear) {
-      // Current year confirmed companies (includes those with null/empty/missing academic_year)
-      const query: any = {
-        confirmation_status: 'confirmed',
-        $or: [
-          { academic_year: year },
-          { academic_year: null },
-          { academic_year: '' },
-          { academic_year: { $exists: false } }
-        ]
-      };
-      [companies, total] = await Promise.all([
-        Company.find(query)
-          .sort({ expected_year: -1, expected_month: -1 })
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        Company.countDocuments(query)
-      ]);
-    } else {
-      const query: any = { confirmation_status: 'confirmed', academic_year: year };
-      [companies, total] = await Promise.all([
-        Company.find(query)
-          .sort({ expected_year: -1, expected_month: -1 })
-          .skip(skip)
-          .limit(limit)
-          .lean(),
-        Company.countDocuments(query)
-      ]);
+    let branchName = '';
+    if (branchId) {
+      const branch = await Branch.findById(branchId);
+      if (branch) branchName = branch.name;
     }
 
-    // Join HR contacts
+    let companies: any[] = [];
+    let total = 0;
+
+    if (isLastYear) {
+      // Fetch Previous Companies
+      [companies, total] = await Promise.all([
+        PreviousCompany.find({ academicYear: year })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
+        PreviousCompany.countDocuments({ academicYear: year })
+      ]);
+
+      const enriched = companies.map(c => ({
+        _id: c._id,
+        company_name: c.companyName || 'Unknown',
+        drive_type: null,
+        role: null,
+        package: null,
+        expected_month: null,
+        expected_year: null,
+        assignedBranch: c.contactedByBranchName || null,
+        isPreviousCompany: true,
+        hr: {
+          name: c.hrName || undefined,
+          email: c.hrEmail || undefined,
+          mobile: c.hrPhone || undefined,
+        }
+      }));
+
+      return res.json({ companies: enriched, total, page, per_page: limit, pages: Math.ceil(total / limit) });
+    }
+
+    // Otherwise, current year
+    const query: any = {
+      confirmation_status: 'confirmed',
+      $or: [
+        { academic_year: year },
+        { academic_year: null },
+        { academic_year: '' },
+        { academic_year: { $exists: false } }
+      ]
+    };
+
+    if (branchName) {
+      query.assignedBranch = branchName;
+    }
+
+    [companies, total] = await Promise.all([
+      Company.find(query)
+        .sort({ expected_year: -1, expected_month: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Company.countDocuments(query)
+    ]);
+
+    // Join HR contacts for current year companies
     const companyIds = companies.map(c => c._id).filter(Boolean);
     const hrContacts = companyIds.length > 0
       ? await HrContact.find({ company_id: { $in: companyIds } }).lean()
@@ -1947,6 +2071,7 @@ router.get('/dashboard/confirmed-companies', async (req, res) => {
       expected_month: c.expected_month || null,
       expected_year: c.expected_year || null,
       assignedBranch: c.assignedBranch || null,
+      isPreviousCompany: false,
       hr: hrMap.get(c._id?.toString()) ? {
         name: hrMap.get(c._id.toString())?.name,
         email: hrMap.get(c._id.toString())?.email,
@@ -1967,9 +2092,9 @@ router.get('/settings', async (req, res) => {
     if (!settings) {
       settings = await Settings.create({});
     }
-    
+
     const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'Not configured in .env';
-    
+
     res.json({ ...settings.toJSON(), serviceAccountEmail });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
@@ -1997,7 +2122,7 @@ router.post('/settings/upload-logo', uploadLogo.single('logo'), async (req, res)
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image uploaded' });
     }
-    
+
     // The image is uploaded to cloudinary, multer-storage-cloudinary gives us the path which is the URL
     const logoUrl = (req.file as any).path;
 
@@ -2030,7 +2155,7 @@ router.post('/settings/google-sheet/test', async (req, res) => {
   if (!result.success) {
     return res.status(400).json({ error: result.error });
   }
-  
+
   res.json({ success: true, message: 'Connection successful' });
 });
 
@@ -2122,7 +2247,7 @@ router.post('/companies/:company_id/acknowledge-hr-update', hrValidationControll
     if (mongoose.connection.readyState !== 1) {
       await new Promise((resolve) => mongoose.connection.once('open', resolve));
     }
-    
+
     // 1. Set data_source = 'scanned' where data_source is missing
     const res1 = await Company.updateMany(
       { data_source: { $exists: false } } as any,

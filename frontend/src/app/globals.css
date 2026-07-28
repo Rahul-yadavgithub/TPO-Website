@@ -145,3 +145,14 @@
     @apply hover:transform-none hover:shadow-none active:scale-100;
   }
 }
+
+@keyframes float-bg {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+.animate-float-bg {
+  animation: float-bg 45s ease-in-out infinite;
+  background-size: 110% 110%;
+}

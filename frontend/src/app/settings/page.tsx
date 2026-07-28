@@ -12,6 +12,7 @@ import { Plus, FileSpreadsheet } from 'lucide-react';
 
 interface Settings {
   currentAcademicYearSheetId: string;
+  mtechCurrentAcademicYearSheetId: string;
   pastAcademicYearSheetId: string;
   lastSyncDate?: string;
   totalSynced?: number;
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     currentAcademicYearSheetId: '',
+    mtechCurrentAcademicYearSheetId: '',
     pastAcademicYearSheetId: '',
   });
   
@@ -73,6 +75,9 @@ export default function SettingsPage() {
   });
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
+  const branchName = userProfile?.branchId?.name || '';
+  const isMTechTpr = !isAdmin && branchName.startsWith('M.Tech');
+  const isBTechTpr = !isAdmin && !branchName.startsWith('M.Tech');
 
   const { data: serviceAccount, isLoading: isLoadingSA } = useQuery({
     queryKey: ['serviceAccount'],
@@ -94,10 +99,11 @@ export default function SettingsPage() {
     if (settings) {
       setFormData({
         currentAcademicYearSheetId: settings.currentAcademicYearSheetId || '',
+        mtechCurrentAcademicYearSheetId: settings.mtechCurrentAcademicYearSheetId || '',
         pastAcademicYearSheetId: settings.pastAcademicYearSheetId || '',
       });
       // If we have at least one ID saved, we mark as saved
-      if (settings.currentAcademicYearSheetId || settings.pastAcademicYearSheetId) {
+      if (settings.currentAcademicYearSheetId || settings.mtechCurrentAcademicYearSheetId || settings.pastAcademicYearSheetId) {
         setIsSaved(true);
       }
     }
@@ -105,7 +111,7 @@ export default function SettingsPage() {
 
   const testConnection = useMutation({
     mutationFn: async () => {
-      const idToTest = formData.currentAcademicYearSheetId || formData.pastAcademicYearSheetId;
+      const idToTest = formData.currentAcademicYearSheetId || formData.mtechCurrentAcademicYearSheetId || formData.pastAcademicYearSheetId;
       if (!idToTest) throw new Error('At least one Sheet ID is required to test');
       
       setTestStatus('testing');
@@ -219,9 +225,9 @@ export default function SettingsPage() {
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8">
         <div className="p-6 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Portal Branding</h2>
+            <h2 className="text-xl font-semibold">Portal Background</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Customize the logo displayed on the login page.
+              Upload an image to be used as a background on portal pages.
             </p>
           </div>
         </div>
@@ -231,11 +237,11 @@ export default function SettingsPage() {
               {logoPreview || settings?.portalLogoUrl ? (
                 <img 
                   src={logoPreview || settings?.portalLogoUrl} 
-                  alt="Portal Logo" 
-                  className="w-full h-full object-contain p-2"
+                  alt="Portal Background" 
+                  className="w-full h-full object-cover p-1 rounded-xl"
                 />
               ) : (
-                <div className="text-slate-400 text-sm text-center px-4">No logo uploaded</div>
+                <div className="text-slate-400 text-sm text-center px-4">No background uploaded</div>
               )}
               {uploadingLogo && (
                 <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
@@ -246,7 +252,7 @@ export default function SettingsPage() {
             
             <div className="flex-1">
               <label className="cursor-pointer bg-white border border-slate-200 hover:border-blue-400 text-slate-700 font-medium px-4 py-2 rounded-lg transition-colors inline-block shadow-sm">
-                <span>Upload New Logo</span>
+                <span>Upload Background Image</span>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -256,7 +262,7 @@ export default function SettingsPage() {
                 />
               </label>
               <p className="text-xs text-slate-500 mt-2 max-w-sm">
-                Supported formats: JPG, PNG, WEBP. Max file size: 5MB. For best results, use a transparent PNG or WEBP.
+                Supported formats: JPG, PNG, WEBP. Max file size: 5MB. For best results, use a high-quality landscape image.
               </p>
             </div>
           </div>
@@ -307,38 +313,79 @@ export default function SettingsPage() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200">
-                  <h3 className="font-semibold text-sm text-slate-700">Current Academic Year</h3>
-                  {formData.currentAcademicYearSheetId ? (
-                    <a 
-                      href={`https://docs.google.com/spreadsheets/d/${formData.currentAcademicYearSheetId}/edit`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors"
-                    >
-                      <ExternalLink className="w-3 h-3" /> Open Sheet
-                    </a>
-                  ) : (
-                    <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed">
-                      <ExternalLink className="w-3 h-3" /> Open Sheet
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">Master Database Sheet ID</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm text-slate-900 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                    placeholder="e.g. 1BxiMVs..."
-                    value={formData.currentAcademicYearSheetId || ''}
-                    onChange={(e) => {
-                      setFormData({...formData, currentAcademicYearSheetId: e.target.value});
-                      setTestStatus('idle');
-                      setIsSaved(false);
-                    }}
-                    required
-                  />
-                </div>
+                {(isAdmin || isBTechTpr) && (
+                  <>
+                    <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200">
+                      <h3 className="font-semibold text-sm text-slate-700">B.Tech Current Academic Year</h3>
+                      {formData.currentAcademicYearSheetId ? (
+                        <a 
+                          href={`https://docs.google.com/spreadsheets/d/${formData.currentAcademicYearSheetId}/edit`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed">
+                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Master Database Sheet ID</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm text-slate-900 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                        placeholder="e.g. 1BxiMVs..."
+                        value={formData.currentAcademicYearSheetId || ''}
+                        onChange={(e) => {
+                          setFormData({...formData, currentAcademicYearSheetId: e.target.value});
+                          setTestStatus('idle');
+                          setIsSaved(false);
+                        }}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {(isAdmin || isMTechTpr) && (
+                  <>
+                    <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-200 mt-4">
+                      <h3 className="font-semibold text-sm text-slate-700">M.Tech Current Academic Year</h3>
+                      {formData.mtechCurrentAcademicYearSheetId ? (
+                        <a 
+                          href={`https://docs.google.com/spreadsheets/d/${formData.mtechCurrentAcademicYearSheetId}/edit`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                        </a>
+                      ) : (
+                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed">
+                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">Master Database Sheet ID</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-sm text-slate-900 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                        placeholder="e.g. 1BxiMVs..."
+                        value={formData.mtechCurrentAcademicYearSheetId || ''}
+                        onChange={(e) => {
+                          setFormData({...formData, mtechCurrentAcademicYearSheetId: e.target.value});
+                          setTestStatus('idle');
+                          setIsSaved(false);
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+
                 {isAdmin && (
                   <div className="flex gap-2 pt-2">
                     <button 
@@ -446,7 +493,7 @@ export default function SettingsPage() {
                 <button 
                   type="button"
                   onClick={() => testConnection.mutate()}
-                  disabled={testConnection.isPending || (!formData.currentAcademicYearSheetId && !formData.pastAcademicYearSheetId)}
+                  disabled={testConnection.isPending || (!formData.currentAcademicYearSheetId && !formData.mtechCurrentAcademicYearSheetId && !formData.pastAcademicYearSheetId)}
                   className="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-xl flex justify-center items-center gap-2 text-sm font-bold transition-colors disabled:opacity-50"
                 >
                   {testConnection.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
