@@ -17,8 +17,13 @@ import { googleSheetService } from '../services/google/GoogleSheetProvider';
 import { apiKeyController } from '../controllers/apiKeyController';
 import { hrValidationController } from '../controllers/hrValidationController';
 import { AgentPipeline } from '../services/agents/AgentPipeline';
+import { protect } from '../middleware/auth';
+import { uploadLogo } from '../utils/cloudinary';
 
 const router = Router();
+
+// Apply auth middleware to all /api routes
+router.use(protect);
 
 // --- DASHBOARD STATS ---
 router.get('/stats', async (req, res) => {
@@ -204,6 +209,187 @@ router.get('/companies/check-name', async (req, res) => {
   } catch (error) {
     console.error('Check name error:', error);
     res.status(500).json({ error: 'Failed to check company name' });
+  };
+})
+
+// @route   POST /api/companies/manual-company
+// @desc    Admin only: Add a manual company to global pool
+router.post('/companies/manual-company', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { companyName, website, hrName, hrPhone, hrEmail, linkedinProfile } = req.body;
+    if (!companyName) return res.status(400).json({ error: 'Company name is required' });
+
+    const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let company = await Company.findOne({ normalizedName }).session(session);
+
+    if (company) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: 'Company already exists in the master database.' });
+    }
+
+    company = new Company({
+      companyName,
+      normalizedName,
+      website,
+      syncStatus: 'pending',
+      status: CompanyStatus.PENDING_REVIEW, // Or APPROVED since admin added it? Let's use APPROVED.
+      placementScore: 0,
+      confidenceScore: 100,
+      aiConfidence: 100,
+      source: {
+        platform: 'MANUAL_ADMIN',
+        sourceUrl: 'MANUAL_ADMIN',
+        discoveredAt: new Date()
+      },
+      discoveryHistory: [],
+      startupSignals: [],
+      confirmation_status: 'not_confirmed',
+      contact_status: 'not_contacted'
+    });
+    
+    // Auto-approve if admin adds it manually
+    company.status = CompanyStatus.APPROVED;
+    
+    await company.save({ session });
+
+    if (hrName || hrPhone || hrEmail || linkedinProfile) {
+      await HrContact.create([{
+        company_id: company._id,
+        name: hrName,
+        mobile: hrPhone,
+        email: hrEmail,
+        linkedin_url: linkedinProfile
+      }], { session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ success: true, company });
+  } catch (error) {
+    console.error('Manual company add error:', error);
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: 'Failed to add company' });
+  }
+});
+
+// @route   POST /api/companies/bulk-validate-companies
+// @desc    Admin only: Validate bulk company upload
+router.post('/companies/bulk-validate-companies', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const { companies } = req.body;
+    if (!Array.isArray(companies)) return res.status(400).json({ error: 'Companies array is required' });
+
+    const existingCompanies = await Company.find().select('normalizedName').lean();
+    const existingNames = new Set(existingCompanies.map((c: any) => c.normalizedName));
+
+    const validCompanies = [];
+    const duplicateCompanies = [];
+
+    for (const c of companies) {
+      if (!c.companyName) continue;
+      const normalized = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (existingNames.has(normalized)) {
+        duplicateCompanies.push(c);
+      } else {
+        validCompanies.push(c);
+        existingNames.add(normalized);
+      }
+    }
+
+    res.json({
+      validCount: validCompanies.length,
+      duplicateCount: duplicateCompanies.length,
+      validCompanies,
+      duplicateCompanies
+    });
+  } catch (error) {
+    console.error('Bulk validate error:', error);
+    res.status(500).json({ error: 'Failed to validate companies' });
+  }
+});
+
+// @route   POST /api/companies/bulk-import-companies
+// @desc    Admin only: Import validated companies
+router.post('/companies/bulk-import-companies', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { companies } = req.body;
+    if (!Array.isArray(companies) || companies.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: 'Valid companies array is required' });
+    }
+
+    const companyDocs = [];
+    const hrContacts = [];
+
+    for (const c of companies) {
+      const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const companyId = new mongoose.Types.ObjectId();
+      
+      companyDocs.push({
+        _id: companyId,
+        companyName: c.companyName,
+        normalizedName,
+        syncStatus: 'pending',
+        status: CompanyStatus.APPROVED,
+        placementScore: 0,
+        confidenceScore: 100,
+        aiConfidence: 100,
+        source: {
+          platform: 'BULK_ADMIN',
+          sourceUrl: 'BULK_ADMIN',
+          discoveredAt: new Date()
+        },
+        discoveryHistory: [],
+        startupSignals: [],
+        confirmation_status: 'not_confirmed',
+        contact_status: 'not_contacted'
+      });
+
+      if (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile) {
+        hrContacts.push({
+          company_id: companyId,
+          name: c.hrName || '',
+          mobile: c.hrPhone || '',
+          email: c.hrEmail || '',
+          linkedin_url: c.linkedinProfile || ''
+        });
+      }
+    }
+
+    if (companyDocs.length > 0) {
+      await Company.insertMany(companyDocs, { session });
+    }
+    if (hrContacts.length > 0) {
+      await HrContact.insertMany(hrContacts, { session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ success: true, count: companyDocs.length });
+  } catch (error) {
+    console.error('Bulk import error:', error);
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: 'Failed to import companies' });
   }
 });
 
@@ -453,6 +639,95 @@ router.post('/companies/bulk-assign', async (req, res) => {
     await session.abortTransaction();
     session.endSession();
     res.status(500).json({ error: 'Failed to bulk assign branches' });
+  }
+});
+
+router.post('/companies/sync-sheet', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    // Sync all companies that have an assigned branch
+    const companiesToSync = await Company.find({ 
+      assignedBranch: { $exists: true, $ne: null } 
+    }).session(session);
+
+    if (companiesToSync.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: 'No companies available to sync' });
+    }
+
+    const now = new Date();
+    let totalSynced = 0;
+    const historyLogs = [];
+
+    // Group by branch
+    const branchMap = new Map<string, typeof companiesToSync>();
+    for (const company of companiesToSync) {
+      const branchName = company.assignedBranch!;
+      if (!branchMap.has(branchName)) branchMap.set(branchName, []);
+      branchMap.get(branchName)!.push(company);
+    }
+
+    // Sync per branch
+    for (const [branchName, companiesGroup] of branchMap.entries()) {
+      const syncResult = await googleSheetService.appendCompaniesToSheet(companiesGroup, branchName);
+      
+      if (syncResult.success) {
+        for (const company of companiesGroup) {
+          if (company.contact_outcome === 'rejected') {
+            await Company.deleteOne({ _id: company._id }, { session });
+            await HrContact.deleteMany({ company_id: company._id }, { session });
+            await ContactLog.deleteMany({ company_id: company._id }, { session });
+            await CompanyStatusHistory.deleteMany({ company_id: company._id }, { session });
+          } else {
+            await Company.updateOne(
+              { _id: company._id },
+              { $set: { syncStatus: 'synced', lastSynced: now } },
+              { session }
+            );
+            totalSynced++;
+          }
+        }
+
+        historyLogs.push(...companiesGroup
+          .filter(company => company.contact_outcome !== 'rejected')
+          .map(company => ({
+            company_id: company._id,
+            field_changed: 'sync_status',
+            old_value: company.syncStatus || 'pending',
+            new_value: 'synced',
+            changed_by: 'System (Global Sync)'
+          }))
+        );
+      } else {
+        console.error(`Global sync failed for branch ${branchName}`);
+      }
+    }
+
+    if (historyLogs.length > 0) {
+      await CompanyStatusHistory.insertMany(historyLogs, { session });
+    }
+
+    // Get total count of all synced companies across the database to update settings accurately
+    const totalSyncedInDb = await Company.countDocuments({ syncStatus: 'synced' }).session(session);
+
+    await Settings.updateOne({}, {
+      $set: { 
+        lastSyncDate: now,
+        totalSynced: totalSyncedInDb 
+      }
+    }, { session, upsert: true });
+
+    await session.commitTransaction();
+    session.endSession();
+    
+    res.json({ message: 'Global sync successful', syncedCount: totalSynced });
+  } catch (error) {
+    console.error('Global sync error:', error);
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: 'Failed to perform global sync' });
   }
 });
 
@@ -1097,6 +1372,133 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
   }
 });
 
+router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
+  try {
+    const branchIdParam = req.params.branch_id;
+    let branch;
+    if (mongoose.Types.ObjectId.isValid(branchIdParam)) {
+      branch = await Branch.findById(branchIdParam);
+    }
+    if (!branch) {
+      branch = await Branch.findOne({ name: branchIdParam });
+    }
+    if (!branch) return res.status(404).json({ error: 'Branch not found' });
+
+    const { companies } = req.body;
+    if (!Array.isArray(companies)) return res.status(400).json({ error: 'Companies array is required' });
+
+    const existingCompanies = await Company.find({ assignedBranch: branch.name }).select('normalizedName').lean();
+    const existingNames = new Set(existingCompanies.map((c: any) => c.normalizedName));
+
+    const validCompanies = [];
+    const duplicateCompanies = [];
+
+    for (const c of companies) {
+      if (!c.companyName) continue;
+      const normalized = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (existingNames.has(normalized)) {
+        duplicateCompanies.push(c);
+      } else {
+        validCompanies.push(c);
+        existingNames.add(normalized); // Prevent duplicates within the same batch
+      }
+    }
+
+    res.json({
+      validCount: validCompanies.length,
+      duplicateCount: duplicateCompanies.length,
+      validCompanies,
+      duplicateCompanies
+    });
+  } catch (error) {
+    console.error('Bulk validate error:', error);
+    res.status(500).json({ error: 'Failed to validate companies' });
+  }
+});
+
+router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const branchIdParam = req.params.branch_id;
+    let branch;
+    if (mongoose.Types.ObjectId.isValid(branchIdParam)) {
+      branch = await Branch.findById(branchIdParam).session(session);
+    }
+    if (!branch) {
+      branch = await Branch.findOne({ name: branchIdParam }).session(session);
+    }
+    if (!branch) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: 'Branch not found' });
+    }
+
+    const { companies } = req.body;
+    if (!Array.isArray(companies)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: 'Companies array is required' });
+    }
+
+    const newCompanies = [];
+    const newHrContacts = [];
+
+    for (const c of companies) {
+      const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      const companyId = new mongoose.Types.ObjectId();
+      newCompanies.push({
+        _id: companyId,
+        companyName: c.companyName,
+        normalizedName,
+        assignedBranch: branch.name,
+        syncStatus: 'pending',
+        status: CompanyStatus.DISCOVERED,
+        placementScore: 0,
+        confidenceScore: 0,
+        aiConfidence: 0,
+        source: {
+          platform: 'EXCEL_IMPORT',
+          sourceUrl: 'EXCEL_IMPORT',
+          discoveredAt: new Date()
+        },
+        discoveryHistory: [],
+        startupSignals: [],
+        confirmation_status: 'not_confirmed',
+        contact_status: 'not_contacted'
+      });
+
+      if (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile) {
+        newHrContacts.push({
+          company_id: companyId,
+          name: c.hrName,
+          mobile: c.hrPhone,
+          email: c.hrEmail,
+          linkedin_url: c.linkedinProfile
+        });
+      }
+    }
+
+    if (newCompanies.length > 0) {
+      await Company.insertMany(newCompanies, { session });
+    }
+    if (newHrContacts.length > 0) {
+      await HrContact.insertMany(newHrContacts, { session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    res.json({ success: true, importedCount: newCompanies.length });
+  } catch (error) {
+    console.error('Bulk import error:', error);
+    await session.abortTransaction();
+    session.endSession();
+    res.status(500).json({ error: 'Failed to bulk import companies' });
+  }
+});
+
 router.patch('/companies/:id/mark-delete', async (req, res) => {
   try {
     const company = await Company.findByIdAndUpdate(req.params.id, { pending_delete: true }, { new: true });
@@ -1587,6 +1989,30 @@ router.put('/settings', async (req, res) => {
     res.json(settings);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update settings' });
+  }
+});
+
+router.post('/settings/upload-logo', uploadLogo.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
+    
+    // The image is uploaded to cloudinary, multer-storage-cloudinary gives us the path which is the URL
+    const logoUrl = (req.file as any).path;
+
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = new Settings({ portalLogoUrl: logoUrl });
+    } else {
+      settings.portalLogoUrl = logoUrl;
+    }
+    await settings.save();
+
+    res.status(200).json({ success: true, url: logoUrl });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error during upload' });
   }
 });
 

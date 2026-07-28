@@ -88,26 +88,6 @@ export class GoogleSheetProvider {
     const settings = await Settings.findOne();
     if (!settings) throw new Error('Settings not configured in DB');
 
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    let currentAcademicYear = '';
-    if (now.getMonth() < 5) { // Jan-May
-      currentAcademicYear = `${currentYear - 1}-${currentYear}`;
-    } else { // Jun-Dec
-      currentAcademicYear = `${currentYear}-${currentYear + 1}`;
-    }
-
-    const currentCompanies: ICompany[] = [];
-    const pastCompanies: ICompany[] = [];
-
-    for (const company of companies) {
-      if (!company.academic_year || company.academic_year === currentAcademicYear) {
-        currentCompanies.push(company);
-      } else {
-        pastCompanies.push(company);
-      }
-    }
-
     const syncBatch = async (batch: ICompany[], sheetId: string) => {
       if (batch.length === 0) return;
       if (!sheetId) throw new Error(`Target Google Sheet ID is missing.`);
@@ -218,14 +198,160 @@ export class GoogleSheetProvider {
     };
 
     try {
-      await syncBatch(currentCompanies, settings.currentAcademicYearSheetId);
-      await syncBatch(pastCompanies, settings.pastAcademicYearSheetId);
+      await syncBatch(companies, settings.currentAcademicYearSheetId);
 
       return { success: true };
     } catch (error) {
       console.error('Failed to append companies to sheet:', error);
       throw error;
     }
+  }
+
+  public async appendPreviousCompaniesToSheet(
+    companies: any[],
+    sheetId: string
+  ): Promise<{ success: boolean }> {
+    await this.initialize();
+    if (!this.sheets) throw new Error('Google Sheets Auth not configured');
+    if (!sheetId) throw new Error('Target Google Sheet ID is missing.');
+
+    const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const sheets = spreadsheet.data.sheets || [];
+    if (sheets.length === 0 || !sheets[0].properties?.title) {
+      throw new Error('No worksheets found in the target spreadsheet');
+    }
+    const sheetTab = sheets[0].properties.title;
+
+    // Fetch existing data to find duplicates/updates
+    const existingRows = await this.fetchInboundData(sheetId, sheetTab);
+    const companyRowMap = new Map<string, number>();
+    
+    for (let i = 0; i < existingRows.length; i++) {
+      const row = existingRows[i];
+      if (i === 0 && row[0]?.toLowerCase().includes('company')) continue;
+      
+      const hiddenId = row[6]?.trim(); // ID is at index 6 (Col G)
+      if (hiddenId) {
+        companyRowMap.set(hiddenId, i);
+      }
+    }
+
+    const valuesToAppend: string[][] = [];
+    const updates: { range: string, values: string[][] }[] = [];
+
+    for (const company of companies) {
+      const rowData = [
+        company.companyName || '',
+        company.hrName || '',
+        company.hrPhone || '',
+        company.hrEmail || '',
+        company.academicYear || '',
+        company.notes || '',
+        company._id.toString()
+      ];
+
+      const hiddenIdStr = company._id.toString();
+      const existingRowIndex = companyRowMap.get(hiddenIdStr);
+
+      if (existingRowIndex !== undefined) {
+        // Update existing row
+        updates.push({
+          range: `${sheetTab}!A${existingRowIndex + 1}:G${existingRowIndex + 1}`,
+          values: [rowData]
+        });
+      } else {
+        // Append new row
+        valuesToAppend.push(rowData);
+      }
+    }
+
+    // Execute updates
+    if (updates.length > 0) {
+      await this.sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: updates
+        }
+      });
+    }
+
+    // Execute appends
+    if (valuesToAppend.length > 0) {
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId: sheetId,
+        range: `${sheetTab}!A:G`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: valuesToAppend },
+      });
+    }
+
+    return { success: true };
+  }
+
+  public async syncPreviousCompaniesBidirectional(sheetId: string): Promise<{ success: boolean; syncedCount: number }> {
+    await this.initialize();
+    if (!this.sheets) throw new Error('Google Sheets Auth not configured');
+    if (!sheetId) throw new Error('Target Google Sheet ID is missing.');
+
+    const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const sheets = spreadsheet.data.sheets || [];
+    if (sheets.length === 0 || !sheets[0].properties?.title) {
+      throw new Error('No worksheets found in the target spreadsheet');
+    }
+    const sheetTab = sheets[0].properties.title;
+
+    // Fetch existing data from sheet
+    const existingRows = await this.fetchInboundData(sheetId, sheetTab);
+    
+    // Dynamically import PreviousCompany model to avoid circular deps or keep it clean
+    const PreviousCompany = (await import('../../models/PreviousCompany')).default;
+
+    let syncedCount = 0;
+
+    // Process Sheet -> MongoDB (One-way sync based on normalized name)
+    for (let i = 0; i < existingRows.length; i++) {
+      const row = existingRows[i];
+      if (i === 0 && row[0]?.toLowerCase().includes('company')) continue; // skip header
+      
+      const companyName = row[0]?.trim();
+      if (!companyName) continue; // Skip empty rows
+
+      const hrName = row[1]?.trim() || '';
+      const hrPhone = row[2]?.trim() || '';
+      const hrEmail = row[3]?.trim() || '';
+      const academicYear = row[4]?.trim() || 'Unknown';
+      const notes = row[5]?.trim() || '';
+
+      const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      try {
+        let existing = await PreviousCompany.findOne({ normalizedName });
+        if (existing) {
+          existing.companyName = companyName;
+          existing.hrName = hrName;
+          existing.hrPhone = hrPhone;
+          existing.hrEmail = hrEmail;
+          if (row[4]?.trim()) existing.academicYear = academicYear;
+          existing.notes = notes;
+          existing.syncStatus = 'synced';
+          existing.lastSynced = new Date();
+          await existing.save();
+          syncedCount++;
+        } else {
+          const newCompany = new PreviousCompany({
+            companyName, normalizedName, hrName, hrPhone, hrEmail, academicYear, notes,
+            syncStatus: 'synced', lastSynced: new Date()
+          });
+          await newCompany.save();
+          syncedCount++;
+        }
+      } catch (e) {
+        console.error('Error syncing previous company row:', e);
+      }
+    }
+
+    return { success: true, syncedCount: syncedCount };
   }
 
   public async fetchInboundData(spreadsheetId: string, sheetTab: string): Promise<string[][]> {

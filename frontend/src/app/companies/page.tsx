@@ -3,9 +3,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useState } from 'react';
-import { Search, Globe, CheckCircle, XCircle, Info } from 'lucide-react';
+import { Search, Globe, CheckCircle, XCircle, Info, Plus, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import { CompanyDetailsModal } from '@/components/ui/CompanyDetailsModal';
+import { GlobalBulkUploadModal } from '@/components/ui/GlobalBulkUploadModal';
+import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 
 interface Company {
   _id: string;
@@ -41,7 +43,19 @@ export default function CompaniesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
+      return res.data.data;
+    }
+  });
+
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
 
   const { data, isLoading } = useQuery({
     queryKey: ['companies', page, search, statusFilter],
@@ -71,6 +85,22 @@ export default function CompaniesPage() {
           <p className="text-muted-foreground mt-1">
             Auto-discovered companies pending review and assignment. Sheet-synced companies are managed via the Sync Center.
           </p>
+          {isAdmin && (
+            <div className="flex items-center gap-3 mt-4">
+              <button 
+                onClick={() => setShowManualModal(true)}
+                className="flex items-center justify-center gap-2 text-indigo-600 font-medium hover:text-indigo-800 bg-white border border-indigo-200 rounded-lg px-4 py-2 transition-colors shadow-sm text-sm"
+              >
+                <Plus className="w-4 h-4" /> Add Manual
+              </button>
+              <button 
+                onClick={() => setShowBulkModal(true)}
+                className="flex items-center justify-center gap-2 text-white font-medium hover:bg-indigo-700 bg-indigo-600 rounded-lg px-4 py-2 transition-colors shadow-sm text-sm"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Bulk Excel
+              </button>
+            </div>
+          )}
         </div>
         
         <div className="flex gap-4 w-full md:w-auto">
@@ -249,6 +279,28 @@ export default function CompaniesPage() {
         company={selectedCompany}
         onUpdate={(updatedCompany) => setSelectedCompany(updatedCompany)}
       />
+
+      {showManualModal && (
+        <GlobalManualCompanyModal 
+          mode="current"
+          onClose={() => setShowManualModal(false)}
+          onSuccess={() => {
+            setShowManualModal(false);
+            queryClient.invalidateQueries({ queryKey: ['companies'] });
+          }}
+        />
+      )}
+
+      {showBulkModal && (
+        <GlobalBulkUploadModal 
+          mode="current"
+          onClose={() => setShowBulkModal(false)}
+          onSuccess={() => {
+            setShowBulkModal(false);
+            queryClient.invalidateQueries({ queryKey: ['companies'] });
+          }}
+        />
+      )}
     </div>
   );
 }

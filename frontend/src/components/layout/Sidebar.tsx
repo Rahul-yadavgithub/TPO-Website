@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { 
   LayoutDashboard, 
   ListPlus, 
@@ -13,15 +14,22 @@ import {
   CloudUpload,
   Users,
   Menu,
-  X
+  X,
+  Archive,
+  ChevronDown,
+  ExternalLink,
+  Inbox,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import axios from 'axios';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/sources', label: 'Scan Center', icon: Briefcase },
   { href: '/companies', label: 'Companies', icon: Database },
+  { href: '/requests', label: 'Requests', icon: Inbox },
   { href: '/sync', label: 'Sync Center', icon: CloudUpload },
   { href: '/branch-portal', label: 'Branch Portal', icon: Users },
   { href: '/history', label: 'Scan History', icon: History },
@@ -32,11 +40,62 @@ export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp');
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true });
+      window.location.href = '/login';
+    } catch (err) {
+      console.error(err);
+      window.location.href = '/login';
+    }
+  };
+
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
+      return res.data.data;
+    },
+    enabled: !isAuthPage,
+    retry: false
+  });
+
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/settings`);
+      return res.data;
+    },
+    enabled: !isAuthPage,
+    retry: false
+  });
+
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
+
+  useEffect(() => {
+    if (isAuthPage) return;
+    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
+      .then(res => {
+        if (res.data?.data?.portalLogoUrl) {
+          setLogoUrl(res.data.data.portalLogoUrl);
+        }
+      })
+      .catch(console.error);
+  }, [isAuthPage]);
 
   // Close mobile sidebar on route change
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
+
+  if (isAuthPage) {
+    return null;
+  }
 
   return (
     <>
@@ -51,8 +110,8 @@ export function Sidebar() {
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full border border-slate-200 overflow-hidden bg-white">
             <img 
-              src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp" 
-              alt="NITH Logo"
+              src={logoUrl} 
+              alt="Portal Logo"
               className="w-full h-full object-cover p-0.5"
             />
           </div>
@@ -159,8 +218,80 @@ export function Sidebar() {
           )}
         </div>
 
-        <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto overflow-x-hidden">
+        {/* Quick Links Dropdown */}
+        {(!isCollapsed || isMobileOpen) && (
+          <div className="px-4 py-3 border-b border-slate-100">
+            <div className="relative">
+              <button 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-blue-600" /> Master Sheets
+                </span>
+                <ChevronDown className={cn("w-4 h-4 text-slate-400 transition-transform", dropdownOpen && "rotate-180")} />
+              </button>
+              
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -5 }}
+                    className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 overflow-hidden"
+                  >
+                    <div className="p-1">
+                      {settings?.currentAcademicYearSheetId ? (
+                        <a 
+                          href={`https://docs.google.com/spreadsheets/d/${settings.currentAcademicYearSheetId}/edit`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 rounded-md transition-colors group"
+                        >
+                          <span>Current Year</span>
+                          <ExternalLink className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                        </a>
+                      ) : (
+                        <div className="px-3 py-2 text-xs font-medium text-slate-400 cursor-not-allowed">
+                          Current Year (Not Set)
+                        </div>
+                      )}
+                      
+                      {isAdmin ? (
+                        settings?.pastAcademicYearSheetId ? (
+                          <a 
+                            href={`https://docs.google.com/spreadsheets/d/${settings.pastAcademicYearSheetId}/edit`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-700 hover:bg-purple-50 hover:text-purple-700 rounded-md transition-colors group"
+                          >
+                            <span>Previous Year</span>
+                            <ExternalLink className="w-3 h-3 opacity-50 group-hover:opacity-100" />
+                          </a>
+                        ) : (
+                          <div className="px-3 py-2 text-xs font-medium text-slate-400 cursor-not-allowed">
+                            Previous Year (Not Set)
+                          </div>
+                        )
+                      ) : (
+                        <button 
+                          onClick={() => alert("Access Denied: Only administrators can view the past year's placement data.")}
+                          className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-slate-400 cursor-not-allowed bg-slate-50 opacity-60"
+                          title="Restricted to Admins"
+                        >
+                          <span>Previous Year</span>
+                          <ExternalLink className="w-3 h-3 opacity-30" />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
+        <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
+            if (item.href === '/requests' && !isAdmin) return null;
             const isActive = pathname === item.href;
             return (
               <Link
@@ -181,6 +312,20 @@ export function Sidebar() {
             );
           })}
         </nav>
+
+        <div className="p-4 border-t border-slate-200 mt-auto">
+          <button
+            onClick={handleLogout}
+            className={cn(
+              "w-full flex items-center rounded-md transition-colors text-sm font-bold text-red-600 hover:bg-red-50",
+              isCollapsed && !isMobileOpen ? "justify-center p-3" : "gap-3 px-3 py-2.5"
+            )}
+            title={isCollapsed && !isMobileOpen ? "Logout" : undefined}
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {(!isCollapsed || isMobileOpen) && <span className="whitespace-nowrap">Logout</span>}
+          </button>
+        </div>
       </div>
     </>
   );

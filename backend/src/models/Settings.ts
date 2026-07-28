@@ -6,6 +6,9 @@ export interface ISettings extends Document {
   serviceAccountEmail: string; // Stored just for UI display
   lastSyncDate?: Date;
   totalSynced: number;
+  pastLastSyncDate?: Date;
+  pastTotalSynced: number;
+  portalLogoUrl?: string;
 }
 
 const SettingsSchema: Schema = new Schema(
@@ -15,6 +18,9 @@ const SettingsSchema: Schema = new Schema(
     serviceAccountEmail: { type: String, default: '' },
     lastSyncDate: { type: Date },
     totalSynced: { type: Number, default: 0 },
+    pastLastSyncDate: { type: Date },
+    pastTotalSynced: { type: Number, default: 0 },
+    portalLogoUrl: { type: String, default: '' },
   },
   { timestamps: true }
 );

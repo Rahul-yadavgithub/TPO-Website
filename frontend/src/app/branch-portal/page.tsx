@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 import ApiKeyConfig from './ApiKeyConfig';
 import ValidateContactButton from './ValidateContactButton';
+import { BulkUploadModal } from '@/components/ui/BulkUploadModal';
+import { PreviousCompanyRequestModal } from '@/components/ui/PreviousCompanyRequestModal';
 
 export default function BranchPortalPage() {
   const queryClient = useQueryClient();
@@ -25,12 +27,31 @@ export default function BranchPortalPage() {
   const [isDuplicate, setIsDuplicate] = useState(false);
   const [checkingName, setCheckingName] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showPreviousCompanyModal, setShowPreviousCompanyModal] = useState(false);
   
   // Form State
   const [outcome, setOutcome] = useState<'call_again' | 'rejected' | ''>('');
   const [channel, setChannel] = useState<string>('Phone');
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
+
+  const { data: userProfile, isLoading: userLoading } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
+      return res.data.data;
+    }
+  });
+
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
+
+  // Auto-select branch if standard TPR
+  useEffect(() => {
+    if (userProfile && !isAdmin && userProfile.branchId && !selectedBranchId) {
+      setSelectedBranchId(userProfile.branchId);
+    }
+  }, [userProfile, isAdmin, selectedBranchId]);
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
@@ -66,6 +87,16 @@ export default function BranchPortalPage() {
       if (!selectedBranchId) return [];
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/not-confirmed`);
       return res.data;
+    },
+    enabled: !!selectedBranchId
+  });
+
+  const { data: pastRequests, isLoading: requestsLoading } = useQuery({
+    queryKey: ['previous-requests', selectedBranchId],
+    queryFn: async () => {
+      if (!selectedBranchId) return [];
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/requests/${selectedBranchId}`);
+      return res.data.data;
     },
     enabled: !!selectedBranchId
   });
@@ -230,18 +261,19 @@ export default function BranchPortalPage() {
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
         <div className="w-full max-w-md">
           <label className="block text-sm font-semibold text-slate-700 mb-2">Select Your Branch</label>
-          {branchesLoading ? (
+          {branchesLoading || userLoading ? (
             <div className="flex items-center gap-2 text-slate-500 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" /> Loading branches...
             </div>
           ) : (
             <select 
-              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 disabled:opacity-70 disabled:cursor-not-allowed"
               value={selectedBranchId}
               onChange={(e) => {
                 setSelectedBranchId(e.target.value);
                 setActiveView('dashboard');
               }}
+              disabled={!isAdmin}
             >
               <option value="">-- Choose Branch --</option>
               {branches?.map((b: any) => (
@@ -385,26 +417,57 @@ export default function BranchPortalPage() {
               </div>
 
               {/* Add New Company Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:col-span-2 lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col lg:col-span-1">
                 <div className="p-6 flex-1">
                   <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center mb-4">
                     <CloudUpload className="w-6 h-6 text-indigo-600" />
                   </div>
                   <h3 className="text-xl font-bold text-slate-900 mb-1">Add / Edit Company</h3>
-                  <p className="text-slate-500 text-sm">Manually add or update a company queue.</p>
+                  <p className="text-slate-500 text-sm">Manually add, update, or bulk import companies into the queue.</p>
+                </div>
+                <div className="border-t border-slate-100 bg-slate-50 p-4 flex gap-3">
+                  <button 
+                    onClick={() => setShowManualModal(true)}
+                    className="flex-1 flex items-center justify-center gap-2 text-indigo-600 font-medium hover:text-indigo-800 bg-white border border-indigo-200 rounded-lg py-2 transition-colors shadow-sm"
+                  >
+                    Manual <ArrowRight className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setShowBulkModal(true)}
+                    className="flex-1 flex items-center justify-center gap-2 text-white font-medium hover:bg-indigo-700 bg-indigo-600 rounded-lg py-2 transition-colors shadow-sm"
+                  >
+                    <FileSpreadsheet className="w-4 h-4" /> Bulk Excel
+                  </button>
+                </div>
+              </div>
+
+              {/* Previous Year Contact Request Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col lg:col-span-1">
+                <div className="p-6 flex-1 relative overflow-hidden">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-purple-50 rounded-full blur-xl pointer-events-none" />
+                  <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center mb-4 relative z-10">
+                    <History className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-1 relative z-10">Previous Year Contacts</h3>
+                  <p className="text-slate-500 text-sm relative z-10">Request contact info for past companies.</p>
                   
-                  <div className="mt-6 flex items-baseline gap-2">
-                    <span className="text-xl font-extrabold text-slate-900">Manual Entry</span>
+                  <div className="mt-4 flex flex-col gap-1 relative z-10">
+                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
+                      <span className="text-xs font-semibold text-slate-600 uppercase">Requests Made</span>
+                      <span className="text-sm font-bold text-slate-900">{pastRequests?.length || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                      <span className="text-xs font-semibold text-emerald-700 uppercase">Contacts Provided</span>
+                      <span className="text-sm font-bold text-emerald-700">{pastRequests?.filter((r: any) => r.status === 'approved').length || 0}</span>
+                    </div>
                   </div>
                 </div>
                 <div className="border-t border-slate-100 bg-slate-50 p-4">
                   <button 
-                    onClick={() => {
-                      setShowManualModal(true);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 text-indigo-600 font-medium hover:text-indigo-800 transition-colors"
+                    onClick={() => setShowPreviousCompanyModal(true)}
+                    className="w-full flex items-center justify-center gap-2 text-purple-600 font-medium hover:text-purple-800 transition-colors"
                   >
-                    Open Form <ArrowRight className="w-4 h-4" />
+                    Make Request <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -518,6 +581,30 @@ export default function BranchPortalPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedBranchId && showBulkModal && (
+        <BulkUploadModal 
+          branchId={selectedBranchId}
+          onClose={() => setShowBulkModal(false)}
+          onSuccess={() => {
+            setShowBulkModal(false);
+            syncMutation.mutate();
+          }}
+        />
+      )}
+
+      {selectedBranchId && showPreviousCompanyModal && (
+        <PreviousCompanyRequestModal 
+          branchId={selectedBranchId}
+          onClose={() => setShowPreviousCompanyModal(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['previous-requests', selectedBranchId] });
+            // Don't close modal immediately so they can see success or make another request if they want, 
+            // wait we can close it or keep it open. Let's just close it for simplicity.
+            setShowPreviousCompanyModal(false);
+          }}
+        />
       )}
 
       {/* Contact Details View */}
