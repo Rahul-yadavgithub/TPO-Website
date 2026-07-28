@@ -152,7 +152,7 @@ export function Sidebar() {
           <div className={cn("flex items-center gap-3", isCollapsed && !isMobileOpen && "hidden")}>
             <div className="w-10 h-10 flex-shrink-0 rounded-full border border-slate-200 shadow-sm overflow-hidden flex items-center justify-center bg-white relative z-10">
               <img 
-                src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp" 
+                src={logoUrl} 
                 alt="NITH Logo"
                 className="w-full h-full object-cover p-0.5"
               />
@@ -200,7 +200,7 @@ export function Sidebar() {
           {isCollapsed && !isMobileOpen && (
             <div className="w-10 h-10 flex-shrink-0 rounded-full border border-slate-200 shadow-sm overflow-hidden flex items-center justify-center bg-white relative z-10">
               <img 
-                src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp" 
+                src={logoUrl} 
                 alt="NITH Logo"
                 className="w-full h-full object-cover p-0.5"
               />

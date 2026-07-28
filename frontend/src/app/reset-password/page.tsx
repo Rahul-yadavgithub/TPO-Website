@@ -22,10 +22,22 @@ function ResetPasswordContent() {
   const id = searchParams.get('id');
 
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp'); // Default
 
   useEffect(() => {
     setCurrentTime(new Date());
+    setCurrentTime(new Date());
     const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
+    
+    // Fetch custom logo
+    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
+      .then(res => {
+        if (res.data?.data?.portalLogoUrl) {
+          setLogoUrl(res.data.data.portalLogoUrl);
+        }
+      })
+      .catch(console.error);
+
     return () => clearInterval(timeInterval);
   }, []);
 
@@ -77,7 +89,7 @@ function ResetPasswordContent() {
             <div className="text-[0.72rem] text-[#555] mt-0.5">हमीरपुर, हिमाचल प्रदेश (भारत) – 177 005</div>
           </div>
           <div className="flex-shrink-0">
-            <img src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp" alt="NITH Logo" className="w-20 h-20 object-contain" />
+            <img src={logoUrl} alt="NITH Logo" className="w-20 h-20 object-contain" />
           </div>
           <div className="flex-1 pl-4">
             <div className="text-[1.1rem] font-bold text-[#1a3a6e] leading-tight">National Institute of Technology Hamirpur</div>

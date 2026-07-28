@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 
 import ApiKeyConfig from './ApiKeyConfig';
 import ValidateContactButton from './ValidateContactButton';
+import ChangeContactDetailsButton from './ChangeContactDetailsButton';
 import { BulkUploadModal } from '@/components/ui/BulkUploadModal';
 import { PreviousContactsView } from '@/components/ui/PreviousContactsView';
 
@@ -624,16 +625,18 @@ export default function BranchPortalPage() {
             </h2>
           </div>
 
-          <div className="mb-6 relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search companies in this list..." 
-              value={listSearchQuery}
-              onChange={(e) => setListSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
-            />
-          </div>
+          {activeView !== 'single_contact' && (
+            <div className="mb-6 relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search companies in this list..." 
+                value={listSearchQuery}
+                onChange={(e) => setListSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+              />
+            </div>
+          )}
 
           <div className="space-y-6">
             {(() => {
@@ -796,8 +799,18 @@ export default function BranchPortalPage() {
                       )}
                     </div>
                     
-                    <div>
-                      <ValidateContactButton companyId={company._id} branchId={selectedBranchId} />
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex-1">
+                        <ValidateContactButton companyId={company._id} branchId={selectedBranchId} />
+                      </div>
+                      <div className="flex-1">
+                        <ChangeContactDetailsButton 
+                          companyId={company._id} 
+                          branchId={selectedBranchId}
+                          branchName={branches?.find((b: any) => b._id === selectedBranchId)?.name}
+                          currentHr={company.hr_contacts?.[0]} 
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

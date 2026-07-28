@@ -11,11 +11,22 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string>('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp'); // Default
   const router = useRouter();
 
   useEffect(() => {
     setCurrentTime(new Date());
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
+    
+    // Fetch custom logo
+    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
+      .then(res => {
+        if (res.data?.data?.portalLogoUrl) {
+          setLogoUrl(res.data.data.portalLogoUrl);
+        }
+      })
+      .catch(console.error);
+
     return () => clearInterval(t);
   }, []);
 
@@ -55,7 +66,7 @@ export default function ForgotPasswordPage() {
             <div className="text-[0.9rem] text-[#555] mt-1.5 font-medium">हमीरपुर, हिमाचल प्रदेश (भारत) – 177 005</div>
           </div>
           <div className="flex-shrink-0 flex justify-center">
-            <img src="https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp"
+            <img src={logoUrl}
               alt="NITH Logo" className="w-24 h-24 md:w-28 md:h-28 object-contain drop-shadow-sm" />
           </div>
           <div className="text-center md:text-left">

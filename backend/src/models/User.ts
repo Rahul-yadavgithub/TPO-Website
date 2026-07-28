@@ -8,7 +8,7 @@ export interface IUser extends Document {
   password?: string;
   branchId: mongoose.Types.ObjectId;
   role: 'tpr' | 'admin' | 'communication_tpr';
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'replaced';
   rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -22,7 +22,7 @@ const UserSchema: Schema = new Schema({
   password: { type: String, required: true },
   branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
   role: { type: String, enum: ['tpr', 'admin', 'communication_tpr'], default: 'tpr' },
-  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'replaced'], default: 'pending' },
   rejectionReason: { type: String },
 }, { timestamps: true });
 
