@@ -75,7 +75,12 @@ export default function LoginPage() {
     try {
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
         { email, password, portal: 'base' }, { withCredentials: true });
-      const { commToken } = res.data.data || {};
+      const { commToken } = await res.data.data || {};
+      
+      if (commToken) {
+        document.cookie = `tpr_token=${commToken}; path=/; max-age=2592000; ${window.location.protocol === 'https:' ? 'Secure;' : ''}`;
+      }
+
       if (isCommTpr && portalChoice === 'communication') {
         if (commToken) localStorage.setItem('comm_tpr_token', commToken);
         window.location.href = '/communication-tpr/dashboard';
