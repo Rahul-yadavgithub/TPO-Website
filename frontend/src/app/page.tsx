@@ -56,18 +56,7 @@ function AnimatedCounter({ target, duration = 600 }: { target: number; duration?
   return <>{count}</>;
 }
 
-// ─── Course Helper ─────────────────────────────────────────────────────────────
-const getCourseFromEmail = (email: string) => {
-  if (!email) return 'Other';
-  const match = email.match(/^\d{2}([a-z])/i);
-  if (!match) return 'Other';
-  const char = match[1].toLowerCase();
-  if (char === 'b') return 'B.Tech';
-  if (char === 'm') return 'M.Tech';
-  if (char === 'd') return 'Dual Degree';
-  if (char === 'a') return 'B.Arch';
-  return 'Other';
-};
+
 
 // ─── Skeleton Card ───────────────────────────────────────────────────────────
 function SkeletonCard() {
@@ -417,11 +406,13 @@ export default function Dashboard() {
     }
   });
 
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
+
   const { data: summary, isLoading, error, refetch, isFetching } = useQuery<DashboardSummary>({
-    queryKey: ['dashboard-summary', userProfile?.branchId],
+    queryKey: ['dashboard-summary', isAdmin ? 'all' : userProfile?.branchId],
     queryFn: async () => {
       let branchId = '';
-      if (userProfile?.branchId) {
+      if (!isAdmin && userProfile?.branchId) {
         branchId = typeof userProfile.branchId === 'object' ? userProfile.branchId._id : userProfile.branchId;
       }
       const params = branchId ? { branchId } : {};
@@ -433,71 +424,19 @@ export default function Dashboard() {
     refetchInterval: 5 * 60 * 1000,
   });
 
-  const branchId = userProfile?.branchId ? (typeof userProfile.branchId === 'object' ? userProfile.branchId._id : userProfile.branchId) : '';
+  const branchId = (!isAdmin && userProfile?.branchId) ? (typeof userProfile.branchId === 'object' ? userProfile.branchId._id : userProfile.branchId) : '';
 
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
-
-  const { data: adminRequests, refetch: refetchRequests } = useQuery({
-    queryKey: ['admin-requests'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/requests`);
-      return res.data.data;
-    },
-    enabled: isAdmin,
-    refetchInterval: 30000,
-  });
-
-  const approveTpr = async (id: string) => {
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/approve-tpr/${id}`);
-      toast.success('TPR Approved successfully');
-      refetchRequests();
-    } catch (err) {
-      toast.error('Failed to approve TPR');
-    }
-  };
-
-  const approveContact = async (id: string) => {
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/approve-contact/${id}`);
-      toast.success('Contact Request Approved & Sent to TPR');
-      refetchRequests();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to approve contact request');
-    }
-  };
-
-  const { data: allTprs, refetch: refetchTprs } = useQuery({
-    queryKey: ['admin-all-tprs'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/tprs`);
-      return res.data.data;
-    },
-    enabled: isAdmin,
-    refetchInterval: 60000,
-  });
 
   const { data: branchesData } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`, { withCredentials: true });
-      return res.data.data;
+      return res.data;
     },
     enabled: isAdmin
   });
 
-  const [tprCourseFilter, setTprCourseFilter] = useState('All');
-  const [tprBranchFilter, setTprBranchFilter] = useState('All');
 
-  const upgradeTpr = async (id: string) => {
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/upgrade-tpr/${id}`);
-      toast.success('TPR upgraded to Admin successfully!');
-      refetchTprs();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to upgrade TPR');
-    }
-  };
 
   const pendingCount = summary?.pending_review_count || 0;
   const timeAgo = Math.round((Date.now() - lastUpdated.getTime()) / 60000);
@@ -511,160 +450,13 @@ export default function Dashboard() {
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Discovery Dashboard</h1>
             <p className="text-slate-500 mt-1 text-sm md:text-base">Institution-wide placement intelligence at a glance.</p>
           </div>
-          <button onClick={() => { refetch(); refetchRequests(); refetchTprs(); }} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" title="Refresh">
+          <button onClick={() => { refetch(); }} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors" title="Refresh">
             <RefreshCw className={`w-5 h-5 ${isFetching ? 'animate-spin text-blue-500' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Admin Pending Requests Queue */}
-      {isAdmin && adminRequests && (adminRequests.tprs.length > 0 || adminRequests.contacts.length > 0) && (
-        <div className="mb-8 bg-white rounded-2xl border border-indigo-200 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-indigo-100 bg-indigo-50/50 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-indigo-900 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-indigo-600" /> Pending Admin Approvals
-            </h2>
-          </div>
-          <div className="p-0">
-            {/* Pending TPRs */}
-            {adminRequests.tprs.length > 0 && (
-              <div className="border-b border-slate-100 last:border-0">
-                <div className="bg-slate-50 px-5 py-2 border-b border-slate-100">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">TPR Registrations ({adminRequests.tprs.length})</h3>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-                  {adminRequests.tprs.map((tpr: any) => (
-                    <div key={tpr._id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                      <div>
-                        <p className="font-bold text-slate-900">{tpr.name}</p>
-                        <p className="text-sm text-slate-500">{tpr.email} • {tpr.branchId?.name}</p>
-                      </div>
-                      <button 
-                        onClick={() => approveTpr(tpr._id)}
-                        className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
-                      >
-                        <CheckCircle className="w-4 h-4" /> Approve
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {/* Pending Contacts */}
-            {adminRequests.contacts.length > 0 && (
-              <div className="border-b border-slate-100 last:border-0">
-                <div className="bg-slate-50 px-5 py-2 border-b border-slate-100">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Contact Requests ({adminRequests.contacts.length})</h3>
-                </div>
-                <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-                  {adminRequests.contacts.map((contact: any) => (
-                    <div key={contact._id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                      <div>
-                        <p className="font-bold text-slate-900">{contact.companyName}</p>
-                        <p className="text-sm text-slate-500">Requested by: {contact.requestedBy?.name} ({contact.branchId?.name})</p>
-                      </div>
-                      <button 
-                        onClick={() => approveContact(contact._id)}
-                        className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg shadow-sm flex items-center justify-center gap-2 transition-colors shrink-0"
-                      >
-                        <CheckCircle className="w-4 h-4" /> Approve & Send Details
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* TPR Directory & Access Management (Admin Only) */}
-      {isAdmin && allTprs && (
-        <div className="mb-8 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-indigo-600" /> TPR Directory & Access Management
-            </h2>
-            
-            <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-              <select 
-                className="w-full sm:w-auto bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-                value={tprCourseFilter}
-                onChange={e => { setTprCourseFilter(e.target.value); setTprBranchFilter('All'); }}
-              >
-                <option value="All">All Courses</option>
-                <option value="B.Tech">B.Tech</option>
-                <option value="M.Tech">M.Tech</option>
-                <option value="Dual Degree">Dual Degree</option>
-                <option value="B.Arch">B.Arch</option>
-              </select>
-              <select 
-                className="w-full sm:w-auto bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
-                value={tprBranchFilter}
-                onChange={e => setTprBranchFilter(e.target.value)}
-              >
-                <option value="All">All Branches</option>
-                {branchesData?.map((b: any) => (
-                  <option key={b._id} value={b._id}>{b.name}</option>
-                ))}
-              </select>
-              <span className="text-sm font-medium text-slate-500 whitespace-nowrap shrink-0 ml-1">
-                {allTprs?.filter((tpr: any) => {
-                  const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
-                  const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
-                  return courseMatch && branchMatch;
-                }).length} TPRs
-              </span>
-            </div>
-          </div>
-          <div className="divide-y divide-slate-100 max-h-80 overflow-y-auto">
-            {allTprs?.filter((tpr: any) => {
-              const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
-              const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
-              return courseMatch && branchMatch;
-            }).map((tpr: any) => (
-              <div key={tpr._id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <p className="font-bold text-slate-900">{tpr.name}</p>
-                    {tpr.role === 'admin' ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">Admin</span>
-                    ) : tpr.role === 'communication_tpr' ? (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">Comm TPR</span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600">Standard</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-500 mt-1">{tpr.email} • {tpr.branchId?.name}</p>
-                </div>
-                {tpr.role !== 'admin' && (
-                  <button 
-                    onClick={() => {
-                      if (window.confirm(`Are you sure you want to upgrade ${tpr.name} to an Admin? They will have full access.`)) {
-                        upgradeTpr(tpr._id);
-                      }
-                    }}
-                    className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors shrink-0"
-                  >
-                    Upgrade to Admin
-                  </button>
-                )}
-              </div>
-            ))}
-            
-            {allTprs?.filter((tpr: any) => {
-              const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
-              const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
-              return courseMatch && branchMatch;
-            }).length === 0 && (
-              <div className="text-center py-10 text-slate-500 text-sm">
-                No TPRs found matching the selected filters.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Manual Approval Queue Banner */}
       {!isLoading && (

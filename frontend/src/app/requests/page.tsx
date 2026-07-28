@@ -14,12 +14,27 @@ import {
   Clock,
   Mail,
   User as UserIcon,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
+
+const getCourseFromEmail = (email: string) => {
+  if (!email) return 'Other';
+  const match = email.match(/^\d{2}([a-z])/i);
+  if (!match) return 'Other';
+  const char = match[1].toLowerCase();
+  if (char === 'b') return 'B.Tech';
+  if (char === 'm') return 'M.Tech';
+  if (char === 'd') return 'Dual Degree';
+  if (char === 'a') return 'B.Arch';
+  return 'Other';
+};
 
 export default function RequestsPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'tpr' | 'company'>('tpr');
+  const [activeTab, setActiveTab] = useState<'tpr' | 'company' | 'directory'>('tpr');
+  const [tprCourseFilter, setTprCourseFilter] = useState('All');
+  const [tprBranchFilter, setTprBranchFilter] = useState('All');
   
   // Rejection modal state
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -40,6 +55,23 @@ export default function RequestsPage() {
         withCredentials: true
       });
       return res.data.data;
+    }
+  });
+
+  const { data: allTprs } = useQuery({
+    queryKey: ['admin-all-tprs'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/tprs`, { withCredentials: true });
+      return res.data.data;
+    },
+    refetchInterval: 60000,
+  });
+
+  const { data: branchesData } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`, { withCredentials: true });
+      return res.data;
     }
   });
 
@@ -109,6 +141,17 @@ export default function RequestsPage() {
       closeRejectModal();
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to reject request')
+  });
+
+  const upgradeTprMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/upgrade-tpr/${id}`, {}, { withCredentials: true });
+    },
+    onSuccess: () => {
+      toast.success('TPR upgraded to Admin successfully!');
+      queryClient.invalidateQueries({ queryKey: ['admin-all-tprs'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to upgrade TPR')
   });
 
   const openRejectModal = (type: 'tpr' | 'contact', id: string) => {
@@ -190,6 +233,15 @@ export default function RequestsPage() {
           {contacts.length > 0 && (
             <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded-full text-xs">{contacts.length}</span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('directory')}
+          className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'directory' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Our TPRs
         </button>
       </div>
 
@@ -292,6 +344,93 @@ export default function RequestsPage() {
                 </div>
               ))
             )
+          )}
+
+          {activeTab === 'directory' && (
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-indigo-600" /> TPR Directory & Access Management
+                </h2>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
+                  <select 
+                    className="w-full sm:w-auto bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={tprCourseFilter}
+                    onChange={e => { setTprCourseFilter(e.target.value); setTprBranchFilter('All'); }}
+                  >
+                    <option value="All">All Courses</option>
+                    <option value="B.Tech">B.Tech</option>
+                    <option value="M.Tech">M.Tech</option>
+                    <option value="Dual Degree">Dual Degree</option>
+                    <option value="B.Arch">B.Arch</option>
+                  </select>
+                  <select 
+                    className="w-full sm:w-auto bg-white border border-slate-200 rounded-lg text-sm px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={tprBranchFilter}
+                    onChange={e => setTprBranchFilter(e.target.value)}
+                  >
+                    <option value="All">All Branches</option>
+                    {branchesData?.map((b: any) => (
+                      <option key={b._id} value={b._id}>{b.name}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm font-medium text-slate-500 whitespace-nowrap shrink-0 ml-1">
+                    {allTprs?.filter((tpr: any) => {
+                      const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
+                      const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
+                      return courseMatch && branchMatch;
+                    }).length || 0} TPRs
+                  </span>
+                </div>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                {allTprs?.filter((tpr: any) => {
+                  const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
+                  const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
+                  return courseMatch && branchMatch;
+                }).map((tpr: any) => (
+                  <div key={tpr._id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <p className="font-bold text-slate-900">{tpr.name}</p>
+                        {tpr.role === 'admin' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">Admin</span>
+                        ) : tpr.role === 'communication_tpr' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700">Comm TPR</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600">Standard</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-slate-500 mt-1">{tpr.email} • {tpr.branchId?.name}</p>
+                    </div>
+                    {tpr.role !== 'admin' && (
+                      <button 
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to upgrade ${tpr.name} to an Admin? They will have full access.`)) {
+                            upgradeTprMutation.mutate(tpr._id);
+                          }
+                        }}
+                        disabled={upgradeTprMutation.isPending}
+                        className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors shrink-0 flex items-center justify-center gap-2"
+                      >
+                        {upgradeTprMutation.isPending && upgradeTprMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upgrade to Admin'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                
+                {allTprs?.filter((tpr: any) => {
+                  const courseMatch = tprCourseFilter === 'All' || getCourseFromEmail(tpr.email) === tprCourseFilter;
+                  const branchMatch = tprBranchFilter === 'All' || tpr.branchId?._id === tprBranchFilter || tpr.branchId?.name === tprBranchFilter;
+                  return courseMatch && branchMatch;
+                }).length === 0 && (
+                  <div className="text-center py-10 text-slate-500 text-sm">
+                    No TPRs found matching the selected filters.
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

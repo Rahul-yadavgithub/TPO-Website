@@ -243,6 +243,8 @@ export default function BranchPortalPage() {
     onSuccess: () => {
       toast.success('Contact log saved successfully!');
       queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
       setOutcome('');
       setChannel('Phone');
       setNotes('');
