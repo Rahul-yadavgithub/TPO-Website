@@ -15,6 +15,8 @@ interface Settings {
   pastAcademicYearSheetId: string;
   lastSyncDate?: string;
   totalSynced?: number;
+  pastLastSyncDate?: string;
+  pastTotalSynced?: number;
   portalLogoUrl?: string;
 }
 
