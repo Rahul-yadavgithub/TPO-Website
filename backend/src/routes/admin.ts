@@ -263,4 +263,32 @@ router.post('/upgrade-tpr/:id', async (req, res) => {
   }
 });
 
+// @route   POST /api/admin/revoke-admin/:id
+// @desc    Revoke admin role from a TPR
+router.post('/revoke-admin/:id', async (req, res) => {
+  try {
+    // Prevent the main admin from being revoked
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.email === 'tpo@nith.ac.in') {
+      return res.status(403).json({ success: false, message: 'Cannot revoke main admin' });
+    }
+
+    if (user.role !== 'admin') {
+      return res.status(400).json({ success: false, message: 'User is not an admin' });
+    }
+
+    user.role = 'tpr';
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Admin access revoked successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
 export default router;

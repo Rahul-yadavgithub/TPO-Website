@@ -52,6 +52,40 @@ export default function RequestsPage() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedCompanyDetails, setSelectedCompanyDetails] = useState<any>(null);
 
+  // Role change modal state
+  const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false);
+  const [roleChangeAction, setRoleChangeAction] = useState<'upgrade' | 'revoke' | null>(null);
+  const [selectedTprForRole, setSelectedTprForRole] = useState<any>(null);
+
+  const openRoleChangeModal = (action: 'upgrade' | 'revoke', tpr: any) => {
+    setRoleChangeAction(action);
+    setSelectedTprForRole(tpr);
+    setRoleChangeModalOpen(true);
+  };
+
+  const closeRoleChangeModal = () => {
+    setRoleChangeModalOpen(false);
+    setRoleChangeAction(null);
+    setSelectedTprForRole(null);
+  };
+
+  const handleConfirmRoleChange = () => {
+    if (!selectedTprForRole) return;
+    if (roleChangeAction === 'upgrade') {
+      upgradeTprMutation.mutate(selectedTprForRole._id, {
+        onSuccess: () => {
+          closeRoleChangeModal();
+        }
+      });
+    } else if (roleChangeAction === 'revoke') {
+      revokeAdminMutation.mutate(selectedTprForRole._id, {
+        onSuccess: () => {
+          closeRoleChangeModal();
+        }
+      });
+    }
+  };
+
   const openDetailsModal = (companyData: any) => {
     setSelectedCompanyDetails(companyData);
     setDetailsModalOpen(true);
@@ -161,6 +195,17 @@ export default function RequestsPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-all-tprs'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to upgrade TPR')
+  });
+
+  const revokeAdminMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/admin/revoke-admin/${id}`, {}, { withCredentials: true });
+    },
+    onSuccess: () => {
+      toast.success('Admin access revoked successfully!');
+      queryClient.invalidateQueries({ queryKey: ['admin-all-tprs'] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to revoke admin access')
   });
 
   const openRejectModal = (type: 'tpr' | 'contact', id: string) => {
@@ -426,15 +471,20 @@ export default function RequestsPage() {
                     </div>
                     {tpr.role !== 'admin' && (
                       <button 
-                        onClick={() => {
-                          if (window.confirm(`Are you sure you want to upgrade ${tpr.name} to an Admin? They will have full access.`)) {
-                            upgradeTprMutation.mutate(tpr._id);
-                          }
-                        }}
+                        onClick={() => openRoleChangeModal('upgrade', tpr)}
                         disabled={upgradeTprMutation.isPending}
                         className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors shrink-0 flex items-center justify-center gap-2"
                       >
                         {upgradeTprMutation.isPending && upgradeTprMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upgrade to Admin'}
+                      </button>
+                    )}
+                    {tpr.role === 'admin' && (
+                      <button 
+                        onClick={() => openRoleChangeModal('revoke', tpr)}
+                        disabled={revokeAdminMutation.isPending}
+                        className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-red-200 transition-colors shrink-0 flex items-center justify-center gap-2"
+                      >
+                        {revokeAdminMutation.isPending && revokeAdminMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Revoke Admin'}
                       </button>
                     )}
                   </div>
@@ -636,6 +686,51 @@ export default function RequestsPage() {
                 className="px-6 py-2.5 font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 rounded-xl transition-colors shadow-sm"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Role Change Modal */}
+      {roleChangeModalOpen && selectedTprForRole && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden relative animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <ShieldCheck className={`w-5 h-5 ${roleChangeAction === 'upgrade' ? 'text-indigo-600' : 'text-red-600'}`} />
+                {roleChangeAction === 'upgrade' ? 'Upgrade to Admin' : 'Revoke Admin Access'}
+              </h3>
+              <button onClick={closeRoleChangeModal} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600">
+                {roleChangeAction === 'upgrade' ? (
+                  <>Are you sure you want to upgrade <strong>{selectedTprForRole.name}</strong> to an Admin? They will have full administrative access to the platform.</>
+                ) : (
+                  <>Are you sure you want to revoke Admin access for <strong>{selectedTprForRole.name}</strong>? They will become a standard TPR.</>
+                )}
+              </p>
+            </div>
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                type="button"
+                onClick={closeRoleChangeModal}
+                className="flex-1 py-2.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRoleChange}
+                disabled={upgradeTprMutation.isPending || revokeAdminMutation.isPending}
+                className={`flex-1 py-2.5 font-semibold text-white rounded-xl transition-colors flex items-center justify-center gap-2 ${
+                  roleChangeAction === 'upgrade' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-red-600 hover:bg-red-700'
+                } disabled:bg-slate-300`}
+              >
+                {(upgradeTprMutation.isPending || revokeAdminMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
+                Confirm
               </button>
             </div>
           </div>
