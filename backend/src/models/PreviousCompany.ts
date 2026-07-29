@@ -7,6 +7,13 @@ export interface IPreviousCompany extends Document {
   hrName?: string;
   hrEmail?: string;
   hrPhone?: string;
+  additionalContacts?: Array<{
+    hrName: string;
+    hrEmail: string;
+    hrPhone: string;
+    sourceSheet: string;
+    academicYear: string;
+  }>;
   notes?: string;
   syncStatus?: 'pending' | 'synced' | 'failed';
   lastSynced?: Date;
@@ -15,6 +22,7 @@ export interface IPreviousCompany extends Document {
   contactedByBranchName?: string;
   contactedByTprName?: string;
   updatedByTprName?: string;
+  is_verified_by_admin?: boolean;
   section: string;
   extraData?: Record<string, any>;
   createdAt: Date;
@@ -28,6 +36,13 @@ const PreviousCompanySchema: Schema = new Schema({
   hrName: { type: String },
   hrEmail: { type: String },
   hrPhone: { type: String },
+  additionalContacts: [{
+    hrName: { type: String },
+    hrEmail: { type: String },
+    hrPhone: { type: String },
+    sourceSheet: { type: String },
+    academicYear: { type: String }
+  }],
   notes: { type: String },
   syncStatus: { type: String, enum: ['pending', 'synced', 'failed'], default: 'pending' },
   lastSynced: { type: Date },
@@ -36,6 +51,7 @@ const PreviousCompanySchema: Schema = new Schema({
   contactedByBranchName: { type: String },
   contactedByTprName: { type: String },
   updatedByTprName: { type: String },
+  is_verified_by_admin: { type: Boolean, default: false },
   section: { type: String, required: true, default: 'Uncategorized' },
   extraData: { type: Schema.Types.Mixed, default: {} }
 }, { timestamps: true, collection: 'PreviousCompany' });

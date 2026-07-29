@@ -134,13 +134,20 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
   };
 
   const handleImport = async () => {
-    if (!validationResult || validationResult.validCompanies.length === 0) return;
+    if (!validationResult) return;
+    
+    const companiesToImport = mode === 'previous' 
+      ? [...validationResult.validCompanies, ...(validationResult.duplicateCompanies || [])]
+      : validationResult.validCompanies;
+
+    if (companiesToImport.length === 0) return;
+
     setImporting(true);
     try {
       await axios.post(getImportEndpoint(), {
-        companies: validationResult.validCompanies
+        companies: companiesToImport
       }, { withCredentials: true });
-      toast.success(`Successfully added ${validationResult.validCompanies.length} companies to the global database!`);
+      toast.success(`Successfully processed ${companiesToImport.length} companies!`);
       onSuccess();
     } catch (error: any) {
       console.error(error);
@@ -299,7 +306,7 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
                 </div>
               </div>
 
-              {validationResult.validCount === 0 && (
+              {(validationResult.validCount === 0 && (mode === 'current' || validationResult.duplicateCount === 0)) && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-800">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                   <p className="text-sm font-medium">No new companies to import. All companies in the file already exist or the file was empty.</p>
@@ -359,11 +366,11 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
                 </button>
                 <button 
                   onClick={handleImport}
-                  disabled={importing || validationResult.validCount === 0}
+                  disabled={importing || (mode === 'current' ? validationResult.validCount === 0 : (validationResult.validCount + validationResult.duplicateCount) === 0)}
                   className="w-2/3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                 >
                   {importing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CloudUpload className="w-5 h-5" />}
-                  Import {validationResult.validCount} Companies
+                  Import {mode === 'current' ? validationResult.validCount : (validationResult.validCount + validationResult.duplicateCount)} Companies
                 </button>
               </div>
             </div>

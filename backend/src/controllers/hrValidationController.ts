@@ -75,6 +75,10 @@ export const hrValidationController = {
         return res.status(404).json({ success: false, message: 'Company not found' });
       }
 
+      if (company.is_verified_by_admin) {
+        return res.status(403).json({ success: false, message: 'This company is verified by Admin and cannot be edited.' });
+      }
+
       const existingContact = await HrContact.findOne({ company_id });
       let historyItem = null;
 

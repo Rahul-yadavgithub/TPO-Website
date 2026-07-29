@@ -11,9 +11,10 @@ interface ChangeContactDetailsButtonProps {
   branchId: string;
   branchName?: string;
   currentHr?: any;
+  is_verified_by_admin?: boolean;
 }
 
-export default function ChangeContactDetailsButton({ companyId, branchId, branchName, currentHr }: ChangeContactDetailsButtonProps) {
+export default function ChangeContactDetailsButton({ companyId, branchId, branchName, currentHr, is_verified_by_admin }: ChangeContactDetailsButtonProps) {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   
@@ -59,6 +60,21 @@ export default function ChangeContactDetailsButton({ companyId, branchId, branch
       toast.error(err.response?.data?.message || 'Failed to update HR contact');
     }
   });
+
+  if (is_verified_by_admin) {
+    return (
+      <div className="relative w-full group">
+        <button
+          disabled
+          title="Company verified by Admin. Contact details cannot be edited."
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold shadow-sm bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed"
+        >
+          <Edit2 className="w-4 h-4" />
+          Verified (Locked)
+        </button>
+      </div>
+    );
+  }
 
   return (
     <>

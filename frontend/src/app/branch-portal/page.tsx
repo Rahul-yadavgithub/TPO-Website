@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -35,19 +36,37 @@ export default function BranchPortalPage() {
   const [showManualModal, setShowManualModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showPreviousCompanyModal, setShowPreviousCompanyModal] = useState(false);
+  const [historyPanelCompany, setHistoryPanelCompany] = useState<any>(null);
   
   // Form State
-  const [outcome, setOutcome] = useState<'call_again' | 'rejected' | ''>('');
+  const [outcome, setOutcome] = useState<string>('');
   const [channel, setChannel] = useState<string>('Phone');
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
+  const [returnToUnified, setReturnToUnified] = useState(false);
+  
+  // Placement Details Edit State
+  const [editingPlacementCompanyId, setEditingPlacementCompanyId] = useState<string | null>(null);
+  const [editDriveType, setEditDriveType] = useState<string>('');
+  const [editAcademicYear, setEditAcademicYear] = useState<string>('');
+
+  const router = useRouter();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const view = params.get('view');
-      if (view === 'previous_requests' || view === 'contact' || view === 'confirmed' || view === 'not_confirmed') {
+      if (view === 'previous_requests' || view === 'contact' || view === 'confirmed' || view === 'not_confirmed' || view === 'single_contact') {
         setActiveView(view as any);
+      }
+      
+      const companyId = params.get('companyId');
+      if (companyId) {
+        setActiveCompanyId(companyId);
+      }
+
+      if (params.get('returnTo') === 'unified') {
+        setReturnToUnified(true);
       }
     }
   }, []);
@@ -76,6 +95,20 @@ export default function BranchPortalPage() {
       return res.data;
     }
   });
+
+  // Auto-select branch from deep link if branches are loaded
+  useEffect(() => {
+    if (typeof window !== 'undefined' && branches?.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const branchName = params.get('branchName');
+      if (branchName && !selectedBranchId) {
+        const foundBranch = branches.find((b: any) => b.name === branchName);
+        if (foundBranch) {
+          setSelectedBranchId(foundBranch._id);
+        }
+      }
+    }
+  }, [branches, selectedBranchId]);
 
   const { data: contactTodayList, isLoading: listLoading } = useQuery({
     queryKey: ['contact-today', selectedBranchId],
@@ -191,6 +224,26 @@ export default function BranchPortalPage() {
     }
   });
 
+  const updatePlacementDetailsMutation = useMutation({
+    mutationFn: async ({ companyId, driveType, academicYear }: { companyId: string, driveType: string, academicYear: string }) => {
+      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/placement-details`, {
+        drive_type: driveType,
+        academic_year: academicYear
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Placement details updated!');
+      setEditingPlacementCompanyId(null);
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+    },
+    onError: () => {
+      toast.error('Failed to update placement details');
+    }
+  });
+
   // Duplicate Check Effect
   useEffect(() => {
     if (!manualForm.companyName || manualForm.companyName.trim().length < 2) {
@@ -258,7 +311,7 @@ export default function BranchPortalPage() {
         channel,
         outcome,
         notes,
-        created_by: 'Branch Coordinator', // Hardcoded for now
+        created_by: userProfile?.name || 'TPR', // Dynamically set TPR name
         next_contact_date: outcome === 'call_again' ? nextContactDate : undefined
       };
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact-logs`, payload);
@@ -281,7 +334,21 @@ export default function BranchPortalPage() {
   });
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className={`p-8 max-w-7xl mx-auto space-y-8 ${returnToUnified ? 'mt-12' : ''}`}>
+      {returnToUnified && (
+        <div className="fixed top-0 left-0 w-full bg-blue-600 shadow-md z-[60] px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+          <p className="text-white font-medium text-sm flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4" /> You are in Deep-Link Mode logging a specific company interaction.
+          </p>
+          <button 
+            onClick={() => router.push('/companies')}
+            className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors border border-white/20"
+          >
+            <X className="w-4 h-4" /> Return to Unified Companies
+          </button>
+        </div>
+      )}
+
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Branch Portal</h1>
         <p className="text-slate-500 mt-2">Manage daily outreach and track communications with assigned companies.</p>
@@ -690,9 +757,91 @@ export default function BranchPortalPage() {
                 {/* Company Info & HR */}
                 <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50">
                   <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
-                  <div className="mt-2 text-sm text-slate-600">
-                    <p>Priority: <span className="font-semibold">{company.placementPriority || 'Standard'}</span></p>
-                    <p>Status: <span className="font-semibold capitalize">{company.confirmation_status}</span></p>
+                  {/* Placement Details Card */}
+                  <div className="mt-4 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow relative group">
+                    <div className="bg-slate-50 border-b border-slate-100 p-3 flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-blue-500" /> Placement Details
+                      </h4>
+                      {editingPlacementCompanyId === company._id ? (
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => setEditingPlacementCompanyId(null)}
+                            className="text-xs text-slate-500 hover:text-slate-700 font-semibold transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => updatePlacementDetailsMutation.mutate({ companyId: company._id, driveType: editDriveType, academicYear: editAcademicYear })}
+                            disabled={updatePlacementDetailsMutation.isPending}
+                            className="flex items-center gap-1 text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 px-2.5 py-1.5 rounded-md font-bold transition-colors shadow-sm"
+                          >
+                            {updatePlacementDetailsMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
+                          </button>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            setEditingPlacementCompanyId(company._id);
+                            setEditDriveType(company.drive_type || '');
+                            setEditAcademicYear(company.academic_year || '');
+                          }}
+                          className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] uppercase font-bold text-green-700 bg-green-100 hover:bg-green-600 hover:text-white border border-green-200 hover:border-green-600 px-2 py-1 rounded shadow-sm transition-all"
+                        >
+                          <Edit2 className="w-3 h-3" /> Edit
+                        </button>
+                      )}
+                    </div>
+                    <div className="p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500">Academic Year</span>
+                        {editingPlacementCompanyId === company._id ? (
+                          <input 
+                            type="text"
+                            value={editAcademicYear}
+                            onChange={(e) => setEditAcademicYear(e.target.value)}
+                            placeholder="e.g. 2024-25"
+                            className="bg-white border border-blue-300 text-sm font-semibold text-slate-800 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all shadow-sm w-full sm:w-32 sm:text-right"
+                          />
+                        ) : (
+                          <span className="text-sm font-bold text-slate-900 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md inline-block">
+                            {company.academic_year || 'Not Specified'}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500">Drive Type</span>
+                        {editingPlacementCompanyId === company._id ? (
+                          <select 
+                            value={editDriveType}
+                            onChange={(e) => setEditDriveType(e.target.value)}
+                            className="bg-white border border-blue-300 text-sm font-semibold text-slate-800 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all shadow-sm w-full sm:w-auto"
+                          >
+                            <option value="">Not Specified</option>
+                            <option value="Internship">Internship</option>
+                            <option value="Full-time">Full-time</option>
+                            <option value="Internship + Full-time">Internship + Full-time</option>
+                          </select>
+                        ) : (
+                          <span className="text-sm font-bold text-slate-900 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md inline-block">
+                            {company.drive_type || 'Not Specified'}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                        <span className="text-sm font-medium text-slate-500">Status</span>
+                        <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center gap-1.5 inline-flex ${
+                          company.confirmation_status === 'confirmed' ? 'bg-green-50 text-green-700 border border-green-200' : 
+                          company.confirmation_status === 'not_confirmed' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
+                          'bg-slate-50 text-slate-700 border border-slate-200'
+                        }`}>
+                          {company.confirmation_status === 'confirmed' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                          {company.confirmation_status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="mt-6">
@@ -846,6 +995,7 @@ export default function BranchPortalPage() {
                           branchId={selectedBranchId}
                           branchName={branches?.find((b: any) => b._id === selectedBranchId)?.name}
                           currentHr={company.hr_contacts?.[0]} 
+                          is_verified_by_admin={company.is_verified_by_admin}
                         />
                       </div>
                     </div>
@@ -854,37 +1004,8 @@ export default function BranchPortalPage() {
 
                 {/* Timeline & Actions */}
                 <div className="p-6 md:w-2/3 flex flex-col">
-                  {/* Timeline */}
-                  <div className="flex-1 mb-6">
-                    <h4 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-slate-400" /> Communication History
-                    </h4>
-                    {company.contact_logs?.length > 0 ? (
-                      <div className="space-y-4">
-                        {company.contact_logs.map((log: any) => (
-                          <div key={log._id} className="flex gap-4">
-                            <div className="mt-1">
-                              {log.outcome === 'call_again' ? <Calendar className="w-4 h-4 text-blue-500" /> :
-                               log.outcome === 'rejected' ? <XCircle className="w-4 h-4 text-red-500" /> :
-                               <CheckCircle2 className="w-4 h-4 text-slate-400" />}
-                            </div>
-                            <div>
-                              <p className="text-sm text-slate-800">
-                                <span className="font-semibold">{log.created_by}</span> logged a <span className="font-semibold">{log.channel}</span> interaction.
-                              </p>
-                              <p className="text-xs text-slate-500">{format(new Date(log.contact_date), 'MMM d, yyyy h:mm a')}</p>
-                              {log.notes && <p className="text-sm text-slate-600 mt-1 bg-slate-50 p-2 rounded border border-slate-100">{log.notes}</p>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-400 italic">No previous contact logs.</p>
-                    )}
-                  </div>
-
                   {/* Log Action Form */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
                     {activeCompanyId === company._id ? (
                       <div className="space-y-5">
                         <div className="grid grid-cols-2 gap-5">
@@ -909,6 +1030,8 @@ export default function BranchPortalPage() {
                             >
                               <option value="">-- Select --</option>
                               <option value="call_again">Call Again (Reschedule)</option>
+                              <option value="brochure_jnf">Brochure + JNF Sent</option>
+                              <option value="tpo_talk">Want to talk to TPO</option>
                               <option value="rejected">Rejected / Not Interested</option>
                               <option value="accepted">Accepted / Confirmed</option>
                             </select>
@@ -953,18 +1076,20 @@ export default function BranchPortalPage() {
                             <button 
                               onClick={() => logMutation.mutate(company._id)}
                               disabled={logMutation.isPending || !outcome || (outcome === 'call_again' && !nextContactDate)}
-                              className="flex-1 sm:flex-none px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm shadow-blue-500/20 hover:shadow-blue-500/40"
+                              className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm shadow-blue-500/20 hover:shadow-blue-500/40"
                             >
                               {logMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                              Save Contact Log
+                              <span className="hidden sm:inline">Save Contact Log</span>
+                              <span className="sm:hidden">Save</span>
                             </button>
                             <button 
                               onClick={() => syncMutation.mutate()}
                               disabled={syncMutation.isPending}
-                              className="flex-1 sm:flex-none px-6 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm"
+                              className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm"
                             >
                               {syncMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin text-slate-400" /> : <CloudUpload className="w-4 h-4 text-slate-400" />}
-                              Sync to Sheet
+                              <span className="hidden sm:inline">Sync to Sheet</span>
+                              <span className="sm:hidden">Sync</span>
                             </button>
                           </div>
                         </div>
@@ -982,6 +1107,16 @@ export default function BranchPortalPage() {
                         + Add New Contact Log
                       </button>
                     )}
+                  </div>
+                  
+                  {/* View History Button */}
+                  <div className="mt-auto pt-4 flex justify-end border-t border-slate-100">
+                    <button
+                      onClick={() => setHistoryPanelCompany(company)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition-colors shadow-sm"
+                    >
+                      <History className="w-4 h-4" /> View History ({company.contact_logs?.length || 0})
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1226,6 +1361,77 @@ export default function BranchPortalPage() {
             );
           })()}
         </div>
+      )}
+      {/* Slide-over History Panel */}
+      {historyPanelCompany && (
+        <>
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity"
+            onClick={() => setHistoryPanelCompany(null)}
+          />
+          <div className="fixed inset-y-0 right-0 z-50 w-full md:w-[480px] bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">{historyPanelCompany.companyName}</h2>
+                <p className="text-sm text-slate-500 mt-1">Communication History</p>
+              </div>
+              <button 
+                onClick={() => setHistoryPanelCompany(null)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+              {historyPanelCompany.contact_logs?.length > 0 ? (
+                <div className="space-y-6">
+                  {historyPanelCompany.contact_logs.map((log: any) => (
+                    <div key={log._id} className="relative pl-6 pb-6 border-l-2 border-slate-200 last:pb-0 last:border-transparent">
+                      <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                      </div>
+                      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative -top-1">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{format(new Date(log.contact_date), 'MMM d, yyyy h:mm a')}</p>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                            ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' : 
+                              log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
+                              log.outcome === 'rejected' ? 'bg-red-100 text-red-800' : 
+                              log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
+                              log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
+                              'bg-slate-100 text-slate-800'}`}
+                          >
+                            {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
+                             log.outcome === 'tpo_talk' ? 'TPO Talk' :
+                             log.outcome === 'call_again' ? 'Call Again' :
+                             log.outcome === 'rejected' ? 'Rejected' :
+                             log.outcome === 'accepted' ? 'Accepted' :
+                             log.outcome || 'Logged'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-800 mb-2">
+                          <span className="font-semibold text-indigo-600">{log.created_by}</span> logged a <span className="font-semibold">{log.channel}</span> interaction.
+                        </p>
+                        {log.notes && (
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm text-slate-600">
+                            {log.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <History className="w-12 h-12 text-slate-300 mb-4" />
+                  <p className="text-lg font-bold text-slate-700">No History Yet</p>
+                  <p className="text-sm text-slate-500 mt-1">There are no contact logs for this company.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

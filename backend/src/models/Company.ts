@@ -75,8 +75,8 @@ export interface ICompany extends Document {
   review_status?: 'scanned' | 'approved';
   confirmation_status?: 'pending' | 'confirmed' | 'not_confirmed';
   contact_status?: 'not_contacted' | 'contacted';
-  contact_outcome?: 'call_again' | 'rejected' | 'accepted' | null;
-  data_source?: 'scanned' | 'excel_import';
+  contact_outcome?: 'call_again' | 'rejected' | 'accepted' | 'brochure_jnf' | 'tpo_talk' | null;
+  data_source?: 'scanned' | 'excel_import' | 'manual_ai';
 
   // Placement Specifics
   drive_type?: string;
@@ -93,8 +93,11 @@ export interface ICompany extends Document {
 
   // Branch Assignment & Sync
   assignedBranch?: string;
+  assignedBranchId?: mongoose.Types.ObjectId;
+  program?: string;
   syncStatus: 'pending' | 'synced' | 'failed';
   lastSynced?: Date;
+  is_verified_by_admin?: boolean;
 }
 
 const CompanySchema: Schema = new Schema(
@@ -166,8 +169,8 @@ const CompanySchema: Schema = new Schema(
     review_status: { type: String, enum: ['scanned', 'approved'] },
     confirmation_status: { type: String, enum: ['pending', 'confirmed', 'not_confirmed'] },
     contact_status: { type: String, enum: ['not_contacted', 'contacted'] },
-    contact_outcome: { type: String, enum: ['call_again', 'rejected', 'accepted', null] },
-    data_source: { type: String, enum: ['scanned', 'excel_import'] },
+    contact_outcome: { type: String, enum: ['call_again', 'rejected', 'accepted', 'brochure_jnf', 'tpo_talk', null] },
+    data_source: { type: String, enum: ['scanned', 'excel_import', 'manual_ai'] },
 
     // Placement Specifics
     drive_type: { type: String },
@@ -183,9 +186,21 @@ const CompanySchema: Schema = new Schema(
     pending_delete: { type: Boolean, default: false },
 
     // Branch Assignment & Sync
-    assignedBranch: { type: String },
+    assignedBranch: {
+      type: String,
+      default: 'Pending Assignment'
+    },
+    assignedBranchId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Branch'
+    },
+    program: {
+      type: String,
+      enum: ['B.Tech', 'M.Tech', 'Open to all', '']
+    },
     syncStatus: { type: String, enum: ['pending', 'synced', 'failed'], default: 'pending' },
-    lastSynced: { type: Date }
+    lastSynced: { type: Date },
+    is_verified_by_admin: { type: Boolean, default: false }
   },
   { timestamps: true }
 );

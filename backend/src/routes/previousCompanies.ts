@@ -1,6 +1,7 @@
 import express from 'express';
 import PreviousCompany from '../models/PreviousCompany';
 import PreviousCompanyContactRequest from '../models/PreviousCompanyContactRequest';
+import { DuplicatePreviousCompany } from '../models/DuplicatePreviousCompany';
 import HrContact from '../models/HrContact';
 import Branch from '../models/Branch';
 import { protect, AuthRequest } from '../middleware/auth';
@@ -158,6 +159,68 @@ router.get('/list', async (req, res) => {
   }
 });
 
+// @route   GET /api/previous-companies/all
+// @desc    Get paginated list of all previous companies (Admin view)
+router.get('/all', async (req: any, res) => {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'communication_tpr') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+    
+    let query: any = {};
+    if (req.query.q) {
+       query.$text = { $search: req.query.q as string };
+    }
+    if (req.query.section && req.query.section !== 'All') {
+      query.section = req.query.section;
+    }
+    if (req.query.verified === 'true') {
+      query.is_verified_by_admin = true;
+    } else if (req.query.verified === 'false') {
+      query.is_verified_by_admin = { $ne: true };
+    }
+    if (req.query.branch && req.query.branch !== 'All') {
+      query.contactedByBranchName = req.query.branch;
+    }
+
+    let companies = [];
+    let total = 0;
+
+    if (req.query.q) {
+      // First try text search
+      companies = await PreviousCompany.find(query).skip(skip).limit(limit).sort({ createdAt: -1 });
+      total = await PreviousCompany.countDocuments(query);
+      
+      // Fallback to regex if text search yields 0 results
+      if (companies.length === 0) {
+        let regexQuery: any = { ...query, companyName: { $regex: req.query.q as string, $options: 'i' } };
+        delete regexQuery.$text;
+        companies = await PreviousCompany.find(regexQuery).skip(skip).limit(limit).sort({ createdAt: -1 });
+        total = await PreviousCompany.countDocuments(regexQuery);
+      }
+    } else {
+      companies = await PreviousCompany.find(query).skip(skip).limit(limit).sort({ createdAt: -1 });
+      total = await PreviousCompany.countDocuments(query);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: companies,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('All list error:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
 // @route   POST /api/previous-companies/request
 // @desc    Submit a contact request for a previous company
 router.post('/request', async (req: AuthRequest, res) => {
@@ -269,7 +332,7 @@ router.post('/manual', async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData } = req.body;
+    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData, is_verified_by_admin, targetSection } = req.body;
     if (!companyName || !academicYear) {
       await session.abortTransaction();
       session.endSession();
@@ -281,11 +344,26 @@ router.post('/manual', async (req: any, res) => {
 
     if (company) {
       // Upsert: Update existing company
-      company.hrName = hrName || company.hrName;
-      company.hrPhone = hrPhone || company.hrPhone;
-      company.hrEmail = hrEmail || company.hrEmail;
-      company.section = section || company.section;
+      if (targetSection && targetSection !== 'Primary') {
+        // Update a specific additional contact
+        if (company.additionalContacts) {
+          const contactIndex = company.additionalContacts.findIndex((c: any) => c.sourceSheet === targetSection);
+          if (contactIndex !== -1) {
+            company.additionalContacts[contactIndex].hrName = hrName || company.additionalContacts[contactIndex].hrName;
+            company.additionalContacts[contactIndex].hrPhone = hrPhone || company.additionalContacts[contactIndex].hrPhone;
+            company.additionalContacts[contactIndex].hrEmail = hrEmail || company.additionalContacts[contactIndex].hrEmail;
+          }
+        }
+      } else {
+        // Update primary contact
+        company.hrName = hrName || company.hrName;
+        company.hrPhone = hrPhone || company.hrPhone;
+        company.hrEmail = hrEmail || company.hrEmail;
+        company.section = section || company.section;
+      }
+      
       if (academicYear) company.academicYear = academicYear;
+      if (is_verified_by_admin !== undefined) company.is_verified_by_admin = is_verified_by_admin;
       company.extraData = { ...company.extraData, ...(extraData || {}) };
       company.syncStatus = 'pending';
     } else {
@@ -298,7 +376,8 @@ router.post('/manual', async (req: any, res) => {
         hrEmail,
         hrPhone,
         section: section || 'Uncategorized',
-        extraData: extraData || {}
+        extraData: extraData || {},
+        is_verified_by_admin: is_verified_by_admin || false
       });
     }
     
@@ -362,24 +441,18 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
     previousCompany.hrName = hrName;
     previousCompany.hrEmail = hrEmail;
     previousCompany.hrPhone = hrPhone;
-    previousCompany.contactStatus = 'contacted';
-    previousCompany.syncStatus = 'pending';
     previousCompany.updatedByTprName = req.user.name;
-    await previousCompany.save();
 
-    // Trigger sync for Previous Year Google Sheet
+    // We no longer just update contactStatus and sync. 
+    // Since it's confirmed, we completely remove it from the past year sheet and DB!
     try {
       const settings = await Settings.findOne();
       if (settings && settings.pastAcademicYearSheetId) {
-        const syncResult = await googleSheetService.appendPreviousCompaniesToSheet([previousCompany.toObject()], settings.pastAcademicYearSheetId);
-        if (syncResult.success) {
-          previousCompany.syncStatus = 'synced';
-          previousCompany.lastSynced = new Date();
-          await previousCompany.save();
-        }
+        // Delete from Google Sheet
+        await googleSheetService.deletePreviousCompanyFromSheet(previousCompany.toObject(), settings.pastAcademicYearSheetId);
       }
     } catch (e) {
-      console.error('Failed to sync previous company update to past year sheet:', e);
+      console.error('Failed to delete previous company from past year sheet:', e);
     }
 
     // Now, push this company to the current year Company collection and trigger branch sync!
@@ -440,7 +513,10 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
       console.error('Failed to trigger auto-sync for branch:', e);
     }
 
-    res.status(200).json({ success: true, data: previousCompany });
+    // Finally, completely delete the previous company record from the DB
+    await PreviousCompany.findByIdAndDelete(previousCompany._id);
+
+    res.status(200).json({ success: true, message: 'Contact info updated successfully. Company removed from previous year and migrated to current year.', data: previousCompany });
   } catch (error) {
     console.error('Update contact info error:', error);
     res.status(500).json({ success: false, message: 'Server Error' });
@@ -448,7 +524,7 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
 });
 
 // @route   POST /api/previous-companies/bulk-validate
-// @desc    Admin only: Validate bulk previous company upload
+// @desc    Admin only: Validate bulk previous company upload and aggregate duplicates
 router.post('/bulk-validate', async (req: any, res) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
@@ -460,7 +536,7 @@ router.post('/bulk-validate', async (req: any, res) => {
     const existingCompanies = await PreviousCompany.find().select('normalizedName academicYear').lean();
     const existingSet = new Set(existingCompanies.map((c: any) => `${c.normalizedName}-${c.academicYear}`));
 
-    const validCompanies = [];
+    const validCompaniesMap = new Map<string, any>();
     const duplicateCompanies = [];
 
     for (const c of companies) {
@@ -469,12 +545,27 @@ router.post('/bulk-validate', async (req: any, res) => {
       const key = `${normalized}-${c.academicYear}`;
       
       if (existingSet.has(key)) {
+        // Already in DB. It's technically a duplicate, but we can treat it as a "to-merge" update later.
         duplicateCompanies.push(c);
       } else {
-        validCompanies.push(c);
-        existingSet.add(key);
+        if (validCompaniesMap.has(key)) {
+          // It's a duplicate WITHIN the uploaded sheet itself.
+          const existing = validCompaniesMap.get(key);
+          if (!existing.additionalContacts) existing.additionalContacts = [];
+          existing.additionalContacts.push({
+            hrName: c.hrName || '',
+            hrPhone: c.hrPhone || '',
+            hrEmail: c.hrEmail || '',
+            sourceSheet: c.section || 'Uncategorized',
+            academicYear: c.academicYear
+          });
+        } else {
+          validCompaniesMap.set(key, { ...c, additionalContacts: [] });
+        }
       }
     }
+
+    const validCompanies = Array.from(validCompaniesMap.values());
 
     res.json({
       validCount: validCompanies.length,
@@ -504,44 +595,77 @@ router.post('/bulk-import', async (req: any, res) => {
       return res.status(400).json({ error: 'Valid companies array is required' });
     }
 
-    const companyDocs = companies.map(c => ({
-      companyName: c.companyName,
-      normalizedName: c.companyName.toLowerCase().replace(/[^a-z0-9]/g, ''),
-      academicYear: c.academicYear,
-      hrName: c.hrName || '',
-      hrPhone: c.hrPhone || '',
-      hrEmail: c.hrEmail || '',
-      section: c.section || 'Uncategorized',
-      extraData: c.extraData || {}
-    }));
+    // Ensure the DuplicatePreviousCompany collection exists before starting a transaction
+    // MongoDB multi-document transactions cannot implicitly create collections.
+    await DuplicatePreviousCompany.createCollection().catch(() => {});
 
-    const insertedDocs = await PreviousCompany.insertMany(companyDocs, { session });
+    const insertedDocs = [];
     
-    // Auto-sync to Google Sheet if configured
-    try {
-      const settings = await Settings.findOne();
-      if (settings && settings.pastAcademicYearSheetId) {
-        const syncResult = await googleSheetService.appendPreviousCompaniesToSheet(insertedDocs as any[], settings.pastAcademicYearSheetId);
-        if (syncResult.success) {
-          const insertedIds = insertedDocs.map(d => d._id);
-          await PreviousCompany.updateMany(
-            { _id: { $in: insertedIds } },
-            { $set: { syncStatus: 'synced', lastSynced: new Date() } },
-            { session }
-          );
-        } else {
-          throw new Error('Google Sheets sync reported failure.');
-        }
+    for (const c of companies) {
+      const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      
+      let existingCompany = await PreviousCompany.findOne({ normalizedName, academicYear: c.academicYear }).session(session);
+      
+      if (existingCompany) {
+        // Intercept as a pending duplicate instead of auto-merging
+        const duplicate = new DuplicatePreviousCompany({
+          originalCompanyId: existingCompany._id,
+          companyName: c.companyName,
+          normalizedName: normalizedName,
+          academicYear: c.academicYear,
+          hrName: c.hrName || '',
+          hrPhone: c.hrPhone || '',
+          hrEmail: c.hrEmail || '',
+          section: c.section || 'Uncategorized',
+          extraData: c.extraData || {},
+          status: 'pending'
+        });
+        await duplicate.save({ session });
+        // We do NOT add it to insertedDocs because it is not verified yet.
+      } else {
+        // Create new
+        const companyDoc = new PreviousCompany({
+          companyName: c.companyName,
+          normalizedName: normalizedName,
+          academicYear: c.academicYear,
+          hrName: c.hrName || '',
+          hrPhone: c.hrPhone || '',
+          hrEmail: c.hrEmail || '',
+          section: c.section || 'Uncategorized',
+          extraData: c.extraData || {},
+          additionalContacts: c.additionalContacts || []
+        });
+        await companyDoc.save({ session });
+        insertedDocs.push(companyDoc);
       }
-    } catch (syncError) {
-      console.error('Immediate bulk sync failed for previous companies:', syncError);
-      throw new Error('Google Sheets Sync Failed: Rollback initiated');
     }
 
+    // Commit the database transaction first so we don't hold locks during external API calls
     await session.commitTransaction();
     session.endSession();
 
-    res.json({ success: true, count: companyDocs.length });
+    // Auto-sync to Google Sheet if configured (outside transaction)
+    if (insertedDocs.length > 0) {
+      try {
+        const settings = await Settings.findOne();
+        if (settings && settings.pastAcademicYearSheetId) {
+          const syncResult = await googleSheetService.appendPreviousCompaniesToSheet(insertedDocs as any[], settings.pastAcademicYearSheetId);
+          if (syncResult.success) {
+            const insertedIds = insertedDocs.map(d => d._id);
+            await PreviousCompany.updateMany(
+              { _id: { $in: insertedIds } },
+              { $set: { syncStatus: 'synced', lastSynced: new Date() } }
+            );
+          } else {
+            console.warn('Google Sheets sync reported failure. Cron job will retry later.');
+          }
+        }
+      } catch (syncError) {
+        console.error('Immediate bulk sync failed for previous companies. Cron job will retry later.', syncError);
+      }
+    }
+
+    res.json({ success: true, count: insertedDocs.length });
   } catch (error) {
     console.error('Bulk import error:', error);
     if (session.inTransaction()) {
@@ -596,6 +720,237 @@ router.post('/sync-sheet', async (req: any, res) => {
       });
     }
     res.status(500).json({ error: error.message || 'Failed to perform previous year sync' });
+  }
+});
+
+// @route   GET /api/previous-companies/duplicates
+// @desc    Admin only: Get paginated list of pending duplicates
+router.get('/duplicates', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    const query = { status: 'pending' };
+    
+    // We want to populate originalCompanyId to show side-by-side
+    const duplicates = await DuplicatePreviousCompany.find(query)
+      .populate('originalCompanyId')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+      
+    const total = await DuplicatePreviousCompany.countDocuments(query);
+
+    res.json({
+      duplicates,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Fetch duplicates error:', error);
+    res.status(500).json({ error: 'Failed to fetch duplicates' });
+  }
+});
+
+// @route   POST /api/previous-companies/duplicates/:id/resolve
+// @desc    Admin only: Resolve a duplicate (replace_primary, add_extra, or discard)
+router.post('/duplicates/:id/resolve', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { action } = req.body; // 'replace_primary', 'add_extra', 'discard'
+    
+    const duplicate = await DuplicatePreviousCompany.findById(req.params.id).session(session);
+    if (!duplicate || duplicate.status === 'resolved') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: 'Pending duplicate not found' });
+    }
+
+    const company = await PreviousCompany.findById(duplicate.originalCompanyId).session(session);
+    if (!company) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: 'Original company not found' });
+    }
+
+    if (action === 'replace_primary') {
+      company.hrName = duplicate.hrName || company.hrName;
+      company.hrPhone = duplicate.hrPhone || company.hrPhone;
+      company.hrEmail = duplicate.hrEmail || company.hrEmail;
+      company.section = duplicate.section || company.section;
+      company.extraData = { ...company.extraData, ...(duplicate.extraData || {}) };
+      company.syncStatus = 'pending';
+      await company.save({ session });
+    } else if (action === 'add_extra') {
+      if (!company.additionalContacts) company.additionalContacts = [];
+      company.additionalContacts.push({
+        hrName: duplicate.hrName || '',
+        hrPhone: duplicate.hrPhone || '',
+        hrEmail: duplicate.hrEmail || '',
+        sourceSheet: duplicate.section || 'Uncategorized',
+        academicYear: duplicate.academicYear
+      });
+      company.syncStatus = 'pending';
+      await company.save({ session });
+    } else if (action !== 'discard') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ error: 'Invalid action' });
+    }
+
+    duplicate.status = 'resolved';
+    await duplicate.save({ session });
+
+    // Check if there are any other pending duplicates for this company
+    const remainingPendingCount = await DuplicatePreviousCompany.countDocuments({
+      originalCompanyId: company._id,
+      status: 'pending'
+    }).session(session);
+
+    const shouldSync = (action === 'replace_primary' || action === 'add_extra') && remainingPendingCount === 0;
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Auto-sync to Google Sheet if changed and no remaining pending duplicates
+    if (shouldSync) {
+      try {
+        const settings = await Settings.findOne();
+        if (settings && settings.pastAcademicYearSheetId) {
+          const syncResult = await googleSheetService.appendPreviousCompaniesToSheet([company as any], settings.pastAcademicYearSheetId);
+          if (syncResult.success) {
+            company.syncStatus = 'synced';
+            company.lastSynced = new Date();
+            await company.save();
+          }
+        }
+      } catch (syncError) {
+        console.error('Immediate bulk sync failed for resolved duplicate:', syncError);
+      }
+    }
+
+    res.json({ success: true, message: 'Duplicate resolved successfully' });
+  } catch (error) {
+    console.error('Resolve duplicate error:', error);
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
+    res.status(500).json({ error: 'Failed to resolve duplicate' });
+  }
+});
+
+// @route   PUT /api/previous-companies/:id
+// @desc    Admin only: Update a previous company details and sync with Google Sheets
+router.put('/:id', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const company = await PreviousCompany.findById(req.params.id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const originalSection = company.section;
+    const { companyName, hrName, hrPhone, hrEmail, section, academicYear, additionalContacts, extraData, notes, is_verified_by_admin } = req.body;
+
+    // Check if section changed
+    const sectionChanged = section && originalSection && section !== originalSection;
+
+    // If section changed, we must first delete the row from the OLD sheet tab
+    if (sectionChanged) {
+      try {
+        const settings = await Settings.findOne();
+        if (settings && settings.pastAcademicYearSheetId) {
+          await googleSheetService.deletePreviousCompanyFromSheet(company.toObject(), settings.pastAcademicYearSheetId);
+        }
+      } catch (err) {
+        console.error('Failed to delete old row during section change:', err);
+      }
+    }
+
+    // Update DB record
+    if (companyName !== undefined) {
+      company.companyName = companyName;
+      company.normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+    if (hrName !== undefined) company.hrName = hrName;
+    if (hrPhone !== undefined) company.hrPhone = hrPhone;
+    if (hrEmail !== undefined) company.hrEmail = hrEmail;
+    if (section !== undefined) company.section = section;
+    if (academicYear !== undefined) company.academicYear = academicYear;
+    if (additionalContacts !== undefined) company.additionalContacts = additionalContacts;
+    if (extraData !== undefined) company.extraData = extraData;
+    if (notes !== undefined) company.notes = notes;
+    if (is_verified_by_admin !== undefined) company.is_verified_by_admin = is_verified_by_admin;
+
+    company.syncStatus = 'synced';
+    company.lastSynced = new Date();
+    await company.save();
+
+    // Upsert into new/same sheet tab
+    try {
+      const settings = await Settings.findOne();
+      if (settings && settings.pastAcademicYearSheetId) {
+        await googleSheetService.appendPreviousCompaniesToSheet([company.toObject()], settings.pastAcademicYearSheetId);
+      }
+    } catch (syncError) {
+      console.error('Failed to sync updated company to Google Sheets:', syncError);
+      company.syncStatus = 'failed';
+      await company.save();
+    }
+
+    res.json({ success: true, data: company });
+  } catch (error) {
+    console.error('Update previous company error:', error);
+    res.status(500).json({ error: 'Failed to update company' });
+  }
+});
+
+// @route   DELETE /api/previous-companies/:id
+// @desc    Admin only: Delete a previous company completely from DB and Google Sheets
+router.delete('/:id', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  try {
+    const company = await PreviousCompany.findById(req.params.id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Attempt to delete from Google Sheets first
+    try {
+      const settings = await Settings.findOne();
+      if (settings && settings.pastAcademicYearSheetId) {
+        await googleSheetService.deletePreviousCompanyFromSheet(company.toObject(), settings.pastAcademicYearSheetId);
+      }
+    } catch (sheetError) {
+      console.error('Failed to delete company from Google Sheets:', sheetError);
+      // We log but continue to delete from DB to prevent orphaned records
+    }
+
+    // Delete from database
+    await PreviousCompany.findByIdAndDelete(req.params.id);
+
+    res.json({ success: true, message: 'Company deleted successfully' });
+  } catch (error) {
+    console.error('Delete previous company error:', error);
+    res.status(500).json({ error: 'Failed to delete company' });
   }
 });
 

@@ -29,6 +29,7 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/sources', label: 'Scan Center', icon: Briefcase },
   { href: '/companies', label: 'Companies', icon: Database },
+  { href: '/past-companies', label: 'Past Companies', icon: Archive },
   { href: '/requests', label: 'Requests', icon: Inbox },
   { href: '/sync', label: 'Sync Center', icon: CloudUpload },
   { href: '/branch-portal', label: 'Branch Portal', icon: Users },
@@ -294,6 +295,7 @@ export function Sidebar() {
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
             if (item.href === '/requests' && !isAdmin) return null;
+            if (isAdmin && (item.href === '/sources' || item.href === '/history')) return null;
             const isActive = pathname === item.href;
             return (
               <Link

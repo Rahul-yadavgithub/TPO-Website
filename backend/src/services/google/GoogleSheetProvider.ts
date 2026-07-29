@@ -233,6 +233,55 @@ export class GoogleSheetProvider {
     }
   }
 
+  public async deletePreviousCompanyFromSheet(company: any, spreadsheetId: string): Promise<boolean> {
+    await this.initialize();
+    if (!this.sheets) return false;
+
+    try {
+      const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId });
+      const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === company.section);
+      if (!sheet || !sheet.properties?.sheetId) return false;
+      
+      const sheetId = sheet.properties.sheetId;
+      const rows = await this.fetchInboundData(spreadsheetId, company.section);
+      
+      let rowIndex = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const hiddenId = rows[i][6]?.trim();
+        const normalizedName = rows[i][0]?.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        // We match by ID first, then fallback to normalized name if no ID is present
+        if (hiddenId === company._id.toString() || (!hiddenId && normalizedName === company.normalizedName)) {
+          rowIndex = i;
+          break;
+        }
+      }
+
+      if (rowIndex > -1) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: sheetId,
+                  dimension: 'ROWS',
+                  startIndex: rowIndex,
+                  endIndex: rowIndex + 1
+                }
+              }
+            }]
+          }
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to delete company from sheet:', error);
+      return false;
+    }
+  }
+
   public async appendPreviousCompaniesToSheet(
     companies: any[],
     sheetId: string
@@ -277,9 +326,9 @@ export class GoogleSheetProvider {
         const title = req.addSheet.properties.title;
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `'${title}'!A1:H1`,
+          range: `'${title}'!A1:I1`,
           valueInputOption: 'USER_ENTERED',
-          requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON']] },
+          requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON', 'Additional HRs JSON']] },
         });
       }
     }
@@ -312,6 +361,10 @@ export class GoogleSheetProvider {
           ? JSON.stringify(company.extraData) 
           : '';
 
+        const additionalContactsStr = company.additionalContacts && company.additionalContacts.length > 0
+          ? JSON.stringify(company.additionalContacts)
+          : '';
+
         const rowData = [
           company.companyName || '',
           company.hrName || '',
@@ -320,7 +373,8 @@ export class GoogleSheetProvider {
           company.academicYear || '',
           company.notes || '',
           company._id.toString(),
-          extraDataStr
+          extraDataStr,
+          additionalContactsStr
         ];
 
         const hiddenIdStr = company._id.toString();
@@ -332,7 +386,7 @@ export class GoogleSheetProvider {
 
         if (existingRowIndex !== undefined) {
           updates.push({
-            range: `'${section}'!A${existingRowIndex + 1}:H${existingRowIndex + 1}`,
+            range: `'${section}'!A${existingRowIndex + 1}:I${existingRowIndex + 1}`,
             values: [rowData]
           });
         } else {
@@ -343,7 +397,7 @@ export class GoogleSheetProvider {
       if (valuesToAppend.length > 0) {
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `'${section}'!A:H`,
+          range: `'${section}'!A:I`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: valuesToAppend },
         });
@@ -404,6 +458,12 @@ export class GoogleSheetProvider {
           extraData = JSON.parse(extraDataStr);
         } catch(e) {}
 
+        const additionalContactsStr = row[8]?.trim() || '[]';
+        let additionalContacts = [];
+        try {
+          additionalContacts = JSON.parse(additionalContactsStr);
+        } catch(e) {}
+
         const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
         allValidNormalizedNames.add(normalizedName);
 
@@ -417,6 +477,20 @@ export class GoogleSheetProvider {
             if (row[4]?.trim()) existing.academicYear = academicYear;
             existing.notes = notes;
             existing.extraData = { ...existing.extraData, ...extraData };
+            
+            // Merge additional contacts
+            if (additionalContacts && additionalContacts.length > 0) {
+               if (!existing.additionalContacts) existing.additionalContacts = [];
+               
+               // Avoid duplicating the exact same additional contacts from the sheet
+               const currentHash = existing.additionalContacts.map((c: any) => c.hrEmail + c.hrName);
+               for (const ac of additionalContacts) {
+                 if (!currentHash.includes(ac.hrEmail + ac.hrName)) {
+                   existing.additionalContacts.push(ac);
+                 }
+               }
+            }
+
             existing.syncStatus = 'synced';
             existing.lastSynced = new Date();
             await existing.save();
@@ -425,6 +499,7 @@ export class GoogleSheetProvider {
             const newCompany = new PreviousCompany({
               companyName, normalizedName, hrName, hrPhone, hrEmail, academicYear, notes,
               section: sectionTab, extraData,
+              additionalContacts,
               syncStatus: 'synced', lastSynced: new Date()
             });
             await newCompany.save();
@@ -460,7 +535,7 @@ export class GoogleSheetProvider {
     try {
       const res = await this.sheets.spreadsheets.values.get({
         spreadsheetId: spreadsheetId,
-        range: `'${sheetTab}'!A:H`,
+        range: `'${sheetTab}'!A:I`,
       });
       return res.data.values || [];
     } catch (error: any) {

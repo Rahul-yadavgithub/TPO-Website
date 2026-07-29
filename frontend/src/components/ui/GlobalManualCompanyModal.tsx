@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2, AlertCircle, Wand2 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -28,8 +28,92 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   const [extraFields, setExtraFields] = useState<Array<{key: string, customKey: string, value: string}>>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
-  const [isConflict, setIsConflict] = useState(false);
   const [conflictMessage, setConflictMessage] = useState('');
+  const [isConflict, setIsConflict] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
+  const [additionalContacts, setAdditionalContacts] = useState<any[]>([]);
+  const [primaryContactDetails, setPrimaryContactDetails] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<string>('Primary');
+  
+  const [smartPasteText, setSmartPasteText] = useState('');
+
+  // Handle Smart Paste parsing
+  useEffect(() => {
+    if (!smartPasteText.trim()) return;
+
+    const timer = setTimeout(() => {
+      const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi;
+      const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?(?:\d{5}[-.\s]?\d{5}|\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{4}[-.\s]?\d{3}[-.\s]?\d{3}|\d{10})/g;
+      const urlRegex = /(https?:\/\/[^\s]+)/gi;
+      const linkedinRegex = /(https?:\/\/(www\.)?linkedin\.com\/in\/[^\s]+)/gi;
+
+      const emails = smartPasteText.match(emailRegex);
+      const phones = smartPasteText.match(phoneRegex);
+      const linkedins = smartPasteText.match(linkedinRegex);
+      const urls = smartPasteText.match(urlRegex);
+
+      setFormData(prev => {
+        const newData = { ...prev };
+        let extractedCompanyName = '';
+        
+        if (emails && emails.length > 0 && !prev.hrEmail) {
+          const email = emails[0];
+          newData.hrEmail = email;
+          
+          // Try to extract company name and website from email domain
+          const domainFull = email.split('@')[1];
+          if (domainFull) {
+            const domainPart = domainFull.split('.')[0].toLowerCase();
+            const commonDomains = ['gmail', 'yahoo', 'hotmail', 'outlook', 'icloud', 'aol'];
+            
+            if (!commonDomains.includes(domainPart)) {
+              extractedCompanyName = domainPart.charAt(0).toUpperCase() + domainPart.slice(1);
+              if (!prev.companyName) newData.companyName = extractedCompanyName;
+              if (!prev.website) newData.website = `https://${domainFull}`;
+            }
+          }
+        }
+        
+        if (phones && phones.length > 0 && !prev.hrPhone) newData.hrPhone = phones[0].trim();
+        if (linkedins && linkedins.length > 0 && !prev.linkedinProfile) newData.linkedinProfile = linkedins[0];
+        
+        if (urls && urls.length > 0 && !prev.website) {
+          const nonLinkedin = urls.find(u => !u.toLowerCase().includes('linkedin.com'));
+          if (nonLinkedin) newData.website = nonLinkedin;
+        }
+
+        // Advanced Name Extraction
+        let cleanText = smartPasteText;
+        if (emails) emails.forEach(e => cleanText = cleanText.replace(e, ''));
+        if (phones) phones.forEach(p => cleanText = cleanText.replace(p, ''));
+        if (urls) urls.forEach(u => cleanText = cleanText.replace(u, ''));
+        
+        // Remove the extracted company name to prevent it from becoming part of the HR Name
+        if (extractedCompanyName) {
+          const companyNameRegex = new RegExp(extractedCompanyName, 'gi');
+          cleanText = cleanText.replace(companyNameRegex, '');
+        }
+        
+        // Remove common titles and prefixes
+        cleanText = cleanText.replace(/HR|Manager|Talent|Acquisition|Lead|Director|Head|Mr\.|Ms\.|Mrs\./gi, '');
+        // Keep only letters and spaces
+        cleanText = cleanText.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        const words = cleanText.split(' ').filter(w => w.length > 1);
+        if (words.length > 0 && !prev.hrName) {
+          // Names are typically 2-3 words, take up to the first 2 words
+          newData.hrName = words.slice(0, 2).join(' ');
+        }
+
+        return newData;
+      });
+
+      toast.success('Smart Paste extracted available information.');
+      setSmartPasteText('');
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [smartPasteText]);
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
@@ -62,6 +146,22 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               section: comp.section || 'Uncategorized',
               academicYear: comp.academicYear || prev.academicYear
             }));
+            
+            setPrimaryContactDetails({
+              hrName: comp.hrName || '',
+              hrPhone: comp.hrPhone || '',
+              hrEmail: comp.hrEmail || '',
+              section: comp.section || 'Uncategorized'
+            });
+            setIsVerified(comp.is_verified_by_admin || false);
+            
+            if (comp.additionalContacts && comp.additionalContacts.length > 0) {
+              setAdditionalContacts(comp.additionalContacts);
+              setActiveTab('Primary');
+            } else {
+              setAdditionalContacts([]);
+              setActiveTab('Primary');
+            }
             
             if (comp.extraData) {
               const parsedFields = Object.entries(comp.extraData).map(([k, v]) => {
@@ -98,6 +198,10 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               setIsConflict(true);
               setConflictMessage(`This company is already assigned to the ${comp.assignedBranch} branch. You cannot add it to ${branch.name}.`);
               setIsEditing(false);
+            } else if (comp.is_verified_by_admin) {
+              setIsConflict(true);
+              setConflictMessage('This company has been verified by the Admin. Its details are locked and cannot be edited.');
+              setIsEditing(false);
             } else {
               setIsConflict(false);
               setIsEditing(true);
@@ -108,6 +212,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 hrEmail: res.data.hrContact?.email || prev.hrEmail,
                 linkedinProfile: res.data.company?.linkedinCompanyUrl || prev.linkedinProfile
               }));
+              setIsVerified(comp.is_verified_by_admin || false);
               toast.info('Company exists in this branch. Switched to Update Mode.');
             }
           } else {
@@ -138,18 +243,16 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
 
   const getEndpoint = () => {
     return mode === 'current'
-      ? `${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/manual-company`
+      ? `${process.env.NEXT_PUBLIC_API_URL}/companies/manual-company`
       : `${process.env.NEXT_PUBLIC_API_URL}/previous-companies/manual`;
   };
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.companyName.trim()) {
       toast.error('Company Name is required');
-      return;
-    }
-    if (mode === 'current' && !selectedBranchId) {
-      toast.error('Please select a branch first');
       return;
     }
     
@@ -164,7 +267,9 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
           }
           return acc;
         }, {} as Record<string, string>);
-        payload = { ...payload, extraData };
+        payload = { ...payload, extraData, is_verified_by_admin: isVerified, targetSection: activeTab };
+      } else {
+        payload = { ...payload, is_verified_by_admin: isVerified };
       }
 
       await axios.post(getEndpoint(), payload, { withCredentials: true });
@@ -197,50 +302,27 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
           </button>
         </div>
 
-        <div className="overflow-y-auto p-6">
+        <div className="overflow-y-auto p-6 space-y-6">
+          
+          {/* Smart Auto-Fill Section */}
+          {mode === 'current' && (
+            <div>
+              <label className="block text-sm font-bold text-slate-900 mb-1.5">
+                Paste the data
+              </label>
+              <textarea 
+                value={smartPasteText}
+                onChange={(e) => setSmartPasteText(e.target.value)}
+                placeholder="Paste details here to auto-fill..."
+                className="w-full h-24 p-4 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+              />
+            </div>
+          )}
+
+          <hr className="border-slate-100" />
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'current' && (
-              <div className="flex gap-4">
-                <div className="w-1/2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-slate-400" /> Program *
-                  </label>
-                  <select
-                    required
-                    value={selectedProgram}
-                    onChange={(e) => {
-                      setSelectedProgram(e.target.value);
-                      setSelectedBranchId(''); // Reset branch on program change
-                    }}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  >
-                    <option value="">-- Select Program --</option>
-                    <option value="B.Tech">B.Tech</option>
-                    <option value="M.Tech">M.Tech</option>
-                  </select>
-                </div>
-                <div className="w-1/2">
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-slate-400" /> Branch *
-                  </label>
-                  <select
-                    required
-                    value={selectedBranchId}
-                    onChange={(e) => setSelectedBranchId(e.target.value)}
-                    disabled={!selectedProgram}
-                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
-                  >
-                    <option value="">-- Select Branch --</option>
-                    {branches
-                      ?.filter((b: any) => b.name !== 'Central Admin' && b.name !== 'M.Tech CSE')
-                      .map((b: any) => (
-                        <option key={b._id} value={b._id}>{b.name}</option>
-                      ))}
-                  </select>
-                </div>
-              </div>
-            )}
-            
+            {/* Removed Program and Branch dropdowns per user request */}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-slate-400" /> Company Name *
@@ -347,7 +429,47 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
             )}
 
             <div className="pt-4 border-t border-slate-100">
-              <h3 className="text-sm font-bold text-slate-900 mb-4">HR Contact Information (Optional)</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-900">HR Contact Information (Optional)</h3>
+                
+                {mode === 'previous' && isEditing && additionalContacts.length > 0 && (
+                  <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('Primary');
+                        setFormData(prev => ({
+                          ...prev,
+                          hrName: primaryContactDetails?.hrName || '',
+                          hrPhone: primaryContactDetails?.hrPhone || '',
+                          hrEmail: primaryContactDetails?.hrEmail || ''
+                        }));
+                      }}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'Primary' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Primary
+                    </button>
+                    {additionalContacts.map((c, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(c.sourceSheet);
+                          setFormData(prev => ({
+                            ...prev,
+                            hrName: c.hrName || '',
+                            hrPhone: c.hrPhone || '',
+                            hrEmail: c.hrEmail || ''
+                          }));
+                        }}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === c.sourceSheet ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {c.sourceSheet}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -547,6 +669,21 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 ))}
               </div>
             )}
+            
+            <div className="pt-4 border-t border-slate-100">
+              <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={isVerified}
+                  onChange={(e) => setIsVerified(e.target.checked)}
+                  className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-900">Verify Contact Details</span>
+                  <span className="text-xs text-slate-500">Mark this company as 100% verified to lock details for TPRs.</span>
+                </div>
+              </label>
+            </div>
 
             <div className="pt-6 flex gap-3">
               <button 
@@ -558,7 +695,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               </button>
               <button 
                 type="submit"
-                disabled={isSubmitting || !formData.companyName.trim() || (mode === 'current' && !selectedBranchId) || isConflict}
+                disabled={isSubmitting || !formData.companyName.trim() || isConflict}
                 className="flex-[2] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}

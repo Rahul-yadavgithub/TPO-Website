@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import axios from 'axios';
 import { scrapeQueue } from '../jobs/queue';
 import Company, { CompanyStatus } from '../models/Company';
 import ScanHistory from '../models/ScanHistory';
@@ -26,6 +27,152 @@ const router = Router();
 
 // Apply auth middleware to all /api routes
 router.use(protect);
+
+router.post('/companies/extract-info', async (req: any, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const { text } = req.body;
+  if (!text) {
+    return res.status(400).json({ error: 'Text is required for extraction' });
+  }
+
+  const apiUrl = process.env.LLM_API_URL || 'https://openrouter.ai/api/v1/chat/completions';
+  const apiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || '';
+  const model = process.env.LLM_MODEL || process.env.OPENROUTER_MODEL || 'qwen/qwen-2.5-72b-instruct';
+
+  if (!apiKey) {
+    return res.status(500).json({ error: 'LLM API Key is not configured' });
+  }
+
+  const prompt = `
+You are an AI data extractor. Extract the following information from the provided raw text.
+Raw Text: "${text}"
+
+Tasks:
+1. Extract Company Name (companyName)
+2. Extract HR Contact Name (hrName)
+3. Extract HR Email (hrEmail)
+4. Extract HR Phone/Mobile (hrPhone)
+5. Extract LinkedIn Profile URL for the HR or Company (linkedinProfile)
+
+If any field is missing, return an empty string "" for that field.
+Return ONLY a valid JSON object matching this structure without any markdown tags:
+{
+  "companyName": "",
+  "hrName": "",
+  "hrEmail": "",
+  "hrPhone": "",
+  "linkedinProfile": ""
+}
+  `;
+
+  try {
+    const response = await axios.post(
+      apiUrl,
+      {
+        model: model,
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: "json_object" }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const content = response.data?.choices?.[0]?.message?.content;
+    if (!content) throw new Error('No content from LLM');
+
+    const cleanContent = content.trim().replace(/^```json/i, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(cleanContent);
+
+    res.json({ success: true, data: parsed });
+  } catch (error: any) {
+    console.error('Extraction failed:', error.message);
+    res.status(500).json({ error: 'Failed to extract information from text' });
+  }
+});
+
+
+router.get('/companies/branch-overview', async (req: any, res) => {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'communication_tpr') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    const query: any = { assignedBranch: { $exists: true, $ne: null } };
+    if (req.query.search) {
+      query.companyName = { $regex: req.query.search, $options: 'i' };
+    }
+    if (req.query.branch) {
+      query.assignedBranch = req.query.branch;
+    }
+    if (req.query.program) {
+      query.program = req.query.program;
+    }
+    if (req.query.is_verified) {
+      query.is_verified_by_admin = req.query.is_verified === 'true';
+    }
+    if (req.query.call_today === 'true') {
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      query.confirmation_status = { $ne: 'confirmed' };
+      query.$or = [
+        { contact_status: 'not_contacted' },
+        { 
+          contact_status: 'contacted', 
+          contact_outcome: 'call_again', 
+          nextFollowupDate: { $lte: endOfToday } 
+        }
+      ];
+    }
+
+    const companies = await Company.aggregate([
+      { $match: query },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'hrcontacts',
+          localField: '_id',
+          foreignField: 'company_id',
+          as: 'hr_contacts'
+        }
+      },
+      {
+        $lookup: {
+          from: 'contactlogs',
+          localField: '_id',
+          foreignField: 'company_id',
+          as: 'contact_logs'
+        }
+      }
+    ]);
+
+    const total = await Company.countDocuments(query);
+
+    res.json({
+      data: companies,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Branch overview error:', error);
+    require('fs').writeFileSync('error.log', (error as any).stack || (error as any).toString());
+    res.status(500).json({ error: 'Failed to fetch branch overview companies', details: (error as any).toString() });
+  }
+});
 
 // --- DASHBOARD STATS ---
 router.get('/stats', async (req, res) => {
@@ -200,7 +347,8 @@ router.get('/companies/check-name', async (req, res) => {
         companyName: company.companyName,
         assignedBranch: company.assignedBranch,
         linkedinCompanyUrl: company.linkedinCompanyUrl,
-        linkedinRecruiterUrl: company.linkedinRecruiterUrl
+        linkedinRecruiterUrl: company.linkedinRecruiterUrl,
+        is_verified_by_admin: company.is_verified_by_admin
       },
       hrContact: hrContact ? {
         name: hrContact.name,
@@ -224,51 +372,73 @@ router.post('/companies/manual-company', async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { companyName, website, hrName, hrPhone, hrEmail, linkedinProfile } = req.body;
+    const { companyName, website, hrName, hrPhone, hrEmail, linkedinProfile, assignedBranchId, program, is_verified_by_admin } = req.body;
     if (!companyName) return res.status(400).json({ error: 'Company name is required' });
 
     const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
     let company = await Company.findOne({ normalizedName }).session(session);
 
     if (company) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ error: 'Company already exists in the master database.' });
-    }
+      // It exists. If it's already verified by admin, we shouldn't allow changing it unless the user is an admin.
+      // Wait, the user IS an admin (checked at top).
+      if (is_verified_by_admin !== undefined) company.is_verified_by_admin = is_verified_by_admin;
+      if (assignedBranchId) company.assignedBranchId = assignedBranchId;
+      if (program) company.program = program;
+      
+      await company.save({ session });
 
-    company = new Company({
-      companyName,
-      normalizedName,
-      website,
-      syncStatus: 'pending',
-      status: CompanyStatus.PENDING_REVIEW, // Or APPROVED since admin added it? Let's use APPROVED.
-      placementScore: 0,
-      confidenceScore: 100,
-      aiConfidence: 100,
-      source: {
-        platform: 'MANUAL_ADMIN',
-        sourceUrl: 'MANUAL_ADMIN',
-        discoveredAt: new Date()
-      },
-      discoveryHistory: [],
-      startupSignals: [],
-      confirmation_status: 'not_confirmed',
-      contact_status: 'not_contacted'
-    });
+      let hrContact = await HrContact.findOne({ company_id: company._id }).session(session);
+      if (hrContact) {
+        hrContact.name = hrName || hrContact.name;
+        hrContact.mobile = hrPhone || hrContact.mobile;
+        hrContact.email = hrEmail || hrContact.email;
+        hrContact.linkedin_url = linkedinProfile || hrContact.linkedin_url;
+        await hrContact.save({ session });
+      } else if (hrName || hrPhone || hrEmail || linkedinProfile) {
+        await HrContact.create([{
+          company_id: company._id,
+          name: hrName,
+          mobile: hrPhone,
+          email: hrEmail,
+          linkedin_url: linkedinProfile
+        }], { session });
+      }
+    } else {
+      company = new Company({
+        companyName,
+        normalizedName,
+        website,
+        syncStatus: 'pending',
+        status: CompanyStatus.APPROVED, // Auto-approve if admin adds it manually
+        placementScore: 0,
+        confidenceScore: 100,
+        aiConfidence: 100,
+        source: {
+          platform: 'MANUAL_ADMIN',
+          sourceUrl: 'MANUAL_ADMIN',
+          discoveredAt: new Date()
+        },
+        discoveryHistory: [],
+        startupSignals: [],
+        confirmation_status: 'not_confirmed',
+        contact_status: 'not_contacted',
+        assignedBranch: 'Pending Assignment',
+        assignedBranchId,
+        program,
+        is_verified_by_admin: is_verified_by_admin || false
+      });
 
-    // Auto-approve if admin adds it manually
-    company.status = CompanyStatus.APPROVED;
+      await company.save({ session });
 
-    await company.save({ session });
-
-    if (hrName || hrPhone || hrEmail || linkedinProfile) {
-      await HrContact.create([{
-        company_id: company._id,
-        name: hrName,
-        mobile: hrPhone,
-        email: hrEmail,
-        linkedin_url: linkedinProfile
-      }], { session });
+      if (hrName || hrPhone || hrEmail || linkedinProfile) {
+        await HrContact.create([{
+          company_id: company._id,
+          name: hrName,
+          mobile: hrPhone,
+          email: hrEmail,
+          linkedin_url: linkedinProfile
+        }], { session });
+      }
     }
 
     await session.commitTransaction();
@@ -408,6 +578,28 @@ router.get('/companies/:id', async (req, res) => {
   }
 });
 
+
+
+router.patch('/companies/:id/verify', async (req: any, res) => {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'communication_tpr') {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  try {
+    const company = await Company.findById(req.params.id);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    company.is_verified_by_admin = true;
+    await company.save();
+
+    res.json({ success: true, company });
+  } catch (error) {
+    console.error('Verify company error:', error);
+    res.status(500).json({ error: 'Failed to verify company' });
+  }
+});
+
 router.put('/companies/:id/assignment', async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -451,6 +643,87 @@ router.put('/companies/:id/assignment', async (req, res) => {
     await session.abortTransaction();
     session.endSession();
     res.status(500).json({ error: 'Failed to reassign branch' });
+  }
+});
+
+router.put('/companies/:id/override-assign', async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const companyId = req.params.id;
+    const { branch_id, program, extractedData } = req.body;
+
+    const company = await Company.findById(companyId).session(session);
+    if (!company) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    let branch;
+    if (branch_id) {
+      branch = await Branch.findById(branch_id).session(session);
+      if (!branch) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ error: 'Branch not found' });
+      }
+    }
+
+    if (branch) {
+      const lockKey = `sync_lock_${branch.name}`;
+      const locked = await acquireLock(lockKey, 30);
+      if (!locked) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(409).json({ error: 'Branch is currently locked for sync. Please try again later.' });
+      }
+      company.assignedBranch = branch.name;
+      company.syncStatus = 'pending';
+    }
+
+    if (program) {
+      company.program = program;
+    }
+
+    await company.save({ session });
+
+    if (extractedData && (extractedData.hrName || extractedData.hrEmail || extractedData.hrPhone)) {
+      const existingHr = await HrContact.findOne({ company_id: company._id }).session(session);
+      if (existingHr) {
+        if (extractedData.hrName) existingHr.name = extractedData.hrName;
+        if (extractedData.hrEmail) existingHr.email = extractedData.hrEmail;
+        if (extractedData.hrPhone) existingHr.mobile = extractedData.hrPhone;
+        if (extractedData.linkedinProfile) existingHr.linkedin_url = extractedData.linkedinProfile;
+        await existingHr.save({ session });
+      } else {
+        await HrContact.create([{
+          company_id: company._id,
+          name: extractedData.hrName || 'HR Contact',
+          email: extractedData.hrEmail,
+          mobile: extractedData.hrPhone,
+          linkedin_url: extractedData.linkedinProfile
+        }], { session });
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+    if (branch) {
+      await releaseLock(`sync_lock_${branch.name}`);
+    }
+
+    const fullCompany = await Company.aggregate([
+      { $match: { _id: company._id } },
+      { $lookup: { from: 'hrcontacts', localField: '_id', foreignField: 'company_id', as: 'hr_contacts' } }
+    ]);
+
+    res.json({ success: true, company: fullCompany[0] });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+    session.endSession();
+    console.error('Override Assign error:', error);
+    res.status(500).json({ error: 'Failed to override and assign company' });
   }
 });
 
@@ -1264,6 +1537,7 @@ router.post('/contact-logs', async (req, res) => {
     const company = await Company.findById(company_id).session(session);
     if (company) {
       company.contact_status = 'contacted';
+      company.contactOwner = created_by; // Update POC TPR dynamically
       if (outcome === 'call_again') {
         company.contact_outcome = 'call_again';
         if (next_contact_date) {
@@ -1275,6 +1549,11 @@ router.post('/contact-logs', async (req, res) => {
       } else if (outcome === 'accepted') {
         company.contact_outcome = 'accepted';
         company.confirmation_status = 'confirmed';
+      } else if (outcome === 'brochure_jnf') {
+        company.contact_outcome = 'brochure_jnf';
+      } else if (outcome === 'tpo_talk') {
+        company.contact_outcome = 'tpo_talk';
+        company.is_verified_by_admin = true;
       }
 
       company.syncStatus = 'pending';
@@ -1338,6 +1617,28 @@ router.patch('/companies/:id/confirmation', async (req, res) => {
     res.json(company);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update company confirmation status' });
+  }
+});
+
+router.patch('/companies/:id/placement-details', async (req, res) => {
+  try {
+    const companyId = req.params.id;
+    const { drive_type, role, academic_year } = req.body;
+
+    const company = await Company.findById(companyId);
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    if (drive_type !== undefined) company.drive_type = drive_type;
+    if (role !== undefined) company.role = role;
+    if (academic_year !== undefined) company.academic_year = academic_year;
+
+    await company.save();
+
+    res.json(company);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update company placement details' });
   }
 });
 
@@ -1410,6 +1711,13 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
         session.endSession();
         await releaseLock(lockKey);
         return res.status(409).json({ error: `This company is already contacted by the ${company.assignedBranch} department (Contact Person: ${company.contactOwner || 'Unknown'}). Please do not duplicate outreach.` });
+      }
+
+      if (company.is_verified_by_admin) {
+        if (session.inTransaction()) await session.abortTransaction();
+        session.endSession();
+        await releaseLock(lockKey);
+        return res.status(403).json({ error: 'This company is verified by Admin and its HR details cannot be modified.' });
       }
 
       // Update existing company
