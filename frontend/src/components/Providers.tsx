@@ -27,14 +27,24 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   useEffect(() => {
+    let isRedirecting = false;
+
     const interceptor = axios.interceptors.response.use(
       (response) => response,
-      (error) => {
+      async (error) => {
         if (error.response?.status === 401) {
           // If we are not already on an auth page, redirect to login
           const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
-          if (!isAuthPage) {
-            router.push('/login');
+          
+          if (!isAuthPage && !isRedirecting) {
+            isRedirecting = true;
+            try {
+              await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true });
+            } catch (err) {
+              console.error('Logout failed during 401 redirect:', err);
+            }
+            document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+            window.location.href = '/login';
           }
         }
         return Promise.reject(error);
@@ -44,7 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     return () => {
       axios.interceptors.response.eject(interceptor);
     };
-  }, [router, pathname]);
+  }, [pathname]);
 
   return (
     <QueryClientProvider client={queryClient}>

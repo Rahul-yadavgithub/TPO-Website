@@ -13,6 +13,8 @@ export interface IPreviousCompany extends Document {
   contactStatus?: 'not_contacted' | 'requested' | 'contacted';
   contactedByBranchId?: mongoose.Types.ObjectId;
   contactedByBranchName?: string;
+  contactedByTprName?: string;
+  updatedByTprName?: string;
   section: string;
   extraData?: Record<string, any>;
   createdAt: Date;
@@ -32,6 +34,8 @@ const PreviousCompanySchema: Schema = new Schema({
   contactStatus: { type: String, enum: ['not_contacted', 'requested', 'contacted'], default: 'not_contacted' },
   contactedByBranchId: { type: Schema.Types.ObjectId, ref: 'Branch' },
   contactedByBranchName: { type: String },
+  contactedByTprName: { type: String },
+  updatedByTprName: { type: String },
   section: { type: String, required: true, default: 'Uncategorized' },
   extraData: { type: Schema.Types.Mixed, default: {} }
 }, { timestamps: true, collection: 'PreviousCompany' });

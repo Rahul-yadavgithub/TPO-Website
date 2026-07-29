@@ -229,9 +229,6 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                     <div key={company._id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-purple-300 transition-colors">
                       <div>
                         <h4 className="font-bold text-slate-800 text-lg">{company.companyName}</h4>
-                        <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md mt-1 inline-block">
-                          {company.academicYear}
-                        </span>
                       </div>
                       <button 
                         onClick={() => requestContactMutation.mutate({ companyId: company._id, companyName: company.companyName })}
@@ -301,14 +298,16 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                           <div>
                             <h4 className="font-bold text-slate-800 text-xl">{company.companyName}</h4>
                             <div className="flex items-center gap-2 mt-2">
-                              <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
-                                {company.academicYear}
-                              </span>
                               <span className={`text-xs font-semibold px-2 py-1 rounded-md ${
                                 isMyRequest ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
                               }`}>
-                                Requested by: {company.contactedByBranchName}
+                                Requested by: {company.contactedByTprName || company.contactedByBranchName}
                               </span>
+                              {company.updatedByTprName && (
+                                <span className="text-xs font-semibold px-2 py-1 rounded-md bg-purple-100 text-purple-700">
+                                  Last updated by: {company.updatedByTprName}
+                                </span>
+                              )}
                               {isMyRequest && myReqDoc && (
                                 <span className={`text-xs font-semibold px-2 py-1 rounded-md ${
                                   myReqDoc.status === 'approved' ? 'bg-emerald-100 text-emerald-700' :

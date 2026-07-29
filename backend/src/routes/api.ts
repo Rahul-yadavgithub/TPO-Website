@@ -145,7 +145,7 @@ router.get('/companies', async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
 
-    const query: any = { data_source: 'scanned' };
+    const query: any = { 'source.platform': { $ne: 'PreviousYearDatabase' } };
     if (req.query.search) {
       query.companyName = { $regex: req.query.search, $options: 'i' };
     }

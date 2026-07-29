@@ -211,6 +211,7 @@ router.post('/request', async (req: AuthRequest, res) => {
     previousCompany.contactStatus = 'requested';
     previousCompany.contactedByBranchId = branchId;
     previousCompany.contactedByBranchName = branch ? branch.name : 'Unknown Branch';
+    previousCompany.contactedByTprName = req.user.name;
     await previousCompany.save();
 
     res.status(201).json({ success: true, data: contactReq });
@@ -233,6 +234,32 @@ router.get('/requests/:branchId', async (req, res) => {
   }
 });
 
+// @route   GET /api/previous-companies/check-name
+// @desc    Check if a previous company exists by name
+router.get('/check-name', async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const company = await PreviousCompany.findOne({ normalizedName });
+
+    if (!company) {
+      return res.json({ exists: false });
+    }
+
+    return res.json({
+      exists: true,
+      company: company.toObject()
+    });
+  } catch (error) {
+    console.error('Check name error:', error);
+    res.status(500).json({ error: 'Failed to check company name' });
+  }
+});
+
 // @route   POST /api/previous-companies/manual
 // @desc    Admin only: Add a manual previous company
 router.post('/manual', async (req: any, res) => {
@@ -242,7 +269,7 @@ router.post('/manual', async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { companyName, academicYear, hrName, hrPhone, hrEmail, section } = req.body;
+    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData } = req.body;
     if (!companyName || !academicYear) {
       await session.abortTransaction();
       session.endSession();
@@ -250,23 +277,30 @@ router.post('/manual', async (req: any, res) => {
     }
 
     const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    let company = await PreviousCompany.findOne({ normalizedName, academicYear }).session(session);
+    let company = await PreviousCompany.findOne({ normalizedName }).session(session);
 
     if (company) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ error: 'Company already exists for this academic year.' });
+      // Upsert: Update existing company
+      company.hrName = hrName || company.hrName;
+      company.hrPhone = hrPhone || company.hrPhone;
+      company.hrEmail = hrEmail || company.hrEmail;
+      company.section = section || company.section;
+      if (academicYear) company.academicYear = academicYear;
+      company.extraData = { ...company.extraData, ...(extraData || {}) };
+      company.syncStatus = 'pending';
+    } else {
+      // Insert new
+      company = new PreviousCompany({
+        companyName,
+        normalizedName,
+        academicYear,
+        hrName,
+        hrEmail,
+        hrPhone,
+        section: section || 'Uncategorized',
+        extraData: extraData || {}
+      });
     }
-
-    company = new PreviousCompany({
-      companyName,
-      normalizedName,
-      academicYear,
-      hrName,
-      hrEmail,
-      hrPhone,
-      section: section || 'Uncategorized'
-    });
     
     await company.save({ session });
 
@@ -329,7 +363,24 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
     previousCompany.hrEmail = hrEmail;
     previousCompany.hrPhone = hrPhone;
     previousCompany.contactStatus = 'contacted';
+    previousCompany.syncStatus = 'pending';
+    previousCompany.updatedByTprName = req.user.name;
     await previousCompany.save();
+
+    // Trigger sync for Previous Year Google Sheet
+    try {
+      const settings = await Settings.findOne();
+      if (settings && settings.pastAcademicYearSheetId) {
+        const syncResult = await googleSheetService.appendPreviousCompaniesToSheet([previousCompany.toObject()], settings.pastAcademicYearSheetId);
+        if (syncResult.success) {
+          previousCompany.syncStatus = 'synced';
+          previousCompany.lastSynced = new Date();
+          await previousCompany.save();
+        }
+      }
+    } catch (e) {
+      console.error('Failed to sync previous company update to past year sheet:', e);
+    }
 
     // Now, push this company to the current year Company collection and trigger branch sync!
     const normalizedName = previousCompany.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');

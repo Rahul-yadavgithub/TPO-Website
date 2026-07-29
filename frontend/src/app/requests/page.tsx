@@ -48,6 +48,15 @@ export default function RequestsPage() {
   const [targetBranchId, setTargetBranchId] = useState<string | null>(null);
   const [selectedOldUserId, setSelectedOldUserId] = useState('');
 
+  // Details modal state
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
+  const [selectedCompanyDetails, setSelectedCompanyDetails] = useState<any>(null);
+
+  const openDetailsModal = (companyData: any) => {
+    setSelectedCompanyDetails(companyData);
+    setDetailsModalOpen(true);
+  };
+
   const { data: requests, isLoading } = useQuery({
     queryKey: ['admin-requests'],
     queryFn: async () => {
@@ -311,9 +320,14 @@ export default function RequestsPage() {
               contacts.map((contact: any) => (
                 <div key={contact._id} className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex flex-wrap items-center gap-3 mb-2">
                       <h3 className="text-lg font-bold text-slate-900">{contact.companyName}</h3>
                       <span className="px-2 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold uppercase rounded-md">Pending Contact</span>
+                      {contact.companyId?.section && (
+                        <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase rounded-md flex items-center gap-1">
+                          Tab: {contact.companyId.section}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-3 bg-slate-50 border border-slate-100 p-4 rounded-lg">
                       <p className="text-xs font-bold text-slate-500 uppercase mb-2">Requested By</p>
@@ -325,7 +339,13 @@ export default function RequestsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex w-full md:w-auto gap-3 shrink-0">
+                  <div className="flex flex-wrap w-full md:w-auto gap-3 shrink-0">
+                    <button
+                      onClick={() => openDetailsModal(contact.companyId)}
+                      className="flex-1 md:flex-none px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors"
+                    >
+                      View Details
+                    </button>
                     <button
                       onClick={() => openRejectModal('contact', contact._id)}
                       className="flex-1 md:flex-none px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
@@ -545,6 +565,77 @@ export default function RequestsPage() {
               >
                 {replaceTprMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
                 Confirm Handover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Company Details Modal */}
+      {detailsModalOpen && selectedCompanyDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden relative animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-indigo-600" />
+                {selectedCompanyDetails.companyName} Details
+              </h3>
+              <button onClick={() => setDetailsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-1">Source Tab / Section</p>
+                  <p className="text-sm font-semibold text-slate-900">{selectedCompanyDetails.section || 'Unknown'}</p>
+                </div>
+                <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-1">Academic Year</p>
+                  <p className="text-sm font-semibold text-slate-900">{selectedCompanyDetails.academicYear || 'Unknown'}</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 mb-3 border-b border-slate-100 pb-2">HR Contact Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-xl p-4 border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">HR Name</p>
+                    <p className="text-sm font-semibold text-slate-900">{selectedCompanyDetails.hrName || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-slate-200">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">HR Phone</p>
+                    <p className="text-sm font-semibold text-slate-900">{selectedCompanyDetails.hrPhone || 'N/A'}</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-slate-200 sm:col-span-2">
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-1">HR Email</p>
+                    <p className="text-sm font-semibold text-slate-900">{selectedCompanyDetails.hrEmail || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {selectedCompanyDetails.extraData && Object.keys(selectedCompanyDetails.extraData).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 mb-3 border-b border-slate-100 pb-2">Additional Information</h4>
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                    {Object.entries(selectedCompanyDetails.extraData).map(([key, value]: any) => (
+                      <div key={key} className="flex flex-col sm:flex-row sm:items-start p-3 sm:p-4 hover:bg-slate-50">
+                        <span className="w-1/3 text-xs font-bold text-slate-500 uppercase shrink-0 mb-1 sm:mb-0">{key}</span>
+                        <span className="flex-1 text-sm text-slate-900 whitespace-pre-wrap">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 pt-4 border-t border-slate-100 flex justify-end shrink-0 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setDetailsModalOpen(false)}
+                className="px-6 py-2.5 font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 rounded-xl transition-colors shadow-sm"
+              >
+                Close
               </button>
             </div>
           </div>

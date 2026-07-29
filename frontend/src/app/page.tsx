@@ -477,7 +477,7 @@ export default function Dashboard() {
             </div>
           </div>
           <Link
-            href="/companies?status=PENDING_REVIEW"
+            href="/requests"
             className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm"
           >
             Review Queue <ArrowRight className="w-4 h-4" />

@@ -28,7 +28,8 @@ router.get('/requests', async (req, res) => {
     const pendingTPRs = await User.find({ status: 'pending' }).populate('branchId', 'name').select('-password');
     const pendingContacts = await PreviousCompanyContactRequest.find({ status: 'pending' })
       .populate('branchId', 'name')
-      .populate('requestedBy', 'name email');
+      .populate('requestedBy', 'name email')
+      .populate('companyId');
 
     res.status(200).json({
       success: true,

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +25,60 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   const [selectedProgram, setSelectedProgram] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [isNewSection, setIsNewSection] = useState(false);
+  const [extraFields, setExtraFields] = useState<Array<{key: string, customKey: string, value: string}>>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'previous') return;
+    const name = formData.companyName.trim();
+    if (!name) {
+      setIsEditing(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsChecking(true);
+      try {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/check-name?name=${encodeURIComponent(name)}`, { withCredentials: true });
+        if (res.data.exists && res.data.company) {
+          const comp = res.data.company;
+          setFormData(prev => ({
+            ...prev,
+            hrName: comp.hrName || '',
+            hrPhone: comp.hrPhone || '',
+            hrEmail: comp.hrEmail || '',
+            section: comp.section || 'Uncategorized',
+            academicYear: comp.academicYear || prev.academicYear
+          }));
+          
+          if (comp.extraData) {
+            const parsedFields = Object.entries(comp.extraData).map(([k, v]) => {
+              const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
+              return {
+                key: isPredefined ? k : 'Custom',
+                customKey: isPredefined ? '' : k,
+                value: v as string
+              };
+            });
+            setExtraFields(parsedFields);
+          } else {
+            setExtraFields([]);
+          }
+          setIsEditing(true);
+          toast.info('Loaded existing company details');
+        } else {
+          setIsEditing(false);
+        }
+      } catch (err) {
+        console.error('Failed to check company name:', err);
+      } finally {
+        setIsChecking(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData.companyName, mode]);
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
@@ -63,12 +117,24 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
     
     setIsSubmitting(true);
     try {
-      await axios.post(getEndpoint(), formData, { withCredentials: true });
-      toast.success('Company added successfully!');
+      let payload: any = { ...formData };
+      if (mode === 'previous') {
+        const extraData = extraFields.reduce((acc, curr) => {
+          const key = curr.key === 'Custom' ? curr.customKey : curr.key;
+          if (key && curr.value) {
+            acc[key] = curr.value;
+          }
+          return acc;
+        }, {} as Record<string, string>);
+        payload = { ...payload, extraData };
+      }
+
+      await axios.post(getEndpoint(), payload, { withCredentials: true });
+      toast.success(`Company ${isEditing ? 'updated' : 'added'} successfully!`);
       onSuccess();
     } catch (error: any) {
       console.error(error);
-      toast.error(error.response?.data?.error || 'Failed to add company');
+      toast.error(error.response?.data?.error || `Failed to ${isEditing ? 'update' : 'add'} company`);
     } finally {
       setIsSubmitting(false);
     }
@@ -134,14 +200,21 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-slate-400" /> Company Name *
               </label>
-              <input 
-                type="text" 
-                required
-                placeholder="e.g. Google"
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                value={formData.companyName}
-                onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-              />
+              <div className="relative">
+                <input 
+                  type="text" 
+                  required
+                  placeholder="e.g. Google"
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  value={formData.companyName}
+                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                />
+                {isChecking && (
+                  <div className="absolute right-3 top-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                  </div>
+                )}
+              </div>
             </div>
             
             {mode === 'previous' && (
@@ -274,6 +347,81 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               )}
             </div>
 
+            {mode === 'previous' && (
+              <div className="pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-slate-900">Additional Information (Optional)</h3>
+                  <button
+                    type="button"
+                    onClick={() => setExtraFields([...extraFields, { key: '', customKey: '', value: '' }])}
+                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <Plus className="w-4 h-4" /> Add Detail
+                  </button>
+                </div>
+                
+                {extraFields.map((field, idx) => (
+                  <div key={idx} className="flex gap-3 mb-3 items-start animate-in fade-in slide-in-from-top-2">
+                    <div className="flex-[1] space-y-2">
+                      <select
+                        value={field.key}
+                        onChange={(e) => {
+                          const newFields = [...extraFields];
+                          newFields[idx].key = e.target.value;
+                          setExtraFields(newFields);
+                        }}
+                        className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      >
+                        <option value="" disabled>Select Option</option>
+                        <option value="Drive Date">Drive Date</option>
+                        <option value="Package">Package</option>
+                        <option value="Eligible Branches">Eligible Branches</option>
+                        <option value="Role">Role</option>
+                        <option value="Custom">Other (Custom)</option>
+                      </select>
+                      {field.key === 'Custom' && (
+                        <input
+                          type="text"
+                          placeholder="Enter custom name"
+                          value={field.customKey}
+                          onChange={(e) => {
+                            const newFields = [...extraFields];
+                            newFields[idx].customKey = e.target.value;
+                            setExtraFields(newFields);
+                          }}
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        />
+                      )}
+                    </div>
+                    <div className="flex-[2]">
+                      <input
+                        type="text"
+                        placeholder="Enter value"
+                        value={field.value}
+                        onChange={(e) => {
+                          const newFields = [...extraFields];
+                          newFields[idx].value = e.target.value;
+                          setExtraFields(newFields);
+                        }}
+                        className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newFields = [...extraFields];
+                        newFields.splice(idx, 1);
+                        setExtraFields(newFields);
+                      }}
+                      className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-0.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="pt-6 flex gap-3">
               <button 
                 type="button"
@@ -288,7 +436,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 className="flex-[2] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                Save Company
+                {isEditing ? 'Update Company' : 'Save Company'}
               </button>
             </div>
           </form>
