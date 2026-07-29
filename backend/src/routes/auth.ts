@@ -19,7 +19,7 @@ const signToken = (id: string) => {
 // @desc    Register a user
 router.post('/register', async (req, res) => {
   try {
-    const { name, rollNumber, email, password, branchName } = req.body;
+    const { name, rollNumber, email, password, branchName, course } = req.body;
 
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -38,6 +38,7 @@ router.post('/register', async (req, res) => {
       email,
       password,
       branchId: branch._id,
+      course: course || 'B.Tech',
       status: 'pending',
     });
 

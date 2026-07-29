@@ -88,11 +88,16 @@ export default function SettingsPage() {
   });
 
   const { data: settings, isLoading: isLoadingSettings } = useQuery<Settings>({
-    queryKey: ['settings'],
+    queryKey: ['settings', branchName],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/settings`);
+      const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/settings`);
+      if (!isAdmin && branchName) {
+        url.searchParams.append('branchName', branchName);
+      }
+      const res = await axios.get(url.toString());
       return res.data;
     },
+    enabled: !!userProfile
   });
 
   useEffect(() => {
@@ -150,12 +155,18 @@ export default function SettingsPage() {
 
   const syncCompanies = useMutation({
     mutationFn: async () => {
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/companies/sync-sheet`);
-      return res.data;
+      if (isAdmin) {
+        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/companies/sync-sheet`);
+        return res.data;
+      } else {
+        if (!branchName) throw new Error('Branch not found');
+        const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/sync/branch/${branchName}`);
+        return res.data;
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
-      toast.success(`${data.syncedCount} Companies Synced Successfully`);
+      toast.success(`${data.count ?? data.syncedCount ?? data.synced ?? 0} Companies Synced Successfully`);
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to sync companies');
@@ -571,7 +582,8 @@ export default function SettingsPage() {
       </div>
 
       {/* Past Academic Year Sync Status Section */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8">
+      {isAdmin && (
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mb-8">
         <div className="p-6 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold">Past Year Google Sheet Status</h2>
@@ -626,6 +638,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Security Profile / Password Update */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">

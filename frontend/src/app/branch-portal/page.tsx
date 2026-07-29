@@ -29,6 +29,8 @@ export default function BranchPortalPage() {
   // Manual Add Form State
   const [manualForm, setManualForm] = useState({ companyName: '', hrName: '', hrPhone: '', hrEmail: '', linkedinProfile: '' });
   const [isDuplicate, setIsDuplicate] = useState(false);
+  const [isConflict, setIsConflict] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState('');
   const [checkingName, setCheckingName] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -193,6 +195,7 @@ export default function BranchPortalPage() {
   useEffect(() => {
     if (!manualForm.companyName || manualForm.companyName.trim().length < 2) {
       setIsDuplicate(false);
+      setIsConflict(false);
       return;
     }
     const timeoutId = setTimeout(async () => {
@@ -200,16 +203,26 @@ export default function BranchPortalPage() {
       try {
         const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(manualForm.companyName)}`);
         if (res.data.exists) {
-          setIsDuplicate(true);
-          setManualForm(prev => ({
-            ...prev,
-            hrName: res.data.hrContact?.name || prev.hrName,
-            hrPhone: res.data.hrContact?.mobile || prev.hrPhone,
-            hrEmail: res.data.hrContact?.email || prev.hrEmail,
-            linkedinProfile: res.data.hrContact?.linkedin_url || prev.linkedinProfile
-          }));
-          toast.info('Company exists. Switched to Update Mode.', { icon: '🔄' });
+          const comp = res.data.company;
+          const currentBranch = branches?.find((b: any) => b._id === selectedBranchId);
+          if (comp.assignedBranch && currentBranch && comp.assignedBranch !== currentBranch.name) {
+            setIsConflict(true);
+            setConflictMessage(`This company is already owned by the ${comp.assignedBranch} branch. You cannot duplicate outreach.`);
+            setIsDuplicate(false);
+          } else {
+            setIsConflict(false);
+            setIsDuplicate(true);
+            setManualForm(prev => ({
+              ...prev,
+              hrName: res.data.hrContact?.name || prev.hrName,
+              hrPhone: res.data.hrContact?.mobile || prev.hrPhone,
+              hrEmail: res.data.hrContact?.email || prev.hrEmail,
+              linkedinProfile: res.data.hrContact?.linkedin_url || prev.linkedinProfile
+            }));
+            toast.info('Company exists. Switched to Update Mode.', { icon: '🔄' });
+          }
         } else {
+          setIsConflict(false);
           setIsDuplicate(false);
         }
       } catch (e) {
@@ -232,6 +245,7 @@ export default function BranchPortalPage() {
       setShowManualModal(false);
       setManualForm({ companyName: '', hrName: '', hrPhone: '', hrEmail: '', linkedinProfile: '' });
       setIsDuplicate(false);
+      setIsConflict(false);
     },
     onError: () => toast.error('Failed to save company')
   });
@@ -514,6 +528,7 @@ export default function BranchPortalPage() {
                   setShowManualModal(false);
                   setManualForm({ companyName: '', hrName: '', hrPhone: '', hrEmail: '', linkedinProfile: '' });
                   setIsDuplicate(false);
+                  setIsConflict(false);
                 }}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               >
@@ -522,10 +537,16 @@ export default function BranchPortalPage() {
             </div>
 
             <div className="overflow-y-auto p-6 space-y-6">
+              {isConflict && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-800">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">{conflictMessage}</p>
+                </div>
+              )}
               {isDuplicate && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 text-amber-800">
                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium">This company is already in the database. Updating the form will overwrite the existing HR details and queue it for syncing.</p>
+                  <p className="text-sm font-medium">This company is already in your database. Updating the form will overwrite the existing HR details and queue it for syncing.</p>
                 </div>
               )}
               <div>
@@ -534,7 +555,7 @@ export default function BranchPortalPage() {
                   <input 
                     type="text" 
                     placeholder="e.g. Cloudera"
-                    className={`w-full bg-slate-50 border ${isDuplicate ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500' : 'border-slate-200 focus:ring-indigo-500 focus:border-indigo-500'} text-slate-900 text-sm rounded-xl p-3.5 transition-all shadow-sm`}
+                    className={`w-full bg-slate-50 border ${isConflict ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : isDuplicate ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500' : 'border-slate-200 focus:ring-indigo-500 focus:border-indigo-500'} text-slate-900 text-sm rounded-xl p-3.5 transition-all shadow-sm`}
                     value={manualForm.companyName}
                     onChange={(e) => setManualForm({ ...manualForm, companyName: e.target.value })}
                   />
@@ -591,7 +612,7 @@ export default function BranchPortalPage() {
               <div className="pt-4">
                 <button 
                   onClick={() => addManualCompanyMutation.mutate()}
-                  disabled={!manualForm.companyName || addManualCompanyMutation.isPending}
+                  disabled={!manualForm.companyName || isConflict || addManualCompanyMutation.isPending}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-md hover:shadow-lg disabled:shadow-none flex items-center justify-center gap-2"
                 >
                   {addManualCompanyMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <CloudUpload className="w-5 h-5" />}

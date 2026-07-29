@@ -218,7 +218,7 @@ export default function RequestsPage() {
         <p className="text-slate-500 mt-2">Manage pending TPR registrations and company contact requests.</p>
       </div>
 
-      <div className="flex gap-4 border-b border-slate-200">
+      <div className="flex gap-4 border-b border-slate-200 overflow-x-auto whitespace-nowrap pb-1">
         <button
           onClick={() => setActiveTab('tpr')}
           className={`pb-4 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${
@@ -278,27 +278,27 @@ export default function RequestsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-slate-600">
                       <p className="flex items-center gap-2"><UserIcon className="w-4 h-4 text-slate-400" /> {tpr.rollNumber}</p>
                       <p className="flex items-center gap-2"><Mail className="w-4 h-4 text-slate-400" /> {tpr.email}</p>
-                      <p className="flex items-center gap-2"><Building2 className="w-4 h-4 text-slate-400" /> Branch: <span className="font-semibold text-slate-900">{tpr.branchId?.name}</span></p>
+                      <p className="flex items-center gap-2"><Building2 className="w-4 h-4 text-slate-400" /> Branch: <span className="font-semibold text-slate-900">{tpr.branchId?.name} {tpr.course && `(${tpr.course})`}</span></p>
                       <p className="flex items-center gap-2"><Clock className="w-4 h-4 text-slate-400" /> Registered: {new Date(tpr.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <div className="flex w-full md:w-auto gap-3 shrink-0">
+                  <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 shrink-0 mt-4 md:mt-0">
                     <button
                       onClick={() => openRejectModal('tpr', tpr._id)}
-                      className="px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
+                      className="w-full sm:w-auto px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
                     >
                       Reject
                     </button>
                     <button
                       onClick={() => openReplaceModal(tpr._id, tpr.branchId?._id)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       Replace TPR
                     </button>
                     <button
                       onClick={() => approveTprMutation.mutate(tpr._id)}
                       disabled={approveTprMutation.isPending}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       {approveTprMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       Approve as New
@@ -339,23 +339,23 @@ export default function RequestsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap w-full md:w-auto gap-3 shrink-0">
+                  <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 shrink-0 mt-4 md:mt-0">
                     <button
                       onClick={() => openDetailsModal(contact.companyId)}
-                      className="flex-1 md:flex-none px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors"
+                      className="w-full sm:w-auto px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors"
                     >
                       View Details
                     </button>
                     <button
                       onClick={() => openRejectModal('contact', contact._id)}
-                      className="flex-1 md:flex-none px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
+                      className="w-full sm:w-auto px-4 py-2 border border-red-200 text-red-600 font-semibold rounded-lg hover:bg-red-50 transition-colors"
                     >
                       Reject
                     </button>
                     <button
                       onClick={() => approveContactMutation.mutate(contact._id)}
                       disabled={approveContactMutation.isPending}
-                      className="flex-1 md:flex-none px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="w-full sm:w-auto px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
                       {approveContactMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                       Approve & Send
@@ -422,7 +422,7 @@ export default function RequestsPage() {
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600">Standard</span>
                         )}
                       </div>
-                      <p className="text-sm text-slate-500 mt-1">{tpr.email} • {tpr.branchId?.name}</p>
+                      <p className="text-sm text-slate-500 mt-1">{tpr.email} • {tpr.branchId?.name} {tpr.course && `(${tpr.course})`}</p>
                     </div>
                     {tpr.role !== 'admin' && (
                       <button 

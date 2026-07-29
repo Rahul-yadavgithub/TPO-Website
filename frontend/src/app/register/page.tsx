@@ -54,7 +54,8 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, formData);
+      const payload = { ...formData, course: program };
+      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, payload);
       setSuccess(res.data.message || 'Registration submitted. Awaiting approval.');
       setTimeout(() => router.push('/login'), 3500);
     } catch (err: any) {

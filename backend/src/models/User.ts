@@ -12,6 +12,7 @@ export interface IUser extends Document {
   rejectionReason?: string;
   createdAt: Date;
   updatedAt: Date;
+  course?: string;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
@@ -23,6 +24,7 @@ const UserSchema: Schema = new Schema({
   branchId: { type: Schema.Types.ObjectId, ref: 'Branch', required: true },
   role: { type: String, enum: ['tpr', 'admin', 'communication_tpr'], default: 'tpr' },
   status: { type: String, enum: ['pending', 'approved', 'rejected', 'replaced'], default: 'pending' },
+  course: { type: String, enum: ['B.Tech', 'M.Tech', 'Dual Degree', 'B.Arch', 'Other'], default: 'B.Tech' },
   rejectionReason: { type: String },
 }, { timestamps: true });
 

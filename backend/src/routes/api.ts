@@ -2180,7 +2180,13 @@ router.get('/settings', async (req, res) => {
 
     const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'Not configured in .env';
 
-    res.json({ ...settings.toJSON(), serviceAccountEmail });
+    let totalSynced = settings.totalSynced;
+    const { branchName } = req.query;
+    if (branchName && typeof branchName === 'string') {
+      totalSynced = await Company.countDocuments({ assignedBranch: branchName, syncStatus: 'synced' });
+    }
+
+    res.json({ ...settings.toJSON(), totalSynced, serviceAccountEmail });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch settings' });
   }

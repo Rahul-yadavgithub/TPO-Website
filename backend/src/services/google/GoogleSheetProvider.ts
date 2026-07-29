@@ -54,7 +54,7 @@ export class GoogleSheetProvider {
 
       const appendRes = await this.sheets.spreadsheets.values.append({
         spreadsheetId: sheetId,
-        range: `${firstSheetName}!A:A`,
+        range: `'${firstSheetName}'!A:A`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [['__jobfinder_test_row__']] },
       });
@@ -155,7 +155,7 @@ export class GoogleSheetProvider {
         if (existingRowIndex !== undefined) {
           // Update the first occurrence (1-based index in sheets)
           updates.push({
-            range: `${branchName}!A${existingRowIndex + 1}:H${existingRowIndex + 1}`,
+            range: `'${branchName}'!A${existingRowIndex + 1}:H${existingRowIndex + 1}`,
             values: [rowData]
           });
         } else {
@@ -169,7 +169,7 @@ export class GoogleSheetProvider {
          const existingDescription = existingRows[dup.rowIndex][6] || '';
          if (!existingDescription.includes('🔴 DUPLICATE')) {
            updates.push({
-             range: `${branchName}!G${dup.rowIndex + 1}`,
+             range: `'${branchName}'!G${dup.rowIndex + 1}`,
              values: [[`🔴 DUPLICATE PLEASE DELETE - ${existingDescription}`]]
            });
          }
@@ -190,7 +190,7 @@ export class GoogleSheetProvider {
       if (valuesToAppend.length > 0) {
         await this.sheets!.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `${branchName}!A:H`,
+          range: `'${branchName}'!A:H`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: valuesToAppend },
         });
@@ -202,6 +202,28 @@ export class GoogleSheetProvider {
       if (branchName.startsWith('M.Tech')) {
         sheetId = settings.mtechCurrentAcademicYearSheetId;
       }
+
+      // Ensure branch tab exists
+      const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
+      const sheets = spreadsheet.data.sheets || [];
+      const sheetTitles = sheets.map(s => s.properties?.title).filter(Boolean) as string[];
+
+      if (!sheetTitles.includes(branchName)) {
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: {
+            requests: [{ addSheet: { properties: { title: branchName } } }]
+          }
+        });
+        
+        await this.sheets.spreadsheets.values.append({
+          spreadsheetId: sheetId,
+          range: `'${branchName}'!A1:H1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON']] },
+        });
+      }
+
       await syncBatch(companies, sheetId);
 
       return { success: true };
@@ -255,7 +277,7 @@ export class GoogleSheetProvider {
         const title = req.addSheet.properties.title;
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `${title}!A1:H1`,
+          range: `'${title}'!A1:H1`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON']] },
         });
@@ -310,7 +332,7 @@ export class GoogleSheetProvider {
 
         if (existingRowIndex !== undefined) {
           updates.push({
-            range: `${section}!A${existingRowIndex + 1}:H${existingRowIndex + 1}`,
+            range: `'${section}'!A${existingRowIndex + 1}:H${existingRowIndex + 1}`,
             values: [rowData]
           });
         } else {
@@ -321,7 +343,7 @@ export class GoogleSheetProvider {
       if (valuesToAppend.length > 0) {
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `${section}!A:H`,
+          range: `'${section}'!A:H`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: valuesToAppend },
         });
@@ -438,11 +460,13 @@ export class GoogleSheetProvider {
     try {
       const res = await this.sheets.spreadsheets.values.get({
         spreadsheetId: spreadsheetId,
-        range: `${sheetTab}!A:H`,
+        range: `'${sheetTab}'!A:H`,
       });
       return res.data.values || [];
-    } catch (error) {
-      console.error(`Failed to fetch inbound data for tab ${sheetTab}:`, error);
+    } catch (error: any) {
+      if (!error.message?.includes('Unable to parse range')) {
+        console.error(`Failed to fetch inbound data for tab ${sheetTab}:`, error);
+      }
       return [];
     }
   }

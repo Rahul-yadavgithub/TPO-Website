@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2 } from 'lucide-react';
+import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -28,57 +28,8 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   const [extraFields, setExtraFields] = useState<Array<{key: string, customKey: string, value: string}>>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
-
-  useEffect(() => {
-    if (mode !== 'previous') return;
-    const name = formData.companyName.trim();
-    if (!name) {
-      setIsEditing(false);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      setIsChecking(true);
-      try {
-        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/check-name?name=${encodeURIComponent(name)}`, { withCredentials: true });
-        if (res.data.exists && res.data.company) {
-          const comp = res.data.company;
-          setFormData(prev => ({
-            ...prev,
-            hrName: comp.hrName || '',
-            hrPhone: comp.hrPhone || '',
-            hrEmail: comp.hrEmail || '',
-            section: comp.section || 'Uncategorized',
-            academicYear: comp.academicYear || prev.academicYear
-          }));
-          
-          if (comp.extraData) {
-            const parsedFields = Object.entries(comp.extraData).map(([k, v]) => {
-              const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
-              return {
-                key: isPredefined ? k : 'Custom',
-                customKey: isPredefined ? '' : k,
-                value: v as string
-              };
-            });
-            setExtraFields(parsedFields);
-          } else {
-            setExtraFields([]);
-          }
-          setIsEditing(true);
-          toast.info('Loaded existing company details');
-        } else {
-          setIsEditing(false);
-        }
-      } catch (err) {
-        console.error('Failed to check company name:', err);
-      } finally {
-        setIsChecking(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [formData.companyName, mode]);
+  const [isConflict, setIsConflict] = useState(false);
+  const [conflictMessage, setConflictMessage] = useState('');
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
@@ -88,6 +39,93 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
     },
     enabled: mode === 'current'
   });
+
+  useEffect(() => {
+    const name = formData.companyName.trim();
+    if (!name) {
+      setIsEditing(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsChecking(true);
+      try {
+        if (mode === 'previous') {
+          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/check-name?name=${encodeURIComponent(name)}`, { withCredentials: true });
+          if (res.data.exists && res.data.company) {
+            const comp = res.data.company;
+            setFormData(prev => ({
+              ...prev,
+              hrName: comp.hrName || '',
+              hrPhone: comp.hrPhone || '',
+              hrEmail: comp.hrEmail || '',
+              section: comp.section || 'Uncategorized',
+              academicYear: comp.academicYear || prev.academicYear
+            }));
+            
+            if (comp.extraData) {
+              const parsedFields = Object.entries(comp.extraData).map(([k, v]) => {
+                const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
+                return {
+                  key: isPredefined ? k : 'Custom',
+                  customKey: isPredefined ? '' : k,
+                  value: v as string
+                };
+              });
+              setExtraFields(parsedFields);
+            } else {
+              setExtraFields([]);
+            }
+            setIsEditing(true);
+            setIsConflict(false);
+            toast.info('Loaded existing previous company details');
+          } else {
+            setIsEditing(false);
+            setIsConflict(false);
+          }
+        } else {
+          // Current mode check
+          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(name)}`, { withCredentials: true });
+          if (res.data.exists && res.data.company) {
+            const comp = res.data.company;
+            
+            // Wait, we need to know selectedBranchId for 'current' mode. 
+            // In this modal, selectedBranchId is chosen by the Admin from a dropdown.
+            // If they haven't chosen one, we just warn it exists.
+            const branch = branches?.find((b: any) => b._id === selectedBranchId);
+            
+            if (comp.assignedBranch && branch && comp.assignedBranch !== branch.name) {
+              setIsConflict(true);
+              setConflictMessage(`This company is already assigned to the ${comp.assignedBranch} branch. You cannot add it to ${branch.name}.`);
+              setIsEditing(false);
+            } else {
+              setIsConflict(false);
+              setIsEditing(true);
+              setFormData(prev => ({
+                ...prev,
+                hrName: res.data.hrContact?.name || prev.hrName,
+                hrPhone: res.data.hrContact?.mobile || prev.hrPhone,
+                hrEmail: res.data.hrContact?.email || prev.hrEmail,
+                linkedinProfile: res.data.company?.linkedinCompanyUrl || prev.linkedinProfile
+              }));
+              toast.info('Company exists in this branch. Switched to Update Mode.');
+            }
+          } else {
+            setIsEditing(false);
+            setIsConflict(false);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check company name:', err);
+      } finally {
+        setIsChecking(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData.companyName, mode, selectedBranchId, branches]);
+
+
 
   const { data: sections, isLoading: sectionsLoading } = useQuery({
     queryKey: ['previous-sections'],
@@ -205,7 +243,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                   type="text" 
                   required
                   placeholder="e.g. Google"
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className={`w-full px-4 py-2 bg-slate-50 border ${isConflict ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : isEditing ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500' : 'border-slate-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg transition-all`}
                   value={formData.companyName}
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                 />
@@ -215,6 +253,19 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                   </div>
                 )}
               </div>
+              
+              {isConflict && (
+                <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 text-red-800">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">{conflictMessage}</p>
+                </div>
+              )}
+              {isEditing && !isConflict && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2 text-amber-800">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm font-medium">This company is already in the database. Saving will update its details.</p>
+                </div>
+              )}
             </div>
             
             {mode === 'previous' && (
@@ -432,7 +483,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               </button>
               <button 
                 type="submit"
-                disabled={isSubmitting || !formData.companyName.trim() || (mode === 'current' && !selectedBranchId)}
+                disabled={isSubmitting || !formData.companyName.trim() || (mode === 'current' && !selectedBranchId) || isConflict}
                 className="flex-[2] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
