@@ -178,6 +178,12 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
     }
   };
 
+  const updateFieldValue = (idx: number, value: string) => {
+    const newFields = [...extraFields];
+    newFields[idx].value = value;
+    setExtraFields(newFields);
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 relative">
@@ -226,7 +232,8 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                   >
                     <option value="">-- Select Branch --</option>
                     {branches
-                      ?.map((b: any) => (
+                      ?.filter((b: any) => b.name !== 'Central Admin' && b.name !== 'M.Tech CSE')
+                      .map((b: any) => (
                         <option key={b._id} value={b._id}>{b.name}</option>
                       ))}
                   </select>
@@ -445,17 +452,85 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                       )}
                     </div>
                     <div className="flex-[2]">
-                      <input
-                        type="text"
-                        placeholder="Enter value"
-                        value={field.value}
-                        onChange={(e) => {
-                          const newFields = [...extraFields];
-                          newFields[idx].value = e.target.value;
-                          setExtraFields(newFields);
-                        }}
-                        className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                      />
+                      {field.key === 'Drive Date' ? (
+                        <input
+                          type="date"
+                          value={field.value}
+                          onChange={(e) => updateFieldValue(idx, e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        />
+                      ) : field.key === 'Eligible Branches' ? (
+                        (() => {
+                          const val = field.value || '';
+                          const isBTech = val.startsWith('B.Tech');
+                          const isMTech = val.startsWith('M.Tech');
+                          const isOpenToAll = val === 'Open to all';
+                          
+                          const currentProgram = isOpenToAll ? 'Open to all' : (isBTech ? 'B.Tech' : (isMTech ? 'M.Tech' : ''));
+                          const currentBranchesStr = (isBTech || isMTech) ? val.split(' - ')[1] || '' : '';
+                          const selectedBranches = currentBranchesStr ? currentBranchesStr.split(', ').filter(Boolean) : [];
+                          
+                          const handleProgramChange = (prog: string) => {
+                            if (prog === 'Open to all') {
+                              updateFieldValue(idx, 'Open to all');
+                            } else {
+                              updateFieldValue(idx, `${prog} - `);
+                            }
+                          };
+                          
+                          const toggleBranch = (branchName: string) => {
+                            let newBranches = [...selectedBranches];
+                            if (newBranches.includes(branchName)) {
+                              newBranches = newBranches.filter(b => b !== branchName);
+                            } else {
+                              newBranches.push(branchName);
+                            }
+                            // Clean up trailing ' - ' if no branches are selected yet, but we actually want to keep ' - ' to identify program.
+                            // However, it's better to just leave 'B.Tech - ' if empty.
+                            updateFieldValue(idx, `${currentProgram} - ${newBranches.join(', ')}`);
+                          };
+                          
+                          const availableBranches = branches?.filter((b: any) => b.name !== 'Central Admin' && b.name !== 'M.Tech CSE').map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE'];
+
+                          return (
+                            <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg w-full">
+                              <select 
+                                value={currentProgram}
+                                onChange={(e) => handleProgramChange(e.target.value)}
+                                className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                              >
+                                <option value="" disabled>Select Program</option>
+                                <option value="Open to all">Open to all</option>
+                                <option value="B.Tech">B.Tech</option>
+                                <option value="M.Tech">M.Tech</option>
+                              </select>
+                              
+                              {(currentProgram === 'B.Tech' || currentProgram === 'M.Tech') && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {availableBranches.map((bName: string) => (
+                                    <button
+                                      key={bName}
+                                      type="button"
+                                      onClick={() => toggleBranch(bName)}
+                                      className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors border ${selectedBranches.includes(bName) ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                    >
+                                      {bName}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        <input
+                          type="text"
+                          placeholder="Enter value"
+                          value={field.value}
+                          onChange={(e) => updateFieldValue(idx, e.target.value)}
+                          className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        />
+                      )}
                     </div>
                     <button
                       type="button"
