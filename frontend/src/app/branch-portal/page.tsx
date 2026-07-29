@@ -40,6 +40,16 @@ export default function BranchPortalPage() {
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const view = params.get('view');
+      if (view === 'previous_requests' || view === 'contact' || view === 'confirmed' || view === 'not_confirmed') {
+        setActiveView(view as any);
+      }
+    }
+  }, []);
+
   const { data: userProfile, isLoading: userLoading } = useQuery({
     queryKey: ['auth-me'],
     queryFn: async () => {
@@ -465,6 +475,10 @@ export default function BranchPortalPage() {
                     <div className="flex justify-between items-center bg-emerald-50 p-2 rounded-lg border border-emerald-100">
                       <span className="text-xs font-semibold text-emerald-700 uppercase">Contacts Provided</span>
                       <span className="text-sm font-bold text-emerald-700">{pastRequests?.filter((r: any) => r.status === 'approved').length || 0}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-red-50 p-2 rounded-lg border border-red-100">
+                      <span className="text-xs font-semibold text-red-700 uppercase">Requests Rejected</span>
+                      <span className="text-sm font-bold text-red-700">{pastRequests?.filter((r: any) => r.status === 'rejected').length || 0}</span>
                     </div>
                   </div>
                 </div>

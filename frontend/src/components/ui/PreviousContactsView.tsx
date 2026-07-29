@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, Search, Building2, CheckCircle2, Save, Users, Calendar } from 'lucide-react';
+import { Loader2, ArrowLeft, Search, Building2, CheckCircle2, Save, Users, Calendar, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface PreviousContactsViewProps {
@@ -226,14 +226,14 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                   </div>
                 ) : (
                   displayAvailable?.map((company: any) => (
-                    <div key={company._id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-purple-300 transition-colors">
+                    <div key={company._id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 p-4 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-purple-300 transition-colors">
                       <div>
                         <h4 className="font-bold text-slate-800 text-lg">{company.companyName}</h4>
                       </div>
                       <button 
                         onClick={() => requestContactMutation.mutate({ companyId: company._id, companyName: company.companyName })}
                         disabled={requestContactMutation.isPending}
-                        className="px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+                        className="w-full sm:w-auto px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
                       >
                         {requestContactMutation.isPending && requestingCompanyId === company._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Request'}
                       </button>
@@ -294,10 +294,10 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
 
                     return (
                       <div key={company._id} className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm">
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0 mb-4">
+                          <div className="w-full sm:w-auto">
                             <h4 className="font-bold text-slate-800 text-xl">{company.companyName}</h4>
-                            <div className="flex items-center gap-2 mt-2">
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
                               <span className={`text-xs font-semibold px-2 py-1 rounded-md ${
                                 isMyRequest ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
                               }`}>
@@ -323,7 +323,7 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                           {isApproved && !isEditing && (
                             <button 
                               onClick={() => startEdit(company)}
-                              className="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors text-sm"
+                              className="w-full sm:w-auto px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors text-sm text-center"
                             >
                               Update & Sync
                             </button>
@@ -344,6 +344,17 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                             <div>
                               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Phone</p>
                               <p className="text-sm font-medium text-slate-900">{company.hrPhone || 'N/A'}</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Rejection Reason block */}
+                        {isMyRequest && myReqDoc?.status === 'rejected' && myReqDoc.rejectionReason && (
+                          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+                            <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-bold text-red-900 mb-1">Request Rejected</p>
+                              <p className="text-sm text-red-700">{myReqDoc.rejectionReason}</p>
                             </div>
                           </div>
                         )}
