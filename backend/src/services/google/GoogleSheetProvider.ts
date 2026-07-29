@@ -356,6 +356,7 @@ export class GoogleSheetProvider {
     }
 
     const PreviousCompany = (await import('../../models/PreviousCompany')).default;
+    const allValidNormalizedNames = new Set<string>();
     let syncedCount = 0;
 
     for (const sectionTab of sheetTitles) {
@@ -382,6 +383,7 @@ export class GoogleSheetProvider {
         } catch(e) {}
 
         const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        allValidNormalizedNames.add(normalizedName);
 
         try {
           let existing = await PreviousCompany.findOne({ normalizedName });
@@ -412,6 +414,19 @@ export class GoogleSheetProvider {
       }
     }
 
+    // Deletion Pass: Remove any companies from DB that were deleted from Google Sheet
+    if (allValidNormalizedNames.size > 0) {
+      const allDbCompanies = await PreviousCompany.find();
+      const idsToDelete = allDbCompanies
+        .filter(c => !allValidNormalizedNames.has(c.normalizedName))
+        .map(c => c._id);
+      
+      if (idsToDelete.length > 0) {
+        await PreviousCompany.deleteMany({ _id: { $in: idsToDelete } });
+        console.log(`Deleted ${idsToDelete.length} orphaned previous companies during bidirectional sync`);
+      }
+    }
+
     return { success: true, syncedCount: syncedCount };
   }
 
@@ -430,6 +445,16 @@ export class GoogleSheetProvider {
       console.error(`Failed to fetch inbound data for tab ${sheetTab}:`, error);
       return [];
     }
+  }
+
+  public async getPreviousCompanySections(sheetId: string): Promise<string[]> {
+    await this.initialize();
+    if (!this.sheets) throw new Error('Google Sheets Auth not configured');
+    if (!sheetId) throw new Error('Target Google Sheet ID is missing.');
+
+    const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
+    const sheets = spreadsheet.data.sheets || [];
+    return sheets.map(s => s.properties?.title).filter(Boolean) as string[];
   }
 
   public async deleteRows(spreadsheetId: string, sheetTab: string, rowRefs: string[]): Promise<boolean> {

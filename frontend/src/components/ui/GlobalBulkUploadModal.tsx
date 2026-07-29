@@ -25,6 +25,7 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
   const [selectedProgram, setSelectedProgram] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [section, setSection] = useState('Uncategorized');
+  const [isNewSection, setIsNewSection] = useState(false);
 
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
@@ -33,6 +34,15 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
       return res.data;
     },
     enabled: mode === 'current'
+  });
+
+  const { data: sections, isLoading: sectionsLoading } = useQuery({
+    queryKey: ['previous-sections'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/sections`, { withCredentials: true });
+      return res.data.data || [];
+    },
+    enabled: mode === 'previous'
   });
 
   const getValidateEndpoint = () => {
@@ -66,7 +76,7 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
       const workbook = XLSX.read(data, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(worksheet) as any[];
+      const json = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
       const companies = json.map(row => {
         const keys = Object.keys(row);
@@ -189,8 +199,7 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
                     >
                       <option value="">-- Select Branch --</option>
                       {branches
-                        ?.filter((b: any) => selectedProgram === 'M.Tech' ? b.name.startsWith('M.Tech') : !b.name.startsWith('M.Tech'))
-                        .map((b: any) => (
+                        ?.map((b: any) => (
                           <option key={b._id} value={b._id}>{b.name}</option>
                         ))}
                     </select>
@@ -199,17 +208,40 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
               )}
               
               {mode === 'previous' && (
-                <div>
+                <div className="space-y-2">
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                     <FileSpreadsheet className="w-4 h-4 text-slate-400" /> Section Name
                   </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. IIT Patna Data"
-                    value={section}
-                    onChange={(e) => setSection(e.target.value)}
+                  <select
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  />
+                    value={isNewSection ? 'ADD_NEW' : section}
+                    onChange={(e) => {
+                      if (e.target.value === 'ADD_NEW') {
+                        setIsNewSection(true);
+                        setSection('');
+                      } else {
+                        setIsNewSection(false);
+                        setSection(e.target.value);
+                      }
+                    }}
+                  >
+                    <option value="" disabled>-- Select Section --</option>
+                    {sections?.map((s: string) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                    <option value="ADD_NEW">+ Add New Section</option>
+                  </select>
+                  
+                  {isNewSection && (
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Enter new section name (e.g. IIT Patna Data)"
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all animate-in fade-in slide-in-from-top-2"
+                      value={section}
+                      onChange={(e) => setSection(e.target.value)}
+                    />
+                  )}
                   <p className="text-xs text-slate-500 mt-1">
                     Unmapped columns from your sheet will automatically be saved.
                   </p>

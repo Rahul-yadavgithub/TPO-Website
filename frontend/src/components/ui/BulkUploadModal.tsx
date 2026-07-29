@@ -36,7 +36,7 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
       const workbook = XLSX.read(data, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const json = XLSX.utils.sheet_to_json(worksheet) as any[];
+      const json = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
       // Map columns heuristically
       const companies = json.map(row => {

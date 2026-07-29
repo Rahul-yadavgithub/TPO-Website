@@ -13,6 +13,29 @@ import axios from 'axios';
 const router = express.Router();
 router.use(protect);
 
+// @route   GET /api/previous-companies/sections
+// @desc    Get all available sections (sheet tabs)
+router.get('/sections', async (req, res) => {
+  try {
+    const settings = await Settings.findOne();
+    let sections: string[] = [];
+    if (settings && settings.pastAcademicYearSheetId) {
+      sections = await googleSheetService.getPreviousCompanySections(settings.pastAcademicYearSheetId);
+    } else {
+      sections = await PreviousCompany.distinct('section');
+    }
+    res.json({ success: true, data: sections });
+  } catch (error) {
+    console.error('Sections fetch error:', error);
+    try {
+       const sections = await PreviousCompany.distinct('section');
+       res.json({ success: true, data: sections });
+    } catch (e) {
+       res.status(500).json({ success: false, message: 'Server Error' });
+    }
+  }
+});
+
 // @route   GET /api/previous-companies/status-counts
 // @desc    Get counts of available vs requested companies
 router.get('/status-counts', async (req, res) => {
@@ -216,16 +239,22 @@ router.post('/manual', async (req: any, res) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { companyName, academicYear, hrName, hrPhone, hrEmail, section } = req.body;
     if (!companyName || !academicYear) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ error: 'Company name and academic year are required' });
     }
 
     const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    let company = await PreviousCompany.findOne({ normalizedName, academicYear });
+    let company = await PreviousCompany.findOne({ normalizedName, academicYear }).session(session);
 
     if (company) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ error: 'Company already exists for this academic year.' });
     }
 
@@ -239,7 +268,7 @@ router.post('/manual', async (req: any, res) => {
       section: section || 'Uncategorized'
     });
     
-    await company.save();
+    await company.save({ session });
 
     // Auto-sync to Google Sheet if configured
     try {
@@ -249,16 +278,26 @@ router.post('/manual', async (req: any, res) => {
         if (syncResult.success) {
           company.syncStatus = 'synced';
           company.lastSynced = new Date();
-          await company.save();
+          await company.save({ session });
+        } else {
+          throw new Error('Google Sheets sync reported failure.');
         }
       }
     } catch (syncError) {
       console.error('Immediate sync failed for manual previous company:', syncError);
+      throw new Error('Google Sheets Sync Failed: Rollback initiated');
     }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({ success: true, company });
   } catch (error) {
     console.error('Manual previous company add error:', error);
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
     res.status(500).json({ error: 'Failed to add company' });
   }
 });
@@ -404,9 +443,13 @@ router.post('/bulk-import', async (req: any, res) => {
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required' });
   }
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const { companies } = req.body;
     if (!Array.isArray(companies) || companies.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ error: 'Valid companies array is required' });
     }
 
@@ -421,7 +464,7 @@ router.post('/bulk-import', async (req: any, res) => {
       extraData: c.extraData || {}
     }));
 
-    const insertedDocs = await PreviousCompany.insertMany(companyDocs);
+    const insertedDocs = await PreviousCompany.insertMany(companyDocs, { session });
     
     // Auto-sync to Google Sheet if configured
     try {
@@ -432,17 +475,28 @@ router.post('/bulk-import', async (req: any, res) => {
           const insertedIds = insertedDocs.map(d => d._id);
           await PreviousCompany.updateMany(
             { _id: { $in: insertedIds } },
-            { $set: { syncStatus: 'synced', lastSynced: new Date() } }
+            { $set: { syncStatus: 'synced', lastSynced: new Date() } },
+            { session }
           );
+        } else {
+          throw new Error('Google Sheets sync reported failure.');
         }
       }
     } catch (syncError) {
       console.error('Immediate bulk sync failed for previous companies:', syncError);
+      throw new Error('Google Sheets Sync Failed: Rollback initiated');
     }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({ success: true, count: companyDocs.length });
   } catch (error) {
     console.error('Bulk import error:', error);
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
     res.status(500).json({ error: 'Failed to import companies' });
   }
 });

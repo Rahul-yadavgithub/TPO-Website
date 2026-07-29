@@ -675,6 +675,49 @@ router.post('/companies/sync-sheet', async (req, res) => {
 
     // Sync per branch
     for (const [branchName, companiesGroup] of branchMap.entries()) {
+      // --- Sync Deletions ---
+      try {
+        const settings = await Settings.findOne().session(session);
+        let sheetId = settings?.currentAcademicYearSheetId;
+        if (branchName.startsWith('M.Tech')) {
+          sheetId = settings?.mtechCurrentAcademicYearSheetId;
+        }
+        
+        if (sheetId) {
+          const sheetRows = await googleSheetService.fetchInboundData(sheetId, branchName);
+          if (sheetRows.length > 0) {
+            const validSheetIds = new Set<string>();
+            for (let i = 0; i < sheetRows.length; i++) {
+              const row = sheetRows[i];
+              if (i === 0 && row[0]?.toLowerCase().includes('company')) continue;
+              const hiddenId = row[7]?.trim();
+              if (hiddenId) validSheetIds.add(hiddenId);
+            }
+            
+            const companiesToDelete = companiesGroup.filter(c => !validSheetIds.has(c._id.toString()) && c.syncStatus === 'synced');
+            
+            if (companiesToDelete.length > 0) {
+              const idsToDelete = companiesToDelete.map(c => c._id);
+              await Company.deleteMany({ _id: { $in: idsToDelete } }, { session });
+              await HrContact.deleteMany({ company_id: { $in: idsToDelete } }, { session });
+              await ContactLog.deleteMany({ company_id: { $in: idsToDelete } }, { session });
+              await CompanyStatusHistory.deleteMany({ company_id: { $in: idsToDelete } }, { session });
+              console.log(`Deleted ${idsToDelete.length} orphaned companies during global sync for ${branchName}`);
+              
+              // Remove deleted from companiesGroup so they don't get appended
+              for (let i = companiesGroup.length - 1; i >= 0; i--) {
+                if (!validSheetIds.has(companiesGroup[i]._id.toString()) && companiesGroup[i].syncStatus === 'synced') {
+                  companiesGroup.splice(i, 1);
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Error during sync deletions for branch ${branchName}:`, err);
+      }
+      // --- End Sync Deletions ---
+
       const syncResult = await googleSheetService.appendCompaniesToSheet(companiesGroup, branchName);
 
       if (syncResult.success) {
@@ -833,15 +876,54 @@ router.post('/sync/branch/:branch_identifier', async (req, res) => {
       return res.status(404).json({ error: 'Branch not found' });
     }
 
+    const allCompanies = await Company.find({ assignedBranch: branch.name }).session(session);
+
+    // 1. Sync Deletions: Remove DB companies that were deleted from Google Sheet
+    try {
+      const settings = await Settings.findOne().session(session);
+      let sheetId = settings?.currentAcademicYearSheetId;
+      if (branch.name.startsWith('M.Tech')) {
+        sheetId = settings?.mtechCurrentAcademicYearSheetId;
+      }
+      
+      if (sheetId) {
+        const sheetRows = await googleSheetService.fetchInboundData(sheetId, branch.name);
+        if (sheetRows.length > 0) { // Safety check: only process if we got data/headers back
+          const validSheetIds = new Set<string>();
+          for (let i = 0; i < sheetRows.length; i++) {
+            const row = sheetRows[i];
+            if (i === 0 && row[0]?.toLowerCase().includes('company')) continue;
+            const hiddenId = row[7]?.trim();
+            if (hiddenId) validSheetIds.add(hiddenId);
+          }
+          
+          const companiesToDelete = allCompanies.filter(c => !validSheetIds.has(c._id.toString()) && c.syncStatus === 'synced');
+          
+          if (companiesToDelete.length > 0) {
+            const idsToDelete = companiesToDelete.map(c => c._id);
+            await Company.deleteMany({ _id: { $in: idsToDelete } }, { session });
+            await HrContact.deleteMany({ company_id: { $in: idsToDelete } }, { session });
+            await ContactLog.deleteMany({ company_id: { $in: idsToDelete } }, { session });
+            await CompanyStatusHistory.deleteMany({ company_id: { $in: idsToDelete } }, { session });
+            console.log(`Deleted ${idsToDelete.length} orphaned companies during branch sync for ${branch.name}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error during sync deletions:', err);
+      // Proceed with push sync even if deletion check fails
+    }
+
+    // 2. Push Pending Updates
     const pendingCompanies = await Company.find({
       assignedBranch: branch.name,
       syncStatus: 'pending'
     }).session(session);
 
     if (pendingCompanies.length === 0) {
-      await session.abortTransaction();
+      await session.commitTransaction();
       session.endSession();
-      return res.status(400).json({ error: 'No pending companies to sync' });
+      return res.json({ message: 'Sync successful (No pending updates pushed, but deletions checked)' });
     }
 
     const syncResult = await googleSheetService.appendCompaniesToSheet(pendingCompanies, branch.name);
@@ -1376,22 +1458,22 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
       }], { session });
     }
 
-    await session.commitTransaction();
-    session.endSession();
-
-    // Now auto-sync to Google Sheets
     try {
       const syncResult = await googleSheetService.appendCompaniesToSheet([company as any], branchInfo.name);
       if (syncResult.success) {
-        await Company.updateOne(
-          { _id: company._id },
-          { $set: { syncStatus: 'synced', lastSynced: new Date() } }
-        );
         company.syncStatus = 'synced';
+        company.lastSynced = new Date();
+        await company.save({ session });
+      } else {
+        throw new Error('Google Sheets sync reported failure.');
       }
     } catch (syncError) {
       console.error('Immediate sync failed:', syncError);
+      throw new Error('Google Sheets Sync Failed: Rollback initiated');
     }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({ success: true, company });
   } catch (error) {
@@ -1546,10 +1628,6 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
       await HrContact.insertMany(newHrContacts, { session });
     }
 
-    await session.commitTransaction();
-    session.endSession();
-
-    // Now auto-sync to Google Sheets
     if (newCompanies.length > 0) {
       try {
         const syncResult = await googleSheetService.appendCompaniesToSheet(newCompanies as any[], branchInfo.name);
@@ -1557,13 +1635,20 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
           const companyIds = newCompanies.map(c => c._id);
           await Company.updateMany(
             { _id: { $in: companyIds } },
-            { $set: { syncStatus: 'synced', lastSynced: new Date() } }
+            { $set: { syncStatus: 'synced', lastSynced: new Date() } },
+            { session }
           );
+        } else {
+          throw new Error('Google Sheets sync reported failure.');
         }
       } catch (syncError) {
         console.error('Immediate bulk sync failed:', syncError);
+        throw new Error('Google Sheets Bulk Sync Failed: Rollback initiated');
       }
     }
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.json({ success: true, importedCount: newCompanies.length });
   } catch (error) {
@@ -2108,6 +2193,7 @@ router.put('/settings', async (req, res) => {
       settings = new Settings(req.body);
     } else {
       settings.currentAcademicYearSheetId = req.body.currentAcademicYearSheetId;
+      settings.mtechCurrentAcademicYearSheetId = req.body.mtechCurrentAcademicYearSheetId;
       settings.pastAcademicYearSheetId = req.body.pastAcademicYearSheetId;
     }
     await settings.save();
