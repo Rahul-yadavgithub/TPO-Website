@@ -65,26 +65,59 @@ router.get('/status-counts', async (req, res) => {
 // @desc    Search previous year companies by name
 router.get('/search', async (req, res) => {
   try {
-    const { q, status } = req.query;
+    const { q, status, branchId } = req.query;
     if (!q) {
       return res.status(400).json({ success: false, message: 'Query string is required' });
     }
 
+    const applyStatusFilter = (queryObj: any) => {
+      if (status === 'not_contacted') {
+        queryObj.contactStatus = 'not_contacted';
+      } else if (status === 'my_requests') {
+        queryObj.contactStatus = { $in: ['requested', 'contacted'] };
+        if (branchId) queryObj.contactedByBranchId = branchId;
+      } else if (status === 'others_requests') {
+        queryObj.contactStatus = { $in: ['requested', 'contacted'] };
+        if (branchId) queryObj.contactedByBranchId = { $ne: branchId };
+      } else if (status) {
+        queryObj.contactStatus = status;
+      }
+    };
+
     let query: any = { $text: { $search: q as string } };
-    if (status) query.contactStatus = status;
+    applyStatusFilter(query);
+
+
+    const attachExistsInCurrentYear = async (companies: any[]) => {
+      if (status === 'my_requests' && branchId && companies.length > 0) {
+        const normalizedNames = companies.map(c => c.normalizedName);
+        const existingCurrentCompanies = await Company.find({
+          assignedBranchId: branchId as string,
+          normalizedName: { $in: normalizedNames }
+        }).select('normalizedName');
+        const existingSet = new Set(existingCurrentCompanies.map(c => c.normalizedName));
+        return companies.map(c => ({
+          ...c.toObject(),
+          existsInCurrentYear: existingSet.has(c.normalizedName)
+        }));
+      }
+      return companies.map(c => c.toObject());
+    };
 
     const companies = await PreviousCompany.find(query).limit(10);
     
     // If no text index matches, fallback to regex
     if (companies.length === 0) {
       let regexQuery: any = { companyName: { $regex: q as string, $options: 'i' } };
-      if (status) regexQuery.contactStatus = status;
+      applyStatusFilter(regexQuery);
       
       const regexCompanies = await PreviousCompany.find(regexQuery).limit(10);
-      return res.status(200).json({ success: true, data: regexCompanies });
+      const finalRegexCompanies = await attachExistsInCurrentYear(regexCompanies);
+      return res.status(200).json({ success: true, data: finalRegexCompanies });
     }
 
-    res.status(200).json({ success: true, data: companies });
+    const finalCompanies = await attachExistsInCurrentYear(companies);
+    res.status(200).json({ success: true, data: finalCompanies });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error' });
@@ -106,6 +139,21 @@ router.get('/list', async (req, res) => {
     } else if (status === 'my_requests') {
       query.contactStatus = { $in: ['requested', 'contacted'] };
       if (branchId) query.contactedByBranchId = branchId;
+      
+      const subTab = req.query.subTab as string;
+      if (branchId && (subTab === 'new' || subTab === 'existing')) {
+        const branch = await mongoose.model('Branch').findById(branchId);
+        if (branch) {
+          const currentCompanies = await Company.find({ assignedBranch: branch.name }).select('normalizedName');
+          const existingNames = currentCompanies.map(c => c.normalizedName);
+          
+          if (subTab === 'existing') {
+            query.normalizedName = { $in: existingNames };
+          } else if (subTab === 'new') {
+            query.normalizedName = { $nin: existingNames };
+          }
+        }
+      }
     } else if (status === 'others_requests') {
       query.contactStatus = { $in: ['requested', 'contacted'] };
       if (branchId) query.contactedByBranchId = { $ne: branchId };
@@ -238,7 +286,9 @@ router.post('/request', async (req: AuthRequest, res) => {
     }
 
     if (previousCompany.contactStatus === 'requested' || previousCompany.contactStatus === 'contacted') {
-      return res.status(409).json({ success: false, message: `This company is already ${previousCompany.contactStatus} by the ${previousCompany.contactedByBranchName} branch. Please do not duplicate outreach.` });
+      if (previousCompany.contactedByBranchId && previousCompany.contactedByBranchId.toString() !== branchId) {
+        return res.status(409).json({ success: false, message: `This company is already ${previousCompany.contactStatus} by the ${previousCompany.contactedByBranchName} branch. Please do not duplicate outreach.` });
+      }
     }
 
     // Check if a pending request already exists for this branch and company
@@ -256,7 +306,9 @@ router.post('/request', async (req: AuthRequest, res) => {
     const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const activeCompany = await Company.findOne({ normalizedName });
     if (activeCompany) {
-      return res.status(409).json({ success: false, message: `This company is already active and contacted by the ${activeCompany.assignedBranch} department (Contact Person: ${activeCompany.contactOwner || 'Unknown'}). Please do not duplicate outreach.` });
+      if (activeCompany.assignedBranchId && activeCompany.assignedBranchId.toString() !== branchId) {
+        return res.status(409).json({ success: false, message: `This company is already active and contacted by the ${activeCompany.assignedBranch} department. Please do not duplicate outreach.` });
+      }
     }
 
     // Fetch the branch name
@@ -275,6 +327,7 @@ router.post('/request', async (req: AuthRequest, res) => {
     previousCompany.contactedByBranchId = branchId;
     previousCompany.contactedByBranchName = branch ? branch.name : 'Unknown Branch';
     previousCompany.contactedByTprName = req.user.name;
+    previousCompany.contactedByTprEmail = req.user.email;
     await previousCompany.save();
 
     res.status(201).json({ success: true, data: contactReq });
@@ -420,7 +473,7 @@ router.post('/manual', async (req: any, res) => {
 router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { hrName, hrEmail, hrPhone, branchId } = req.body;
+    const { hrName, hrEmail, hrPhone, branchId, isVerified } = req.body;
 
     const previousCompany = await PreviousCompany.findById(id);
     if (!previousCompany) {
@@ -442,6 +495,10 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
     previousCompany.hrEmail = hrEmail;
     previousCompany.hrPhone = hrPhone;
     previousCompany.updatedByTprName = req.user.name;
+    
+    if (isVerified) {
+      previousCompany.primary_contact_verified = true;
+    }
 
     // We no longer just update contactStatus and sync. 
     // Since it's confirmed, we completely remove it from the past year sheet and DB!
@@ -473,10 +530,12 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
         assignedBranchId: branchId,
         hrEmail: hrEmail,
         contactOwner: req.user.name,
+        contactOwnerEmail: req.user.email,
         contactOwnerRole: req.user.role,
         lastContactStatus: 'not_contacted',
         totalDrivesConducted: 0,
-        syncStatus: 'pending'
+        syncStatus: 'pending',
+        primary_contact_verified: isVerified || false
       });
       await currentCompany.save();
 
@@ -491,6 +550,9 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
       // Company exists in this branch's DB, so REPLACE the contact info
       currentCompany.hrEmail = hrEmail;
       currentCompany.syncStatus = 'pending';
+      if (isVerified) {
+        currentCompany.primary_contact_verified = true;
+      }
       await currentCompany.save();
 
       let hrContact = await HrContact.findOne({ company_id: currentCompany._id });
@@ -732,9 +794,13 @@ router.get('/duplicates', async (req: any, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
+    const q = req.query.q as string;
     const skip = (page - 1) * limit;
 
-    const query = { status: 'pending' };
+    let query: any = { status: 'pending' };
+    if (q && q.length >= 2) {
+      query.companyName = { $regex: q, $options: 'i' };
+    }
     
     // We want to populate originalCompanyId to show side-by-side
     const duplicates = await DuplicatePreviousCompany.find(query)

@@ -295,6 +295,7 @@ export function Sidebar() {
         <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto overflow-x-hidden">
           {navItems.map((item) => {
             if (item.href === '/requests' && !isAdmin) return null;
+            if (item.href === '/past-companies' && !isAdmin) return null;
             if (isAdmin && (item.href === '/sources' || item.href === '/history')) return null;
             const isActive = pathname === item.href;
             return (

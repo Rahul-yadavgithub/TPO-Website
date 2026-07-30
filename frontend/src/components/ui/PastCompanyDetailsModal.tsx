@@ -10,6 +10,15 @@ interface AdditionalContact {
   hrPhone: string;
   sourceSheet: string;
   academicYear: string;
+  isVerified?: boolean;
+}
+
+interface ExtraContact {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  isVerified: boolean;
 }
 
 interface PastCompany {
@@ -26,6 +35,7 @@ interface PastCompany {
   extraData?: Record<string, any>;
   additionalContacts?: AdditionalContact[];
   is_verified_by_admin?: boolean;
+  primary_contact_verified?: boolean;
 }
 
 interface PastCompanyDetailsModalProps {
@@ -38,6 +48,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<PastCompany>>({});
   const [editExtraData, setEditExtraData] = useState<{ id: string; key: string; value: string }[]>([]);
+  const [extraContacts, setExtraContacts] = useState<ExtraContact[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewSection, setIsNewSection] = useState(false);
   
@@ -58,12 +69,44 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
       setFormData(JSON.parse(JSON.stringify(company)));
       
       // Initialize extra data array for editing
-      const extraArray = Object.entries(company.extraData || {}).map(([k, v], idx) => ({
-        id: `extra-${idx}`,
-        key: k,
-        value: typeof v === 'object' ? JSON.stringify(v) : String(v)
-      }));
-      setEditExtraData(extraArray);
+      
+      const genericExtra: { id: string; key: string; value: string }[] = [];
+      const hrContactsMap: Record<string, ExtraContact> = {};
+
+      Object.entries(company.extraData || {}).forEach(([k, v]) => {
+        const nameMatch = k.match(/^OTHER HR NAME\s*(\d*)$/i);
+        const emailMatch = k.match(/^OTHER HR EMAIL\s*(\d*)$/i) || k.match(/^OTHER HR MAIL\s*(\d*)$/i);
+        const phoneMatch = k.match(/^OTHER HR MOBILE\s*(\d*)$/i) || k.match(/^OTHER HR PHONE\s*(\d*)$/i) || k.match(/^OTHER HR NUMBER\s*(\d*)$/i);
+        const verifiedMatch = k.match(/^OTHER HR VERIFIED\s*(\d*)$/i);
+
+        let isHrContact = false;
+        let suffix = '';
+
+        if (nameMatch) { suffix = nameMatch[1]; isHrContact = true; }
+        else if (emailMatch) { suffix = emailMatch[1]; isHrContact = true; }
+        else if (phoneMatch) { suffix = phoneMatch[1]; isHrContact = true; }
+        else if (verifiedMatch) { suffix = verifiedMatch[1]; isHrContact = true; }
+
+        if (isHrContact) {
+          if (!hrContactsMap[suffix]) {
+            hrContactsMap[suffix] = { id: suffix, name: '', phone: '', email: '', isVerified: false };
+          }
+          if (nameMatch) hrContactsMap[suffix].name = String(v);
+          if (emailMatch) hrContactsMap[suffix].email = String(v);
+          if (phoneMatch) hrContactsMap[suffix].phone = String(v);
+          if (verifiedMatch) hrContactsMap[suffix].isVerified = String(v).toLowerCase() === 'true';
+        } else {
+          genericExtra.push({
+            id: `extra-${Date.now()}-${Math.random()}`,
+            key: k,
+            value: typeof v === 'object' ? JSON.stringify(v) : String(v)
+          });
+        }
+      });
+
+      setEditExtraData(genericExtra);
+      setExtraContacts(Object.values(hrContactsMap));
+
 
       setIsEditing(false);
       setIsNewSection(false);
@@ -79,6 +122,16 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
       const finalExtraData: Record<string, any> = {};
       editExtraData.forEach(item => {
         if (item.key.trim()) finalExtraData[item.key.trim()] = item.value;
+      });
+
+      extraContacts.forEach(contact => {
+        if (contact.name || contact.email || contact.phone) {
+          const suffix = contact.id;
+          if (contact.name) finalExtraData[`OTHER HR NAME ${suffix}`.trim()] = contact.name;
+          if (contact.email) finalExtraData[`OTHER HR EMAIL ${suffix}`.trim()] = contact.email;
+          if (contact.phone) finalExtraData[`OTHER HR MOBILE ${suffix}`.trim()] = contact.phone;
+          if (contact.isVerified) finalExtraData[`OTHER HR VERIFIED ${suffix}`.trim()] = 'true';
+        }
       });
       
       const payload = { ...formData, extraData: finalExtraData };
@@ -99,7 +152,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
     }
   };
 
-  const handleAdditionalContactChange = (index: number, field: keyof AdditionalContact, value: string) => {
+  const handleAdditionalContactChange = (index: number, field: keyof AdditionalContact, value: any) => {
     const newContacts = [...(formData.additionalContacts || [])];
     newContacts[index] = { ...newContacts[index], [field]: value };
     setFormData({ ...formData, additionalContacts: newContacts });
@@ -113,8 +166,25 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
 
   const handleAddAdditionalContact = () => {
     const newContacts = [...(formData.additionalContacts || [])];
-    newContacts.push({ hrName: '', hrEmail: '', hrPhone: '', sourceSheet: 'Manual Entry', academicYear: new Date().getFullYear().toString() });
+    newContacts.push({ hrName: '', hrEmail: '', hrPhone: '', sourceSheet: 'Manual Entry', academicYear: new Date().getFullYear().toString(), isVerified: false });
     setFormData({ ...formData, additionalContacts: newContacts });
+  };
+
+  const handleExtraContactChange = (index: number, field: keyof ExtraContact, value: any) => {
+    const newContacts = [...extraContacts];
+    newContacts[index] = { ...newContacts[index], [field]: value };
+    setExtraContacts(newContacts);
+  };
+
+  const handleRemoveExtraContact = (index: number) => {
+    const newContacts = [...extraContacts];
+    newContacts.splice(index, 1);
+    setExtraContacts(newContacts);
+  };
+
+  const handleAddExtraContact = () => {
+    const nextId = (extraContacts.length + 1).toString();
+    setExtraContacts([...extraContacts, { id: nextId, name: '', phone: '', email: '', isVerified: false }]);
   };
 
   const handleExtraDataChange = (id: string, field: 'key' | 'value', val: string) => {
@@ -250,9 +320,26 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
           
           {/* Primary Contact */}
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-              <h3 className="font-semibold text-slate-900">Primary Contact (Last Used)</h3>
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <h3 className="font-semibold text-slate-900">Primary Contact (Last Used)</h3>
+              </div>
+              {isEditing ? (
+                <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
+                  <input 
+                    type="checkbox" 
+                    checked={formData.primary_contact_verified || false} 
+                    onChange={e => setFormData({...formData, primary_contact_verified: e.target.checked})}
+                    className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span className="text-sm font-semibold text-emerald-700">Verify Primary Contact</span>
+                </label>
+              ) : formData.primary_contact_verified && (
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Verified
+                </span>
+              )}
             </div>
             <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
@@ -341,6 +428,100 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   </button>
                 )}
               </div>
+              
+              {((extraContacts && extraContacts.length > 0) || isEditing) && (
+                <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold text-slate-700 text-sm uppercase tracking-wider">Additional HR Contacts</h4>
+                    {isEditing && (
+                      <button 
+                        onClick={handleAddExtraContact}
+                        className="text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
+                      >
+                        + Add HR Contact
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {extraContacts.map((c, idx) => (
+                      <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            {isEditing ? (
+                              <input 
+                                type="text"
+                                placeholder="HR Name"
+                                value={c.name}
+                                onChange={e => handleExtraContactChange(idx, 'name', e.target.value)}
+                                className="w-full font-semibold text-slate-900 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 mb-2 text-sm"
+                              />
+                            ) : (
+                              <h5 className="font-bold text-slate-800 flex items-center gap-2">
+                                {c.name || 'No Name'}
+                                {c.isVerified && <ShieldCheck className="w-4 h-4 text-emerald-500" />}
+                              </h5>
+                            )}
+                          </div>
+                          {isEditing && (
+                            <button onClick={() => handleRemoveExtraContact(idx)} className="text-red-400 hover:text-red-600 ml-2">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Phone className="w-4 h-4 text-slate-400" />
+                            {isEditing ? (
+                              <input 
+                                type="text"
+                                placeholder="Phone"
+                                value={c.phone}
+                                onChange={e => handleExtraContactChange(idx, 'phone', e.target.value)}
+                                className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                              />
+                            ) : (
+                              <span>{c.phone || 'N/A'}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Mail className="w-4 h-4 text-slate-400" />
+                            {isEditing ? (
+                              <input 
+                                type="text"
+                                placeholder="Email"
+                                value={c.email}
+                                onChange={e => handleExtraContactChange(idx, 'email', e.target.value)}
+                                className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                              />
+                            ) : (
+                              <span className="truncate">{c.email || 'N/A'}</span>
+                            )}
+                          </div>
+                        </div>
+                        {isEditing && (
+                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input 
+                                type="checkbox"
+                                checked={c.isVerified}
+                                onChange={e => handleExtraContactChange(idx, 'isVerified', e.target.checked)}
+                                className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                              />
+                              <span className="text-xs font-semibold text-emerald-700">Verified</span>
+                            </label>
+                          </div>
+                        )}
+                        {!isEditing && (
+                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                             <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Source: EXTRA DATA</div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="p-0">
                 <table className="w-full text-sm text-left">
                   <tbody className="divide-y divide-slate-100">
@@ -422,6 +603,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                       <th className="px-5 py-3 font-medium">HR Name</th>
                       <th className="px-5 py-3 font-medium">Contact Details</th>
                       <th className="px-5 py-3 font-medium">Source & Year</th>
+                      <th className="px-5 py-3 font-medium">Verified</th>
                       {isEditing && <th className="px-5 py-3 font-medium w-16">Action</th>}
                     </tr>
                   </thead>
@@ -514,6 +696,22 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                             )}
                           </div>
                         </td>
+                        <td className="px-5 py-3 text-center">
+                          {isEditing ? (
+                            <input 
+                              type="checkbox"
+                              checked={contact.isVerified || false}
+                              onChange={e => handleAdditionalContactChange(idx, 'isVerified', e.target.checked)}
+                              className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                            />
+                          ) : contact.isVerified ? (
+                            <span className="inline-flex items-center justify-center p-1 bg-emerald-50 text-emerald-600 rounded-full">
+                              <ShieldCheck className="w-4 h-4" />
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
                         {isEditing && (
                           <td className="px-5 py-3 text-center">
                             <button 
@@ -553,12 +751,44 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                 setFormData(JSON.parse(JSON.stringify(company)));
                 
                 // Reset extra data array
-                const extraArray = Object.entries(company.extraData || {}).map(([k, v], idx) => ({
-                  id: `extra-${idx}`,
-                  key: k,
-                  value: typeof v === 'object' ? JSON.stringify(v) : String(v)
-                }));
-                setEditExtraData(extraArray);
+                
+                const genericExtra: { id: string; key: string; value: string }[] = [];
+                const hrContactsMap: Record<string, ExtraContact> = {};
+
+                Object.entries(company.extraData || {}).forEach(([k, v]) => {
+                  const nameMatch = k.match(/^OTHER HR NAME\s*(\d*)$/i);
+                  const emailMatch = k.match(/^OTHER HR EMAIL\s*(\d*)$/i) || k.match(/^OTHER HR MAIL\s*(\d*)$/i);
+                  const phoneMatch = k.match(/^OTHER HR MOBILE\s*(\d*)$/i) || k.match(/^OTHER HR PHONE\s*(\d*)$/i) || k.match(/^OTHER HR NUMBER\s*(\d*)$/i);
+                  const verifiedMatch = k.match(/^OTHER HR VERIFIED\s*(\d*)$/i);
+
+                  let isHrContact = false;
+                  let suffix = '';
+
+                  if (nameMatch) { suffix = nameMatch[1]; isHrContact = true; }
+                  else if (emailMatch) { suffix = emailMatch[1]; isHrContact = true; }
+                  else if (phoneMatch) { suffix = phoneMatch[1]; isHrContact = true; }
+                  else if (verifiedMatch) { suffix = verifiedMatch[1]; isHrContact = true; }
+
+                  if (isHrContact) {
+                    if (!hrContactsMap[suffix]) {
+                      hrContactsMap[suffix] = { id: suffix, name: '', phone: '', email: '', isVerified: false };
+                    }
+                    if (nameMatch) hrContactsMap[suffix].name = String(v);
+                    if (emailMatch) hrContactsMap[suffix].email = String(v);
+                    if (phoneMatch) hrContactsMap[suffix].phone = String(v);
+                    if (verifiedMatch) hrContactsMap[suffix].isVerified = String(v).toLowerCase() === 'true';
+                  } else {
+                    genericExtra.push({
+                      id: `extra-${Date.now()}-${Math.random()}`,
+                      key: k,
+                      value: typeof v === 'object' ? JSON.stringify(v) : String(v)
+                    });
+                  }
+                });
+
+                setEditExtraData(genericExtra);
+                setExtraContacts(Object.values(hrContactsMap));
+
 
                 setIsEditing(false);
                 setIsNewSection(false);

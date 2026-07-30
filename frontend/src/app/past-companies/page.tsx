@@ -65,7 +65,8 @@ export default function PastCompaniesPage() {
     queryFn: async () => {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/sections`, { withCredentials: true });
       return res.data.data || [];
-    }
+    },
+    enabled: userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr'
   });
 
   const { data: branches } = useQuery({
@@ -73,7 +74,8 @@ export default function PastCompaniesPage() {
     queryFn: async () => {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`, { withCredentials: true });
       return res.data || [];
-    }
+    },
+    enabled: userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr'
   });
 
   const { data, isLoading } = useQuery({
@@ -87,7 +89,7 @@ export default function PastCompaniesPage() {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/all`, { params, withCredentials: true });
       return res.data;
     },
-    enabled: activeTab === 'master'
+    enabled: activeTab === 'master' && (userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr')
   });
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
@@ -109,6 +111,20 @@ export default function PastCompaniesPage() {
 
   if (isUserLoading) {
     return <div className="p-8 text-center text-slate-500">Loading...</div>;
+  }
+
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
+  
+  if (!isAdmin) {
+    return (
+      <div className="p-8 max-w-7xl mx-auto space-y-6">
+        <div className="bg-red-50 p-6 rounded-2xl border border-red-200 shadow-sm text-center">
+          <ShieldCheck className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-red-900 mb-2">Access Denied</h2>
+          <p className="text-red-700">You do not have permission to view the Past Companies master database.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -367,7 +383,7 @@ export default function PastCompaniesPage() {
         )}
       </div>
       ) : (
-        <DuplicateCompaniesTable />
+        <DuplicateCompaniesTable searchQuery={search} />
       )}
 
       <PastCompanyDetailsModal 

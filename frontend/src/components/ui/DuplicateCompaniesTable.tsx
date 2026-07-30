@@ -26,15 +26,15 @@ interface DuplicateCompany {
   createdAt: string;
 }
 
-export function DuplicateCompaniesTable() {
+export function DuplicateCompaniesTable({ searchQuery = '' }: { searchQuery?: string }) {
   const [page, setPage] = useState(1);
   const [selectedDuplicate, setSelectedDuplicate] = useState<DuplicateCompany | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['duplicate-companies', page],
+    queryKey: ['duplicate-companies', page, searchQuery],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/duplicates?page=${page}&limit=10`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/duplicates?page=${page}&limit=10&q=${searchQuery}`, { withCredentials: true });
       return res.data;
     }
   });

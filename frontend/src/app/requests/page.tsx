@@ -366,7 +366,12 @@ export default function RequestsPage() {
                 <div key={contact._id} className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
                   <div className="flex-1">
                     <div className="flex flex-wrap items-center gap-3 mb-2">
-                      <h3 className="text-lg font-bold text-slate-900">{contact.companyName}</h3>
+                      <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        {contact.companyName}
+                          <div title="Verified by Admin">
+                            <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                          </div>
+                      </h3>
                       <span className="px-2 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold uppercase rounded-md">Pending Contact</span>
                       {contact.companyId?.section && (
                         <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase rounded-md flex items-center gap-1">

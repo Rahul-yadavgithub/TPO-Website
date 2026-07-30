@@ -57,6 +57,7 @@ export interface ICompany extends Document {
   lastContactDate?: Date;
   nextFollowupDate?: Date;
   contactOwner?: string;
+  contactOwnerEmail?: string;
   responseStatus?: string;
   notes?: string;
 
@@ -67,6 +68,15 @@ export interface ICompany extends Document {
   linkedinCompanyUrl?: string;
   linkedinRecruiterUrl?: string;
   careersUrl?: string;
+  primary_contact_verified?: boolean;
+  additionalContacts?: Array<{
+    hrName: string;
+    hrEmail: string;
+    hrPhone: string;
+    sourceSheet: string;
+    academicYear: string;
+    isVerified?: boolean;
+  }>;
 
   createdAt: Date;
   updatedAt: Date;
@@ -154,6 +164,7 @@ const CompanySchema: Schema = new Schema(
     lastContactDate: { type: Date },
     nextFollowupDate: { type: Date },
     contactOwner: { type: String },
+    contactOwnerEmail: { type: String },
     responseStatus: { type: String },
     notes: { type: String },
 
@@ -164,6 +175,15 @@ const CompanySchema: Schema = new Schema(
     linkedinCompanyUrl: { type: String },
     linkedinRecruiterUrl: { type: String },
     careersUrl: { type: String },
+    primary_contact_verified: { type: Boolean, default: false },
+    additionalContacts: [{
+      hrName: { type: String },
+      hrEmail: { type: String },
+      hrPhone: { type: String },
+      sourceSheet: { type: String },
+      academicYear: { type: String },
+      isVerified: { type: Boolean, default: false }
+    }],
 
     // Review & Confirmation
     review_status: { type: String, enum: ['scanned', 'approved'] },

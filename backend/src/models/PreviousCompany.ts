@@ -7,12 +7,14 @@ export interface IPreviousCompany extends Document {
   hrName?: string;
   hrEmail?: string;
   hrPhone?: string;
+  primary_contact_verified?: boolean;
   additionalContacts?: Array<{
     hrName: string;
     hrEmail: string;
     hrPhone: string;
     sourceSheet: string;
     academicYear: string;
+    isVerified?: boolean;
   }>;
   notes?: string;
   syncStatus?: 'pending' | 'synced' | 'failed';
@@ -21,6 +23,7 @@ export interface IPreviousCompany extends Document {
   contactedByBranchId?: mongoose.Types.ObjectId;
   contactedByBranchName?: string;
   contactedByTprName?: string;
+  contactedByTprEmail?: string;
   updatedByTprName?: string;
   is_verified_by_admin?: boolean;
   section: string;
@@ -36,12 +39,14 @@ const PreviousCompanySchema: Schema = new Schema({
   hrName: { type: String },
   hrEmail: { type: String },
   hrPhone: { type: String },
+  primary_contact_verified: { type: Boolean, default: false },
   additionalContacts: [{
     hrName: { type: String },
     hrEmail: { type: String },
     hrPhone: { type: String },
     sourceSheet: { type: String },
-    academicYear: { type: String }
+    academicYear: { type: String },
+    isVerified: { type: Boolean, default: false }
   }],
   notes: { type: String },
   syncStatus: { type: String, enum: ['pending', 'synced', 'failed'], default: 'pending' },
@@ -50,6 +55,7 @@ const PreviousCompanySchema: Schema = new Schema({
   contactedByBranchId: { type: Schema.Types.ObjectId, ref: 'Branch' },
   contactedByBranchName: { type: String },
   contactedByTprName: { type: String },
+  contactedByTprEmail: { type: String },
   updatedByTprName: { type: String },
   is_verified_by_admin: { type: Boolean, default: false },
   section: { type: String, required: true, default: 'Uncategorized' },

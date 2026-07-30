@@ -326,13 +326,16 @@ router.get('/companies', async (req, res) => {
 // GET /api/companies/check-name?name=...
 router.get('/companies/check-name', async (req, res) => {
   try {
-    const { name } = req.query;
+    const { name, branchId } = req.query;
     if (!name || typeof name !== 'string') {
       return res.status(400).json({ error: 'Name is required' });
     }
 
     const normalizedName = name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const company = await Company.findOne({ normalizedName });
+    let query: any = { normalizedName };
+    if (branchId) query.assignedBranchId = branchId;
+    
+    const company = await Company.findOne(query);
 
     if (!company) {
       return res.json({ exists: false });
@@ -1743,7 +1746,8 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
         startupSignals: [],
         confirmation_status: 'not_confirmed',
         contact_status: 'not_contacted',
-        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown'
+        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown',
+        contactOwnerEmail: (req as any).user?.email || ''
       });
       await company.save({ session });
     }
@@ -1915,7 +1919,8 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
         startupSignals: [],
         confirmation_status: 'not_confirmed',
         contact_status: 'not_contacted',
-        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown'
+        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown',
+        contactOwnerEmail: (req as any).user?.email || ''
       });
 
       if (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile) {
