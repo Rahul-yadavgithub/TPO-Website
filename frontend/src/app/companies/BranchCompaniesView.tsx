@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Search, CheckCircle2, Info, Loader2, Building2, Plus, AlertCircle, Filter, X, ShieldCheck } from 'lucide-react';
+import { Search, CheckCircle2, Info, Loader2, Building2, Plus, AlertCircle, Filter, X, ShieldCheck, ArrowRight } from 'lucide-react';
 import { BranchCompanyDetailsModal } from '@/components/ui/BranchCompanyDetailsModal';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 
@@ -63,18 +63,22 @@ export function BranchCompaniesView() {
             </p>
           </div>
           
-          <div className="flex gap-3 w-full md:w-auto">
+          <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm w-full md:w-auto"
+              className="flex flex-1 md:flex-none items-center justify-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 bg-blue-600 text-white text-xs md:text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
             >
-              <Plus className="w-4 h-4" /> Add Company
+              <Plus className="w-3 h-3 md:w-4 md:h-4 shrink-0" /> 
+              <span className="hidden sm:inline">Add Company</span>
+              <span className="sm:hidden">Add</span>
             </button>
             <button
               onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-              className={`flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto border ${isFilterPanelOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              className={`flex flex-1 md:flex-none items-center justify-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-colors shadow-sm border ${isFilterPanelOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
             >
-              <Filter className="w-4 h-4" /> Filters
+              <Filter className="w-3 h-3 md:w-4 md:h-4 shrink-0" /> 
+              <span className="hidden sm:inline">Filters</span>
+              <span className="sm:hidden">Filter</span>
             </button>
           </div>
         </div>
@@ -188,9 +192,9 @@ export function BranchCompaniesView() {
         )}
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left whitespace-nowrap lg:whitespace-normal">
             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-6 py-4">Company Details</th>
@@ -289,9 +293,11 @@ export function BranchCompaniesView() {
                       <td className="px-6 py-4 text-right">
                         <button 
                           onClick={() => setSelectedCompany(company)}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-indigo-600 font-semibold text-sm rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm"
+                          className="inline-flex items-center justify-center gap-1 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-white border border-slate-200 text-indigo-600 font-semibold text-xs md:text-sm rounded-lg md:rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-all shadow-sm"
                         >
-                          <Info className="w-4 h-4" /> View More
+                          <Info className="hidden md:block w-4 h-4 shrink-0" /> 
+                          <span className="hidden md:inline">View More</span>
+                          <span className="md:hidden flex items-center gap-1">View <ArrowRight className="w-3 h-3" /></span>
                         </button>
                       </td>
                     </tr>

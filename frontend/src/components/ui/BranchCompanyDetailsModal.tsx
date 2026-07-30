@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -21,6 +21,12 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   const [isEditingPlacement, setIsEditingPlacement] = useState(false);
   const [editDriveType, setEditDriveType] = useState('');
   const [editAcademicYear, setEditAcademicYear] = useState('');
+
+  const [localCompany, setLocalCompany] = useState(company);
+
+  useEffect(() => {
+    setLocalCompany(company);
+  }, [company]);
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
@@ -72,8 +78,22 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
       return res.data;
     },
     onSuccess: () => {
-      toast.success(pendingDuplicateData ? 'Company overridden and assigned successfully!' : 'Branch assigned successfully!');
-      if (onAssignComplete) onAssignComplete();
+      toast.success(pendingDuplicateData ? 'Company overridden and assigned successfully!' : 'Assignment updated successfully!');
+      
+      if (assignMode === 'branch') {
+        const branchName = branches?.find((b: any) => b._id === assignBranchId)?.name;
+        if (branchName) {
+          setLocalCompany({ ...localCompany, assignedBranch: branchName, program: assignProgram || localCompany.program });
+        }
+      } else {
+        setLocalCompany({ ...localCompany, assignedTPO: assignTpoName, tpoType: assignTpoType });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['companies-branch-overview'] });
+      
+      if (pendingDuplicateData && onAssignComplete) {
+        onAssignComplete();
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to assign branch');
@@ -133,111 +153,109 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
-          {/* Assignment Section (Shown if unassigned or if there's duplicate data to override) */}
-          {(company.assignedBranch === 'Pending Assignment' || pendingDuplicateData) && (
-            <div className={`p-4 rounded-xl border ${pendingDuplicateData ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} space-y-4`}>
-              <div>
-                <h3 className={`text-sm font-bold flex items-center gap-2 ${pendingDuplicateData ? 'text-amber-800' : 'text-indigo-800'}`}>
-                  {pendingDuplicateData ? <ShieldAlert className="w-4 h-4" /> : <GitMerge className="w-4 h-4" />}
-                  {pendingDuplicateData ? 'Resolve Duplicate & Assign' : 'Assign Company'}
-                </h3>
-                <p className={`text-xs mt-1 ${pendingDuplicateData ? 'text-amber-700' : 'text-indigo-600'}`}>
-                  {pendingDuplicateData 
-                    ? 'This company already exists. Select a branch or TPO and click Override to update its HR details with your new AI extraction and assign it.'
-                    : 'This company was created via Quick Add and needs to be assigned to a branch or TPO.'}
-                </p>
-              </div>
-              
-              <div className="flex gap-2 bg-white/50 p-1 rounded-lg border border-slate-200 mb-1 w-fit">
-                <button
-                  onClick={() => setAssignMode('branch')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'branch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
-                >
-                  Assign to Branch
-                </button>
-                <button
-                  onClick={() => setAssignMode('tpo')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'tpo' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
-                >
-                  Assign to TPO
-                </button>
-              </div>
-
-              {assignMode === 'branch' ? (
-                <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
-                  <select 
-                    value={assignProgram}
-                    onChange={(e) => setAssignProgram(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                  >
-                    <option value="" disabled>Select Course...</option>
-                    <option value="B.Tech">B.Tech</option>
-                    <option value="M.Tech">M.Tech</option>
-                    <option value="Open to all">Open to all</option>
-                  </select>
-                  <select 
-                    value={assignBranchId}
-                    onChange={(e) => setAssignBranchId(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                  >
-                    <option value="" disabled>Select Branch...</option>
-                    {branches?.map((b: any) => (
-                      <option key={b._id} value={b._id}>{b.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => assignMutation.mutate()}
-                    disabled={!assignBranchId || !assignProgram || assignMutation.isPending}
-                    className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                      pendingDuplicateData 
-                        ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
-                    }`}
-                  >
-                    {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
-                  <select
-                    value={assignTpoType}
-                    onChange={(e) => {
-                      setAssignTpoType(e.target.value as 'Faculty' | 'Staff');
-                      setAssignTpoName('');
-                    }}
-                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                  >
-                    <option value="" disabled>Select Category...</option>
-                    <option value="Faculty">Faculty</option>
-                    <option value="Staff">Staff</option>
-                  </select>
-                  <select
-                    value={assignTpoName}
-                    onChange={(e) => setAssignTpoName(e.target.value)}
-                    disabled={!assignTpoType}
-                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px] disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    <option value="" disabled>Select Name...</option>
-                    {assignTpoType === 'Faculty' && TPO_FACULTY.map(name => <option key={name} value={name}>{name}</option>)}
-                    {assignTpoType === 'Staff' && TPO_STAFF.map(name => <option key={name} value={name}>{name}</option>)}
-                  </select>
-                  <button
-                    onClick={() => assignMutation.mutate()}
-                    disabled={!assignTpoType || !assignTpoName || assignMutation.isPending}
-                    className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                      pendingDuplicateData 
-                        ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
-                    }`}
-                  >
-                    {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
-                  </button>
-                </div>
-              )}
+          {/* Assignment & Routing Section (Always shown for Admins to assign TPOs or Branches) */}
+          <div className={`p-4 rounded-xl border ${pendingDuplicateData ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} space-y-4`}>
+            <div>
+              <h3 className={`text-sm font-bold flex items-center gap-2 ${pendingDuplicateData ? 'text-amber-800' : 'text-indigo-800'}`}>
+                {pendingDuplicateData ? <ShieldAlert className="w-4 h-4" /> : <GitMerge className="w-4 h-4" />}
+                {pendingDuplicateData ? 'Resolve Duplicate & Assign' : 'Assignment & Routing'}
+              </h3>
+              <p className={`text-xs mt-1 ${pendingDuplicateData ? 'text-amber-700' : 'text-indigo-600'}`}>
+                {pendingDuplicateData 
+                  ? 'This company already exists. Select a branch or TPO and click Override to update its HR details with your new AI extraction and assign it.'
+                  : 'Assign this company to a Branch TPR or a TPO (Faculty/Staff). A company can be assigned to both simultaneously for shared outreach.'}
+              </p>
             </div>
-          )}
+            
+            <div className="flex gap-2 bg-white/50 p-1 rounded-lg border border-slate-200 mb-1 w-fit">
+              <button
+                onClick={() => setAssignMode('branch')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'branch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                Assign to Branch
+              </button>
+              <button
+                onClick={() => setAssignMode('tpo')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'tpo' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                Assign to TPO
+              </button>
+            </div>
+
+            {assignMode === 'branch' ? (
+              <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
+                <select 
+                  value={assignProgram}
+                  onChange={(e) => setAssignProgram(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                >
+                  <option value="" disabled>Select Course...</option>
+                  <option value="B.Tech">B.Tech</option>
+                  <option value="M.Tech">M.Tech</option>
+                  <option value="Open to all">Open to all</option>
+                </select>
+                <select 
+                  value={assignBranchId}
+                  onChange={(e) => setAssignBranchId(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                >
+                  <option value="" disabled>Select Branch...</option>
+                  {branches?.map((b: any) => (
+                    <option key={b._id} value={b._id}>{b.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => assignMutation.mutate()}
+                  disabled={!assignBranchId || !assignProgram || assignMutation.isPending}
+                  className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
+                    pendingDuplicateData 
+                      ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
+                  }`}
+                >
+                  {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
+                <select
+                  value={assignTpoType}
+                  onChange={(e) => {
+                    setAssignTpoType(e.target.value as 'Faculty' | 'Staff');
+                    setAssignTpoName('');
+                  }}
+                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                >
+                  <option value="" disabled>Select Category...</option>
+                  <option value="Faculty">Faculty</option>
+                  <option value="Staff">Staff</option>
+                </select>
+                <select
+                  value={assignTpoName}
+                  onChange={(e) => setAssignTpoName(e.target.value)}
+                  disabled={!assignTpoType}
+                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px] disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  <option value="" disabled>Select Name...</option>
+                  {assignTpoType === 'Faculty' && TPO_FACULTY.map(name => <option key={name} value={name}>{name}</option>)}
+                  {assignTpoType === 'Staff' && TPO_STAFF.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+                <button
+                  onClick={() => assignMutation.mutate()}
+                  disabled={!assignTpoType || !assignTpoName || assignMutation.isPending}
+                  className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
+                    pendingDuplicateData 
+                      ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
+                      : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
+                  }`}
+                >
+                  {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Top Info Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -247,18 +265,24 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                 TPR Information
               </h3>
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-sm items-center">
                   <span className="text-slate-500">POC TPR:</span>
-                  <span className="font-semibold text-slate-900">{company.contactOwner && company.contactOwner !== 'Unknown' ? company.contactOwner : 'N/A'}</span>
+                  <span className="font-semibold text-slate-900">{localCompany.contactOwner && localCompany.contactOwner !== 'Unknown' ? localCompany.contactOwner : 'N/A'}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                {(localCompany.assignedTPO || localCompany.tpoType) && (
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-slate-500">POC TPO:</span>
+                    <span className="font-semibold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">{localCompany.assignedTPO || 'N/A'} {localCompany.tpoType ? `(${localCompany.tpoType})` : ''}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm items-center">
                   <span className="text-slate-500">Assigned Branch:</span>
-                  <span className="font-semibold text-slate-900">{company.assignedBranch}</span>
+                  <span className="font-semibold text-slate-900">{localCompany.assignedBranch}</span>
                 </div>
-                {company.program && (
-                  <div className="flex justify-between text-sm">
+                {localCompany.program && (
+                  <div className="flex justify-between text-sm items-center">
                     <span className="text-slate-500">Course / Program:</span>
-                    <span className="font-semibold text-slate-900">{company.program}</span>
+                    <span className="font-semibold text-slate-900">{localCompany.program}</span>
                   </div>
                 )}
               </div>

@@ -108,19 +108,7 @@ router.get('/:tpo_name/not-confirmed', async (req: any, res) => {
       {
         $match: {
           assignedTPO: tpoNameStr,
-          confirmation_status: { $ne: 'confirmed' },
-          $or: [
-            { pending_delete: true },
-            { 
-              contact_status: 'contacted', 
-              contact_outcome: { $nin: ['call_again'] }
-            },
-            {
-              contact_status: 'contacted',
-              contact_outcome: 'call_again',
-              nextFollowupDate: { $gte: startOfTomorrow }
-            }
-          ]
+          confirmation_status: { $ne: 'confirmed' }
         }
       },
       {

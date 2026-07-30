@@ -9,6 +9,7 @@ export interface IContactLog extends Document {
   notes?: string;
   created_by?: string;
   show_to_tpr?: boolean;
+  show_to_tpo?: boolean;
   tpo_name?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -24,6 +25,7 @@ const ContactLogSchema: Schema = new Schema(
     notes: { type: String },
     created_by: { type: String },
     show_to_tpr: { type: Boolean, default: false },
+    show_to_tpo: { type: Boolean, default: false },
     tpo_name: { type: String }
   },
   { timestamps: true }

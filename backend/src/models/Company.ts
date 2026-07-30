@@ -245,6 +245,10 @@ CompanySchema.index({ normalizedName: 1 });
 CompanySchema.index({ assignedBranch: 1, syncStatus: 1 });
 CompanySchema.index({ syncStatus: 1, lastSynced: -1 });
 
+// Optimizations for Contact List endpoints
+CompanySchema.index({ assignedBranch: 1, confirmation_status: 1, nextFollowupDate: 1 });
+CompanySchema.index({ assignedBranch: 1, contact_status: 1 });
+
 // Dashboard counters (covered queries — no doc fetch needed)
 CompanySchema.index({ fresherHiring: 1 });
 CompanySchema.index({ internshipAvailable: 1 });

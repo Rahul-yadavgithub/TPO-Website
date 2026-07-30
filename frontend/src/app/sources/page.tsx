@@ -107,18 +107,18 @@ export default function SourcesPage() {
               Add your favorite companies and platforms to automate the discovery process.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full md:w-auto">
             <button 
               onClick={() => setIsModalOpen(true)}
-              className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm"
+              className="flex-1 md:flex-none justify-center bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors shadow-sm whitespace-nowrap text-sm sm:text-base"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
               Add Source
             </button>
             <button 
               onClick={() => triggerScan.mutate()}
               disabled={isGlobalScanning}
-              className={`px-6 py-2.5 rounded-lg flex items-center gap-2 font-bold transition-all shadow-lg ${
+              className={`flex-1 md:flex-none justify-center px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg flex items-center gap-2 font-bold transition-all shadow-lg whitespace-nowrap text-sm sm:text-base ${
                 isGlobalScanning 
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' 
                   : scanStatus === 'completed'
@@ -127,11 +127,11 @@ export default function SourcesPage() {
               }`}
             >
               {isGlobalScanning ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin shrink-0" />
               ) : scanStatus === 'completed' ? (
-                <CheckCircle2 className="w-5 h-5" />
+                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
               ) : (
-                <Play className="w-5 h-5 fill-current" />
+                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current shrink-0" />
               )}
               {isGlobalScanning ? 'ENGAGING...' : scanStatus === 'completed' ? 'ENGAGED' : 'ENGAGE ALL'}
             </button>

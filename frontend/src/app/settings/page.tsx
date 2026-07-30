@@ -294,7 +294,7 @@ export default function SettingsPage() {
         <div className="p-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex gap-3 items-start">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-900 w-full">
+            <div className="text-sm text-blue-900 w-full min-w-0">
               <p className="font-semibold mb-1">Service Account Required</p>
               <p>To use this integration, you must share your Google Sheet with the following service account email as an <strong>Editor</strong>:</p>
               <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white border border-blue-200 rounded-lg p-3 overflow-hidden">
@@ -333,13 +333,13 @@ export default function SettingsPage() {
                           href={`https://docs.google.com/spreadsheets/d/${formData.currentAcademicYearSheetId}/edit`} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors"
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors whitespace-nowrap"
                         >
-                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                          <ExternalLink className="w-3 h-3 shrink-0" /> <span className="hidden sm:inline">Open Sheet</span><span className="sm:hidden">Open</span>
                         </a>
                       ) : (
-                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed">
-                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed whitespace-nowrap">
+                          <ExternalLink className="w-3 h-3 shrink-0" /> <span className="hidden sm:inline">Open Sheet</span><span className="sm:hidden">Open</span>
                         </span>
                       )}
                     </div>
@@ -370,13 +370,13 @@ export default function SettingsPage() {
                           href={`https://docs.google.com/spreadsheets/d/${formData.mtechCurrentAcademicYearSheetId}/edit`} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors"
+                          className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors whitespace-nowrap"
                         >
-                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                          <ExternalLink className="w-3 h-3 shrink-0" /> <span className="hidden sm:inline">Open Sheet</span><span className="sm:hidden">Open</span>
                         </a>
                       ) : (
-                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed">
-                          <ExternalLink className="w-3 h-3" /> Open Sheet
+                        <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed whitespace-nowrap">
+                          <ExternalLink className="w-3 h-3 shrink-0" /> <span className="hidden sm:inline">Open Sheet</span><span className="sm:hidden">Open</span>
                         </span>
                       )}
                     </div>
@@ -426,13 +426,13 @@ export default function SettingsPage() {
                         href={`https://docs.google.com/spreadsheets/d/${formData.pastAcademicYearSheetId}/edit`} 
                         target="_blank" 
                         rel="noopener noreferrer"
-                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors"
+                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium bg-blue-50 px-2 py-1 rounded transition-colors whitespace-nowrap"
                       >
-                        <ExternalLink className="w-3 h-3" /> Open Sheet
+                        <ExternalLink className="w-3 h-3 shrink-0" /> <span className="hidden sm:inline">Open Sheet</span><span className="sm:hidden">Open</span>
                       </a>
                     ) : (
-                      <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed">
-                        <ExternalLink className="w-3 h-3" /> Open Sheet
+                      <span className="text-xs text-slate-400 flex items-center gap-1 font-medium bg-slate-100 px-2 py-1 rounded cursor-not-allowed whitespace-nowrap">
+                        <ExternalLink className="w-3 h-3 shrink-0" /> <span className="hidden sm:inline">Open Sheet</span><span className="sm:hidden">Open</span>
                       </span>
                     )}
                   </div>

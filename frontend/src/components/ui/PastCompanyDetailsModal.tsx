@@ -267,12 +267,12 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-200 shadow-sm">
-              <Building2 className="w-6 h-6" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 gap-4 relative">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-4 pr-8 lg:pr-0 min-w-0">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-200 shadow-sm">
+              <Building2 className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               {isEditing ? (
                 <div className="flex items-center gap-3 w-full">
                   <input 
@@ -292,20 +292,20 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   </label>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-slate-900">{company.companyName}</h2>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{company.companyName}</h2>
                   {company.is_verified_by_admin ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm shrink-0">
                       <ShieldCheck className="w-3.5 h-3.5" /> Verified
                     </span>
                   ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm shrink-0">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Verified
                     </span>
                   ) : null}
                 </div>
               )}
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 {isEditing ? (
                   <>
                     <input 
@@ -355,7 +355,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             {!isEditing && (
               <div className="relative">
                 {company.assignedTPO ? (
@@ -455,7 +455,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
             )}
             <button 
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              className="absolute top-4 right-4 lg:static lg:top-auto lg:right-auto p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>

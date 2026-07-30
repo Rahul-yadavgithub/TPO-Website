@@ -683,7 +683,9 @@ router.put('/companies/:id/override-assign', async (req, res) => {
     if (tpoType && assignedTPO) {
       company.tpoType = tpoType;
       company.assignedTPO = assignedTPO;
-      company.assignedBranch = 'TPO'; // Mark as handled by TPO
+      if (company.assignedBranch === 'Pending Assignment') {
+        company.assignedBranch = 'TPO'; // Mark as handled by TPO if no branch is assigned yet
+      }
       company.syncStatus = 'pending';
     } else if (branch_id) {
       branch = await Branch.findById(branch_id).session(session);
@@ -1281,7 +1283,7 @@ router.get('/sync/history/:branch_id/companies', async (req, res) => {
     const companies = await Company.find({
       assignedBranch: branch.name,
       syncStatus: 'synced'
-    });
+    }).lean();
 
     res.json(companies);
   } catch (error) {
@@ -1523,14 +1525,28 @@ router.get('/branch/:branch_id/contact-today', async (req, res) => {
       nextFollowupDate: { $lte: endOfToday }
     }).lean();
 
-    const result = await Promise.all(companies.map(async (company) => {
-      const hrContacts = await HrContact.find({ company_id: company._id });
-      const contactLogs = await ContactLog.find({ company_id: company._id }).sort({ contact_date: -1 });
-      return {
-        ...company,
-        hr_contacts: hrContacts,
-        contact_logs: contactLogs
-      };
+    const companyIds = companies.map(c => c._id);
+    const allHrContacts = await HrContact.find({ company_id: { $in: companyIds } }).lean();
+    const allContactLogs = await ContactLog.find({ company_id: { $in: companyIds } }).sort({ contact_date: -1 }).lean();
+
+    const hrContactMap = allHrContacts.reduce((acc: any, curr: any) => {
+      const key = curr.company_id.toString();
+      acc[key] = acc[key] || [];
+      acc[key].push(curr);
+      return acc;
+    }, {});
+
+    const logMap = allContactLogs.reduce((acc: any, curr: any) => {
+      const key = curr.company_id.toString();
+      acc[key] = acc[key] || [];
+      acc[key].push(curr);
+      return acc;
+    }, {});
+
+    const result = companies.map(company => ({
+      ...company,
+      hr_contacts: hrContactMap[company._id.toString()] || [],
+      contact_logs: logMap[company._id.toString()] || []
     }));
 
     res.json(result);
@@ -1544,7 +1560,7 @@ router.post('/contact-logs', async (req, res) => {
   session.startTransaction();
 
   try {
-    const { company_id, branch_id, contact_date, channel, outcome, notes, created_by, next_contact_date, show_to_tpr, tpo_name } = req.body;
+    const { company_id, branch_id, contact_date, channel, outcome, notes, created_by, next_contact_date, show_to_tpr, show_to_tpo, tpo_name } = req.body;
 
     let validBranchId = undefined;
     if (branch_id && mongoose.Types.ObjectId.isValid(branch_id)) {
@@ -1560,6 +1576,7 @@ router.post('/contact-logs', async (req, res) => {
       notes,
       created_by,
       show_to_tpr: show_to_tpr || false,
+      show_to_tpo: show_to_tpo || false,
       tpo_name
     }], { session });
 
@@ -1567,6 +1584,9 @@ router.post('/contact-logs', async (req, res) => {
     if (company) {
       company.contact_status = 'contacted';
       company.contactOwner = created_by; // Update POC TPR dynamically
+      if (tpo_name) {
+        company.assignedTPO = tpo_name; // Temporarily point to TPO for their dashboard view
+      }
       if (outcome === 'call_again') {
         company.contact_outcome = 'call_again';
         if (next_contact_date) {
@@ -1696,14 +1716,28 @@ router.get('/branch/:branch_id/not-confirmed', async (req, res) => {
       confirmation_status: { $ne: 'confirmed' }
     }).lean();
 
-    const result = await Promise.all(companies.map(async (company) => {
-      const hrContacts = await HrContact.find({ company_id: company._id });
-      const contactLogs = await ContactLog.find({ company_id: company._id }).sort({ contact_date: -1 });
-      return {
-        ...company,
-        hr_contacts: hrContacts,
-        contact_logs: contactLogs
-      };
+    const companyIds = companies.map(c => c._id);
+    const allHrContacts = await HrContact.find({ company_id: { $in: companyIds } }).lean();
+    const allContactLogs = await ContactLog.find({ company_id: { $in: companyIds } }).sort({ contact_date: -1 }).lean();
+
+    const hrContactMap = allHrContacts.reduce((acc: any, curr: any) => {
+      const key = curr.company_id.toString();
+      acc[key] = acc[key] || [];
+      acc[key].push(curr);
+      return acc;
+    }, {});
+
+    const logMap = allContactLogs.reduce((acc: any, curr: any) => {
+      const key = curr.company_id.toString();
+      acc[key] = acc[key] || [];
+      acc[key].push(curr);
+      return acc;
+    }, {});
+
+    const result = companies.map(company => ({
+      ...company,
+      hr_contacts: hrContactMap[company._id.toString()] || [],
+      contact_logs: logMap[company._id.toString()] || []
     }));
 
     res.json(result);

@@ -311,17 +311,38 @@ export default function TpoPortalPage() {
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact-logs`, payload);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (newLog, companyId) => {
       toast.success('Contact log saved successfully!');
+      
+      const updateList = (oldList: any[]) => {
+        if (!oldList) return oldList;
+        return oldList.map(c => {
+          if (c._id === companyId) {
+            return {
+              ...c,
+              contact_logs: [newLog, ...(c.contact_logs || [])],
+              contact_status: 'contacted',
+              contact_outcome: outcome,
+            };
+          }
+          return c;
+        });
+      };
+      
+      queryClient.setQueryData(['contact-today', selectedTPO], updateList);
+      queryClient.setQueryData(['not-confirmed', selectedTPO], updateList);
+      queryClient.setQueryData(['confirmed', selectedTPO], updateList);
+
       queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
       queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
       queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      
       setOutcome('');
       setChannel('Phone');
       setNotes('');
       setNextContactDate('');
       setShowToTPR(false);
-      setActiveCompanyId(null);
+      // Do not clear activeCompanyId so the page maintains its state
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to save contact log');
@@ -331,15 +352,20 @@ export default function TpoPortalPage() {
   return (
     <div className={`p-8 max-w-7xl mx-auto space-y-8 ${returnToUnified ? 'mt-12' : ''}`}>
       {returnToUnified && (
-        <div className="fixed top-0 left-0 w-full bg-blue-600 shadow-md z-[60] px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
-          <p className="text-white font-medium text-sm flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4" /> You are in Deep-Link Mode logging a specific company interaction.
+        <div className="fixed top-0 left-0 w-full bg-blue-600 shadow-md z-[60] px-4 md:px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+          <p className="text-white font-medium text-sm hidden md:flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" /> You are in Deep-Link Mode logging a specific company interaction.
+          </p>
+          <p className="text-white font-medium text-sm md:hidden flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" /> Deep-Link Mode
           </p>
           <button 
             onClick={() => router.push('/companies')}
-            className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors border border-white/20"
+            className="bg-white/10 hover:bg-white/20 text-white px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1.5 md:gap-2 transition-colors border border-white/20 ml-auto md:ml-0"
           >
-            <X className="w-4 h-4" /> Return to Unified Companies
+            <X className="w-3 h-3 md:w-4 md:h-4 shrink-0" /> 
+            <span className="hidden md:inline">Return to Unified Companies</span>
+            <span className="md:hidden">Return</span>
           </button>
         </div>
       )}
@@ -685,19 +711,19 @@ export default function TpoPortalPage() {
       {/* Contact Details View */}
       {selectedTPO && (activeView === 'contact' || activeView === 'single_contact') && (
         <div className="mt-8">
-          <div className="relative flex items-center justify-center mb-8">
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <button 
               onClick={() => {
                 setActiveView(previousView || 'dashboard');
                 setActiveCompanyId(null);
               }}
-              className="absolute left-0 flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow"
+              className="w-fit flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow z-10"
             >
-              <ArrowLeft className="w-4 h-4" /> 
+              <ArrowLeft className="w-4 h-4 shrink-0" /> 
               Back {previousView === 'dashboard' ? 'to Dashboard' : previousView === 'not_confirmed' ? 'to List' : ''}
             </button>
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <PhoneCall className="w-6 h-6 text-blue-600" />
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-3 md:absolute md:left-1/2 md:-translate-x-1/2">
+              <PhoneCall className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 shrink-0" />
               {activeView === 'single_contact' ? 'Company Contact Details' : 'Contact Action List'}
             </h2>
           </div>
@@ -729,13 +755,20 @@ export default function TpoPortalPage() {
               <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col md:flex-row">
                 {/* Company Info & HR */}
                 <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50">
-                  <div className="flex items-center gap-2 mb-4">
-                    <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
-                    {company.is_verified_by_admin ? (
-                      <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-5 h-5 text-emerald-500" /></span>
-                    ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
-                      <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
-                    ) : null}
+                  <div className="flex flex-col gap-1 mb-4">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
+                      {company.is_verified_by_admin ? (
+                        <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-5 h-5 text-emerald-500" /></span>
+                      ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
+                        <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
+                      ) : null}
+                    </div>
+                    {company.contactOwner && company.contactOwner !== 'Unknown' && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md w-max border border-indigo-100 uppercase tracking-wide mt-1">
+                        <Users className="w-3 h-3" /> POC TPR : {company.contactOwner}
+                      </div>
+                    )}
                   </div>
                   {/* Quick Actions */}
                   <div className="mt-4 flex flex-col gap-3">

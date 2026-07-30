@@ -1,4 +1,4 @@
-import axios from 'axios';
+import nodemailer from 'nodemailer';
 
 export async function sendRecoveryEmail(
   toEmail: string,
@@ -23,33 +23,48 @@ If you did not expect this email, please ignore it.`;
 <p><small>If you did not expect this email, please ignore it.</small></p>`;
 
   try {
-    const apiKey = process.env.BREVO_API_KEY || process.env.SMTP_PASS;
-    const senderEmail = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS || process.env.BREVO_API_KEY;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpHost = process.env.SMTP_HOST || 'smtp-relay.brevo.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+    const fromEmail = process.env.SMTP_FROM_EMAIL || smtpUser;
 
-    if (!apiKey || !senderEmail) {
-      console.warn('Brevo credentials not configured. Email would have been:', textBody);
+    if (!smtpPass || !smtpUser) {
+      console.warn('⚠️ SMTP credentials not configured.');
+      console.warn('⚠️ Development Fallback - Password Reset Link:');
+      console.warn(recoveryLink);
       return;
     }
 
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', {
-      sender: { name: "NITH TPR Portal", email: senderEmail },
-      to: [{ email: toEmail }],
-      subject: subject,
-      htmlContent: htmlBody,
-      textContent: textBody
-    }, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'api-key': apiKey
-      }
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // true for 465, false for other ports
+      connectionTimeout: 5000,
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
     });
 
-    if (response.status !== 200 && response.status !== 201) {
-      throw new Error(`Brevo API Error: ${response.statusText}`);
-    }
+    await transporter.sendMail({
+      from: `"NITH TPR Portal" <${fromEmail}>`,
+      to: toEmail,
+      subject: subject,
+      text: textBody,
+      html: htmlBody,
+    });
+    
+    console.log(`✅ Recovery email sent successfully to ${toEmail}`);
   } catch (error: any) {
-    console.error('Failed to send recovery email:', error.response?.data || error.message);
-    throw new Error('Email service configuration error or delivery failed.');
+    console.error('❌ Failed to send recovery email. Please check your SMTP configuration in the .env file.');
+    console.error('Error Details:', error.message);
+    console.warn('⚠️ Development Fallback - Password Reset Link:');
+    console.warn(recoveryLink);
+    // We gracefully swallow the error here so the frontend API doesn't crash with a 500 error.
+    // This allows developers to test the password reset flow using the printed link even if email configuration is broken.
   }
 }
+

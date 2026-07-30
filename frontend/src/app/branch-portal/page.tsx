@@ -43,6 +43,7 @@ export default function BranchPortalPage() {
   const [channel, setChannel] = useState<string>('Phone');
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
+  const [showToTPO, setShowToTPO] = useState(false);
   const [returnToUnified, setReturnToUnified] = useState(false);
   
   // Placement Details Edit State
@@ -312,21 +313,44 @@ export default function BranchPortalPage() {
         outcome,
         notes,
         created_by: userProfile?.name || 'TPR', // Dynamically set TPR name
-        next_contact_date: outcome === 'call_again' ? nextContactDate : undefined
+        next_contact_date: outcome === 'call_again' ? nextContactDate : undefined,
+        show_to_tpo: showToTPO
       };
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact-logs`, payload);
       return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (newLog, companyId) => {
       toast.success('Contact log saved successfully!');
+      
+      const updateList = (oldList: any[]) => {
+        if (!oldList) return oldList;
+        return oldList.map(c => {
+          if (c._id === companyId) {
+            return {
+              ...c,
+              contact_logs: [newLog, ...(c.contact_logs || [])],
+              contact_status: 'contacted',
+              contact_outcome: outcome,
+            };
+          }
+          return c;
+        });
+      };
+      
+      queryClient.setQueryData(['contact-today', selectedBranchId], updateList);
+      queryClient.setQueryData(['not-confirmed', selectedBranchId], updateList);
+      queryClient.setQueryData(['confirmed', selectedBranchId], updateList);
+
       queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
       queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
       queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
+      
       setOutcome('');
       setChannel('Phone');
       setNotes('');
       setNextContactDate('');
-      setActiveCompanyId(null);
+      setShowToTPO(false);
+      // Do not clear activeCompanyId so the page maintains its state
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to save contact log');
@@ -336,15 +360,20 @@ export default function BranchPortalPage() {
   return (
     <div className={`p-8 max-w-7xl mx-auto space-y-8 ${returnToUnified ? 'mt-12' : ''}`}>
       {returnToUnified && (
-        <div className="fixed top-0 left-0 w-full bg-blue-600 shadow-md z-[60] px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
-          <p className="text-white font-medium text-sm flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4" /> You are in Deep-Link Mode logging a specific company interaction.
+        <div className="fixed top-0 left-0 w-full bg-blue-600 shadow-md z-[60] px-4 md:px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+          <p className="text-white font-medium text-sm hidden md:flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" /> You are in Deep-Link Mode logging a specific company interaction.
+          </p>
+          <p className="text-white font-medium text-sm md:hidden flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 shrink-0" /> Deep-Link Mode
           </p>
           <button 
             onClick={() => router.push('/companies')}
-            className="bg-white/10 hover:bg-white/20 text-white px-4 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors border border-white/20"
+            className="bg-white/10 hover:bg-white/20 text-white px-3 md:px-4 py-1.5 rounded-lg text-xs md:text-sm font-bold flex items-center gap-1.5 md:gap-2 transition-colors border border-white/20 ml-auto md:ml-0"
           >
-            <X className="w-4 h-4" /> Return to Unified Companies
+            <X className="w-3 h-3 md:w-4 md:h-4 shrink-0" /> 
+            <span className="hidden md:inline">Return to Unified Companies</span>
+            <span className="md:hidden">Return</span>
           </button>
         </div>
       )}
@@ -712,19 +741,19 @@ export default function BranchPortalPage() {
       {/* Contact Details View */}
       {selectedBranchId && (activeView === 'contact' || activeView === 'single_contact') && (
         <div className="mt-8">
-          <div className="relative flex items-center justify-center mb-8">
+          <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <button 
               onClick={() => {
                 setActiveView(previousView || 'dashboard');
                 setActiveCompanyId(null);
               }}
-              className="absolute left-0 flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow"
+              className="w-fit flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow z-10"
             >
-              <ArrowLeft className="w-4 h-4" /> 
+              <ArrowLeft className="w-4 h-4 shrink-0" /> 
               Back {previousView === 'dashboard' ? 'to Dashboard' : previousView === 'not_confirmed' ? 'to List' : ''}
             </button>
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <PhoneCall className="w-6 h-6 text-blue-600" />
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-3 md:absolute md:left-1/2 md:-translate-x-1/2">
+              <PhoneCall className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 shrink-0" />
               {activeView === 'single_contact' ? 'Company Contact Details' : 'Contact Action List'}
             </h2>
           </div>
@@ -743,7 +772,20 @@ export default function BranchPortalPage() {
           )}
 
           <div className="space-y-6">
-            {(() => {
+            {(listLoading || confirmedLoading || notConfirmedLoading) ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-xl border border-slate-200 min-w-[300px]">
+                  <div className="relative w-14 h-14">
+                    <div className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-[#1a3a6e] animate-spin" />
+                    <ShieldCheck className="absolute inset-0 m-auto w-6 h-6 text-[#1a3a6e]" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-[#1a3a6e] text-base">Loading...</p>
+                    <p className="text-slate-500 text-xs mt-1">Please wait while data is being fetched</p>
+                  </div>
+                </div>
+              </div>
+            ) : (() => {
               if (activeView === 'single_contact' && activeCompanyId) {
                 const company = [...(contactTodayList||[]), ...(confirmedList||[]), ...(notConfirmedList||[])]
                                  .find(c => c._id === activeCompanyId);
@@ -756,13 +798,20 @@ export default function BranchPortalPage() {
               <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col md:flex-row">
                 {/* Company Info & HR */}
                 <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50">
-                  <div className="flex items-center gap-2 mb-4">
-                    <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
-                    {company.is_verified_by_admin ? (
-                      <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-5 h-5 text-emerald-500" /></span>
-                    ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
-                      <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
-                    ) : null}
+                  <div className="flex flex-col gap-1 mb-4">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
+                      {company.is_verified_by_admin ? (
+                        <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-5 h-5 text-emerald-500" /></span>
+                      ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
+                        <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
+                      ) : null}
+                    </div>
+                    {company.assignedTPO && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md w-max border border-indigo-100 uppercase tracking-wide mt-1">
+                        <Users className="w-3 h-3" /> POC TPO : {company.assignedTPO}
+                      </div>
+                    )}
                   </div>
                   {/* Placement Details Card */}
                   <div className="mt-4 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow relative group">
@@ -845,7 +894,7 @@ export default function BranchPortalPage() {
                           'bg-slate-50 text-slate-700 border border-slate-200'
                         }`}>
                           {company.confirmation_status === 'confirmed' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                          {company.confirmation_status.replace('_', ' ')}
+                          {company.confirmation_status ? company.confirmation_status.replace('_', ' ') : 'Pending'}
                         </span>
                       </div>
                     </div>
@@ -1068,6 +1117,19 @@ export default function BranchPortalPage() {
                           />
                         </div>
 
+                        <div className="flex items-center gap-2 mt-4 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                          <input 
+                            type="checkbox" 
+                            id={`showToTPO-${company._id}`} 
+                            className="w-4 h-4 text-indigo-600 bg-white border-indigo-300 rounded focus:ring-indigo-500 focus:ring-2"
+                            checked={showToTPO}
+                            onChange={(e) => setShowToTPO(e.target.checked)}
+                          />
+                          <label htmlFor={`showToTPO-${company._id}`} className="text-sm font-medium text-indigo-900 cursor-pointer">
+                            Show full log details to TPOs
+                          </label>
+                        </div>
+
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
                           <button 
                             onClick={() => {
@@ -1128,6 +1190,20 @@ export default function BranchPortalPage() {
                 </div>
               </div>
             ))}
+            {!listLoading && !confirmedLoading && !notConfirmedLoading && (() => {
+              if (activeView === 'single_contact' && activeCompanyId) {
+                const company = [...(contactTodayList||[]), ...(confirmedList||[]), ...(notConfirmedList||[])]
+                                 .find(c => c._id === activeCompanyId);
+                return company ? [company] : [];
+              }
+              const list = contactTodayList || [];
+              if (!listSearchQuery.trim()) return list;
+              return list.filter((c: any) => c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()));
+            })()?.length === 0 && (
+              <div className="bg-white border border-slate-200 rounded-xl p-10 text-center shadow-sm">
+                <p className="text-slate-500">No companies found.</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1160,6 +1236,20 @@ export default function BranchPortalPage() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            {confirmedLoading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-xl border border-slate-200 min-w-[300px]">
+                  <div className="relative w-14 h-14">
+                    <div className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-[#1a3a6e] animate-spin" />
+                    <ShieldCheck className="absolute inset-0 m-auto w-6 h-6 text-[#1a3a6e]" />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-[#1a3a6e] text-base">Loading...</p>
+                    <p className="text-slate-500 text-xs mt-1">Please wait while data is being fetched</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -1194,6 +1284,7 @@ export default function BranchPortalPage() {
                 ))}
               </tbody>
             </table>
+            )}
           </div>
         </div>
       )}
@@ -1218,7 +1309,20 @@ export default function BranchPortalPage() {
           </div>
 
           {/* Premium Folder/Nested Category View */}
-          {(() => {
+          {notConfirmedLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-xl border border-slate-200 min-w-[300px]">
+                <div className="relative w-14 h-14">
+                  <div className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-[#1a3a6e] animate-spin" />
+                  <ShieldCheck className="absolute inset-0 m-auto w-6 h-6 text-[#1a3a6e]" />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-[#1a3a6e] text-base">Loading...</p>
+                  <p className="text-slate-500 text-xs mt-1">Please wait while data is being fetched</p>
+                </div>
+              </div>
+            </div>
+          ) : (() => {
             const notContacted = notConfirmedList?.filter((c: any) => !c.contact_status || c.contact_status === 'not_contacted') || [];
             const callAgain = notConfirmedList?.filter((c: any) => c.contact_outcome === 'call_again') || [];
             const pendingResponse = notConfirmedList?.filter((c: any) => c.contact_status === 'contacted' && c.contact_outcome !== 'call_again' && c.contact_outcome !== 'rejected' && c.contact_outcome !== 'accepted') || [];
