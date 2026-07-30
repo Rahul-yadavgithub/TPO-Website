@@ -773,17 +773,14 @@ export default function BranchPortalPage() {
 
           <div className="space-y-6">
             {(listLoading || confirmedLoading || notConfirmedLoading) ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-xl border border-slate-200 min-w-[300px]">
-                  <div className="relative w-14 h-14">
-                    <div className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-[#1a3a6e] animate-spin" />
-                    <ShieldCheck className="absolute inset-0 m-auto w-6 h-6 text-[#1a3a6e]" />
-                  </div>
-                  <div className="text-center">
-                    <p className="font-bold text-[#1a3a6e] text-base">Loading...</p>
-                    <p className="text-slate-500 text-xs mt-1">Please wait while data is being fetched</p>
-                  </div>
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in zoom-in-95 duration-300">
+                <div className="relative w-16 h-16 mb-6">
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                  <PhoneCall className="absolute inset-0 m-auto w-6 h-6 text-blue-600 animate-pulse" />
                 </div>
+                <h3 className="font-bold text-xl text-slate-900 mb-2">Fetching Assignment Queue</h3>
+                <p className="text-slate-500">Please wait while we securely retrieve your active company list...</p>
               </div>
             ) : (() => {
               if (activeView === 'single_contact' && activeCompanyId) {
@@ -1310,17 +1307,14 @@ export default function BranchPortalPage() {
 
           {/* Premium Folder/Nested Category View */}
           {notConfirmedLoading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-4 shadow-xl border border-slate-200 min-w-[300px]">
-                <div className="relative w-14 h-14">
-                  <div className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-[#1a3a6e] animate-spin" />
-                  <ShieldCheck className="absolute inset-0 m-auto w-6 h-6 text-[#1a3a6e]" />
-                </div>
-                <div className="text-center">
-                  <p className="font-bold text-[#1a3a6e] text-base">Loading...</p>
-                  <p className="text-slate-500 text-xs mt-1">Please wait while data is being fetched</p>
-                </div>
+            <div className="flex flex-col items-center justify-center py-24 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in zoom-in-95 duration-300">
+              <div className="relative w-16 h-16 mb-6">
+                <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+                <AlertCircle className="absolute inset-0 m-auto w-6 h-6 text-amber-500 animate-pulse" />
               </div>
+              <h3 className="font-bold text-xl text-slate-900 mb-2">Analyzing Unconfirmed Records</h3>
+              <p className="text-slate-500">Categorizing pending and uncontacted companies...</p>
             </div>
           ) : (() => {
             const notContacted = notConfirmedList?.filter((c: any) => !c.contact_status || c.contact_status === 'not_contacted') || [];

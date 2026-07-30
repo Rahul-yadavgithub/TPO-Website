@@ -258,11 +258,17 @@ export function BranchCompaniesView() {
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border ${company.assignedBranch === 'Pending Assignment' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
                           {company.assignedBranch}
                         </span>
-                        <p className="text-xs text-slate-500 mt-1.5">
-                          POC TPR: <span className="font-medium text-slate-700">
-                            {company.assignedBranch === 'Pending Assignment' ? 'Pending' : (company.contactOwner && company.contactOwner !== 'Unknown' ? company.contactOwner : 'N/A')}
-                          </span>
-                        </p>
+                        {company.contactOwner && company.contactOwner !== 'Unknown' ? (
+                          <p className="text-xs text-slate-500 mt-1.5">
+                            POC TPR: <span className="font-medium text-slate-700">{company.contactOwner}</span>
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-500 mt-1.5">
+                            POC Branch: <span className="font-medium text-slate-700">
+                              {company.assignedBranch === 'Pending Assignment' ? 'Pending' : company.assignedBranch}
+                            </span>
+                          </p>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         {hr ? (

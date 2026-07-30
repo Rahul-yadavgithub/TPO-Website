@@ -269,19 +269,17 @@ function SlideOverPanel({
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 relative">
           {isLoading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-slate-50 rounded-xl p-4 animate-pulse">
-                <div className="flex gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-200" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-slate-200 rounded w-3/4" />
-                    <div className="h-3 bg-slate-100 rounded w-1/2" />
-                  </div>
-                </div>
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-white/90 backdrop-blur-sm z-10 animate-in fade-in zoom-in-95 duration-300">
+              <div className="relative w-16 h-16 mb-5">
+                <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                <Building2 className="absolute inset-0 m-auto w-7 h-7 text-blue-600 animate-pulse" />
               </div>
-            ))
+              <h3 className="font-bold text-lg text-slate-900 mb-1">Fetching Companies</h3>
+              <p className="text-slate-500 text-sm text-center">Loading institutional intelligence data...</p>
+            </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
               <Building2 className="w-12 h-12 text-slate-200 mx-auto mb-3" />
@@ -474,7 +472,15 @@ export default function Dashboard() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {isLoading ? (
-          <><SkeletonCard /><SkeletonCard /></>
+          <div className="col-span-1 lg:col-span-2 flex flex-col items-center justify-center py-24 bg-white rounded-3xl border border-slate-200 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+            <div className="relative w-20 h-20 mb-8">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin shadow-[0_0_15px_rgba(37,99,235,0.2)]"></div>
+              <ShieldCheck className="absolute inset-0 m-auto w-8 h-8 text-blue-600 animate-pulse" />
+            </div>
+            <h3 className="font-bold text-2xl text-slate-900 mb-3 tracking-tight">Loading Intelligence Data</h3>
+            <p className="text-slate-500 font-medium">Aggregating real-time placement statistics...</p>
+          </div>
         ) : (
           <>
             <StatCard

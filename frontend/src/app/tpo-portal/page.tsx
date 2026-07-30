@@ -742,7 +742,17 @@ export default function TpoPortalPage() {
           )}
 
           <div className="space-y-6">
-            {(() => {
+            {listLoading && activeView !== 'single_contact' ? (
+              <div className="flex flex-col items-center justify-center py-20 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in zoom-in-95 duration-300">
+                <div className="relative w-16 h-16 mb-6">
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"></div>
+                  <PhoneCall className="absolute inset-0 m-auto w-6 h-6 text-blue-600 animate-pulse" />
+                </div>
+                <h3 className="font-bold text-xl text-slate-900 mb-2">Fetching Assignment Queue</h3>
+                <p className="text-slate-500">Please wait while we securely retrieve your active company list...</p>
+              </div>
+            ) : (() => {
               if (activeView === 'single_contact' && activeCompanyId) {
                 const company = [...(contactTodayList||[]), ...(confirmedList||[]), ...(notConfirmedList||[])]
                                  .find(c => c._id === activeCompanyId);
@@ -1133,7 +1143,21 @@ export default function TpoPortalPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(confirmedList || [])
+                {confirmedLoading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300">
+                        <div className="relative w-16 h-16 mb-6">
+                          <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                          <div className="absolute inset-0 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin"></div>
+                          <CheckCircle2 className="absolute inset-0 m-auto w-6 h-6 text-emerald-500 animate-pulse" />
+                        </div>
+                        <h3 className="font-bold text-xl text-slate-900 mb-2">Loading Confirmed Placements</h3>
+                        <p className="text-slate-500">Retrieving successful drive details...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (confirmedList || [])
                   .filter((c: any) => !listSearchQuery.trim() || c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()))
                   .map((company: any) => (
                   <tr key={company._id} className="hover:bg-slate-50 transition-colors">
@@ -1182,6 +1206,19 @@ export default function TpoPortalPage() {
 
           {/* Premium Folder/Nested Category View */}
           {(() => {
+            if (notConfirmedLoading) {
+              return (
+                <div className="flex flex-col items-center justify-center py-24 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm animate-in fade-in zoom-in-95 duration-300">
+                  <div className="relative w-16 h-16 mb-6">
+                    <div className="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+                    <AlertCircle className="absolute inset-0 m-auto w-6 h-6 text-amber-500 animate-pulse" />
+                  </div>
+                  <h3 className="font-bold text-xl text-slate-900 mb-2">Analyzing Unconfirmed Records</h3>
+                  <p className="text-slate-500">Categorizing pending and uncontacted companies...</p>
+                </div>
+              );
+            }
             const notContacted = notConfirmedList?.filter((c: any) => !c.contact_status || c.contact_status === 'not_contacted') || [];
             const callAgain = notConfirmedList?.filter((c: any) => c.contact_outcome === 'call_again') || [];
             const pendingResponse = notConfirmedList?.filter((c: any) => c.contact_status === 'contacted' && c.contact_outcome !== 'call_again' && c.contact_outcome !== 'rejected' && c.contact_outcome !== 'accepted') || [];

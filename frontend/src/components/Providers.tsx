@@ -33,8 +33,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       (response) => response,
       async (error) => {
         if (error.response?.status === 401) {
-          // If we are not already on an auth page, redirect to login
-          const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
+          const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password';
           
           if (!isAuthPage && !isRedirecting) {
             isRedirecting = true;

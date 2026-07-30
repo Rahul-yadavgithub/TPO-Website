@@ -1819,9 +1819,7 @@ router.post('/branch/:branch_id/manual-company', async (req, res) => {
         discoveryHistory: [],
         startupSignals: [],
         confirmation_status: 'not_confirmed',
-        contact_status: 'not_contacted',
-        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown',
-        contactOwnerEmail: (req as any).user?.email || ''
+        contact_status: 'not_contacted'
       });
       await company.save({ session });
     }
@@ -1992,9 +1990,7 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
         discoveryHistory: [],
         startupSignals: [],
         confirmation_status: 'not_confirmed',
-        contact_status: 'not_contacted',
-        contactOwner: (req as any).user?.name || (req as any).user?.email || 'Unknown',
-        contactOwnerEmail: (req as any).user?.email || ''
+        contact_status: 'not_contacted'
       });
 
       if (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile) {
