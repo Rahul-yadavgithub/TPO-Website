@@ -372,7 +372,7 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                         <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
                           {company.companyName}
                           {company.is_verified_by_admin && (
-                            <ShieldCheck className="w-5 h-5 text-emerald-500" title="Verified by Admin" />
+                            <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-5 h-5 text-emerald-500" /></span>
                           )}
                         </h4>
                       </div>
@@ -473,7 +473,7 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                             <h4 className="font-bold text-slate-800 text-xl flex items-center gap-2">
                               {company.companyName}
                               {company.is_verified_by_admin && (
-                                <ShieldCheck className="w-6 h-6 text-emerald-500" title="Verified by Admin" />
+                                <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-6 h-6 text-emerald-500" /></span>
                               )}
                             </h4>
                             <div className="flex flex-wrap items-center gap-2 mt-2">
