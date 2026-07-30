@@ -308,19 +308,17 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
         <div className="overflow-y-auto p-6 space-y-6">
           
           {/* Smart Auto-Fill Section */}
-          {mode === 'current' && (
-            <div>
-              <label className="block text-sm font-bold text-slate-900 mb-1.5">
-                Paste the data
-              </label>
-              <textarea 
-                value={smartPasteText}
-                onChange={(e) => setSmartPasteText(e.target.value)}
-                placeholder="Paste details here to auto-fill..."
-                className="w-full h-24 p-4 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-bold text-slate-900 mb-1.5">
+              Paste the data
+            </label>
+            <textarea 
+              value={smartPasteText}
+              onChange={(e) => setSmartPasteText(e.target.value)}
+              placeholder="Paste details here to auto-fill..."
+              className="w-full h-24 p-4 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+            />
+          </div>
 
           <hr className="border-slate-100" />
 

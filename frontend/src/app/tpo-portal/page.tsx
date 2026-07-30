@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, MessageSquare, ShieldCheck, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -43,11 +43,15 @@ export default function TpoPortalPage() {
   
   // Form State
   const [outcome, setOutcome] = useState<string>('');
+  const [customOutcome, setCustomOutcome] = useState('');
   const [channel, setChannel] = useState<string>('Phone');
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
   const [showToTPR, setShowToTPR] = useState<boolean>(false);
   const [returnToUnified, setReturnToUnified] = useState(false);
+  
+  // Mobile HR Details State
+  const [mobileHRModalCompany, setMobileHRModalCompany] = useState<any>(null);
   
   // Placement Details Edit State
   const [editingPlacementCompanyId, setEditingPlacementCompanyId] = useState<string | null>(null);
@@ -55,6 +59,46 @@ export default function TpoPortalPage() {
   const [editAcademicYear, setEditAcademicYear] = useState<string>('');
 
   const router = useRouter();
+
+  // Session Storage State Persistence
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedState = sessionStorage.getItem('tpoPortalState');
+        if (savedState) {
+          const parsed = JSON.parse(savedState);
+          if (parsed.selectedTPO !== undefined) setSelectedTPO(parsed.selectedTPO);
+          if (parsed.tpoCategory !== undefined) setTpoCategory(parsed.tpoCategory);
+          if (parsed.activeView !== undefined) setActiveView(parsed.activeView);
+          if (parsed.previousView !== undefined) setPreviousView(parsed.previousView);
+          if (parsed.dashboardTab !== undefined) setDashboardTab(parsed.dashboardTab);
+          if (parsed.activeCompanyId !== undefined) setActiveCompanyId(parsed.activeCompanyId);
+          if (parsed.lastVisitedCompanyId !== undefined) setLastVisitedCompanyId(parsed.lastVisitedCompanyId);
+          if (parsed.activeCategory !== undefined) setActiveCategory(parsed.activeCategory);
+          if (parsed.listSearchQuery !== undefined) setListSearchQuery(parsed.listSearchQuery);
+          if (parsed.outcome !== undefined) setOutcome(parsed.outcome);
+          if (parsed.customOutcome !== undefined) setCustomOutcome(parsed.customOutcome);
+          if (parsed.channel !== undefined) setChannel(parsed.channel);
+          if (parsed.notes !== undefined) setNotes(parsed.notes);
+          if (parsed.nextContactDate !== undefined) setNextContactDate(parsed.nextContactDate);
+          if (parsed.showToTPR !== undefined) setShowToTPR(parsed.showToTPR);
+          if (parsed.returnToUnified !== undefined) setReturnToUnified(parsed.returnToUnified);
+        }
+      } catch (e) {
+        console.error("Failed to restore tpo portal state", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stateToSave = {
+        selectedTPO, tpoCategory, activeView, previousView, dashboardTab, activeCompanyId, lastVisitedCompanyId, activeCategory, listSearchQuery,
+        outcome, customOutcome, channel, notes, nextContactDate, showToTPR, returnToUnified
+      };
+      sessionStorage.setItem('tpoPortalState', JSON.stringify(stateToSave));
+    }
+  }, [selectedTPO, tpoCategory, activeView, previousView, dashboardTab, activeCompanyId, lastVisitedCompanyId, activeCategory, listSearchQuery, outcome, customOutcome, channel, notes, nextContactDate, showToTPR, returnToUnified]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -333,7 +377,7 @@ export default function TpoPortalPage() {
         company_id: companyId,
         tpo_name: selectedTPO,
         channel,
-        outcome,
+        outcome: outcome === 'custom' ? customOutcome : outcome,
         notes,
         created_by: userProfile?.name || 'TPR', // Dynamically set TPR name
         next_contact_date: outcome === 'call_again' ? nextContactDate : undefined,
@@ -353,7 +397,7 @@ export default function TpoPortalPage() {
               ...c,
               contact_logs: [newLog, ...(c.contact_logs || [])],
               contact_status: 'contacted',
-              contact_outcome: outcome,
+              contact_outcome: outcome === 'custom' ? customOutcome : outcome,
             };
           }
           return c;
@@ -369,6 +413,7 @@ export default function TpoPortalPage() {
       queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
       
       setOutcome('');
+      setCustomOutcome('');
       setChannel('Phone');
       setNotes('');
       setNextContactDate('');
@@ -450,16 +495,7 @@ export default function TpoPortalPage() {
           )}
         </div>
         
-        {selectedTPO && (
-          <button
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            className="w-full md:w-auto flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-medium py-2.5 px-6 rounded-lg transition-colors shadow-sm"
-          >
-            {syncMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
-            Sync All
-          </button>
-        )}
+
       </div>
 
       {/* Dashboard View */}
@@ -843,7 +879,18 @@ export default function TpoPortalPage() {
                   </div>
 
                   <div className="mt-6">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">HR Contacts</h4>
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">HR Contacts</h4>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => setMobileHRModalCompany(company)}
+                          className="sm:hidden px-3 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-full text-xs font-bold border border-indigo-200 transition-colors flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> View HR
+                        </button>
+                        <span className="bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 shadow-sm text-xs font-bold">{company.hr_contacts?.length || 0 + (company.additionalContacts?.length || 0)} Found</span>
+                      </div>
+                    </div>
                     <div className="mb-6">
                       {(company.hr_contacts?.length > 0 || company.additionalContacts?.length > 0) ? (
                         <div className="space-y-4">
@@ -900,45 +947,47 @@ export default function TpoPortalPage() {
                               )}
 
                               <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm hover:shadow-md transition-shadow relative group">
-                                {hr.is_auto_updated && (
-                                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-amber-200">
-                                    Auto-Updated
-                                    <button onClick={() => acknowledgeUpdateMutation.mutate(company._id)} className="hover:bg-amber-200 rounded p-0.5 transition-colors" title="Acknowledge & clear">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
-                                {hr.is_additional && (
-                                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
-                                    Additional Contact
-                                  </div>
-                                )}
+                                <div className="flex flex-wrap items-center gap-2 mb-2 justify-end w-full">
+                                  {hr.is_auto_updated && (
+                                    <div className="flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-amber-200">
+                                      Auto-Updated
+                                      <button onClick={() => acknowledgeUpdateMutation.mutate(company._id)} className="hover:bg-amber-200 rounded p-0.5 transition-colors" title="Acknowledge & clear">
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  {hr.is_additional && (
+                                    <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
+                                      Additional Contact
+                                    </div>
+                                  )}
+                                </div>
                                 
                                 <div className="flex items-start gap-3">
                                   <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg shrink-0 border border-indigo-100">
                                     {(hr.name || 'U').charAt(0).toUpperCase()}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="font-bold text-slate-900 truncate pr-20 text-base">{hr.name || 'Unknown Name'}</p>
+                                    <p className="font-bold text-slate-900 truncate pr-12 sm:pr-24 text-base min-w-0">{hr.name || 'Unknown Name'}</p>
                                     <p className="text-indigo-600 font-medium text-xs mb-3 truncate">{hr.designation || 'Human Resources'}</p>
                                     
                                     <div className="space-y-2 mt-1">
                                       {hr.mobile && (
-                                        <div className="flex items-start gap-2 text-sm text-slate-600">
+                                        <div className="flex items-start gap-2 text-sm text-slate-600 min-w-0">
                                           <PhoneCall className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                          <div className="flex flex-col gap-0.5">
+                                          <div className="flex flex-col gap-0.5 min-w-0 w-full">
                                             {hr.mobile.split(',').map((phone: string, i: number) => (
-                                              <a key={i} href={`tel:${phone.trim()}`} className="hover:text-indigo-600 transition-colors block truncate">{phone.trim()}</a>
+                                              <a key={i} href={`tel:${phone.trim()}`} className="hover:text-indigo-600 transition-colors block truncate w-full">{phone.trim()}</a>
                                             ))}
                                           </div>
                                         </div>
                                       )}
                                       {hr.email && (
-                                        <div className="flex items-start gap-2 text-sm text-slate-600">
+                                        <div className="flex items-start gap-2 text-sm text-slate-600 min-w-0 mt-1">
                                           <Mail className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                          <div className="flex flex-col gap-0.5 min-w-0">
+                                          <div className="flex flex-col gap-0.5 min-w-0 w-full">
                                             {hr.email.split(',').map((em: string, i: number) => (
-                                              <a key={i} href={`mailto:${em.trim()}`} className="hover:text-indigo-600 transition-colors block truncate" title={em.trim()}>{em.trim()}</a>
+                                              <a key={i} href={`mailto:${em.trim()}`} className="hover:text-indigo-600 transition-colors block truncate w-full">{em.trim()}</a>
                                             ))}
                                           </div>
                                         </div>
@@ -962,7 +1011,7 @@ export default function TpoPortalPage() {
                                   </div>
 
                                   {/* Verification Toggle & Delete */}
-                                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                  <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                                     <label className="flex items-center gap-2 cursor-pointer group/toggle">
                                       <div className="relative">
                                         <input 
@@ -1089,9 +1138,23 @@ export default function TpoPortalPage() {
                               <option value="tpo_talk">Want to talk to TPO</option>
                               <option value="rejected">Rejected / Not Interested</option>
                               <option value="accepted">Accepted / Confirmed</option>
+                              <option value="custom">Custom (Type your own)</option>
                             </select>
                           </div>
                         </div>
+
+                        {outcome === 'custom' && (
+                          <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Custom Outcome</label>
+                            <input 
+                              type="text"
+                              placeholder="e.g. Not hiring freshers, Call next year"
+                              className="w-full bg-white shadow-sm border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 p-3 transition-all" 
+                              value={customOutcome}
+                              onChange={(e) => setCustomOutcome(e.target.value)}
+                            />
+                          </div>
+                        )}
 
                         {outcome === 'call_again' && (
                           <div className="animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1134,6 +1197,7 @@ export default function TpoPortalPage() {
                             onClick={() => {
                               setActiveCompanyId(null);
                               setOutcome('');
+                              setCustomOutcome('');
                             }}
                             className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 rounded-xl transition-colors"
                           >
@@ -1143,7 +1207,7 @@ export default function TpoPortalPage() {
                           <div className="flex w-full sm:w-auto gap-3">
                             <button 
                               onClick={() => logMutation.mutate(company._id)}
-                              disabled={logMutation.isPending || !outcome || (outcome === 'call_again' && !nextContactDate)}
+                              disabled={logMutation.isPending || !outcome || (outcome === 'call_again' && !nextContactDate) || (outcome === 'custom' && !customOutcome.trim())}
                               className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm shadow-blue-500/20 hover:shadow-blue-500/40"
                             >
                               {logMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1167,8 +1231,10 @@ export default function TpoPortalPage() {
                         onClick={() => {
                           setActiveCompanyId(company._id);
                           setOutcome('');
+                          setCustomOutcome('');
                           setNotes('');
                           setNextContactDate('');
+                          setShowToTPR(false);
                         }}
                         className="w-full bg-white border-2 border-dashed border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-600 font-medium py-3 rounded-lg transition-colors"
                       >
@@ -1276,9 +1342,9 @@ export default function TpoPortalPage() {
       {/* Not Confirmed View */}
       {selectedTPO && activeView === 'not_confirmed' && (
         <div className="mt-8 space-y-8">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-              <AlertCircle className="w-6 h-6 text-amber-600" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
               Not Confirmed Placements
             </h2>
             <button 
@@ -1286,7 +1352,7 @@ export default function TpoPortalPage() {
                 setActiveView('dashboard');
                 setActiveCategory(null);
               }}
-              className="text-sm font-medium text-slate-500 hover:text-slate-700 bg-white border border-slate-200 px-4 py-2 rounded-lg"
+              className="text-sm font-medium text-slate-500 hover:text-slate-700 bg-white border border-slate-200 px-4 py-2.5 rounded-xl w-full sm:w-auto text-center shadow-sm"
             >
               Back to Dashboard
             </button>
@@ -1373,16 +1439,16 @@ export default function TpoPortalPage() {
                   activeCategory === 'call_again' ? 'bg-blue-50 border-blue-100' :
                   'bg-amber-50 border-amber-100'
                 }`}>
-                  <h3 className={`text-xl font-bold flex items-center gap-2.5 ${
+                  <h3 className={`text-xl font-bold flex flex-wrap items-center gap-2.5 ${
                     activeCategory === 'not_contacted' ? 'text-slate-800' :
                     activeCategory === 'call_again' ? 'text-blue-900' :
                     'text-amber-900'
                   }`}>
-                    {activeCategory === 'not_contacted' && <Users className="w-6 h-6 text-slate-500" />}
-                    {activeCategory === 'call_again' && <Calendar className="w-6 h-6 text-blue-600" />}
-                    {activeCategory === 'pending' && <Clock className="w-6 h-6 text-amber-600" />}
-                    {title} Queue
-                    <span className={`text-xs font-bold px-3 py-1 rounded-full border bg-white shadow-sm ${
+                    {activeCategory === 'not_contacted' && <Users className="w-6 h-6 text-slate-500 shrink-0" />}
+                    {activeCategory === 'call_again' && <Calendar className="w-6 h-6 text-blue-600 shrink-0" />}
+                    {activeCategory === 'pending' && <Clock className="w-6 h-6 text-amber-600 shrink-0" />}
+                    <span>{title} Queue</span>
+                    <span className={`text-xs font-bold px-3 py-1 rounded-full border bg-white shadow-sm shrink-0 whitespace-nowrap ${
                       activeCategory === 'not_contacted' ? 'text-slate-600 border-slate-200' :
                       activeCategory === 'call_again' ? 'text-blue-700 border-blue-200' :
                       'text-amber-700 border-amber-200'

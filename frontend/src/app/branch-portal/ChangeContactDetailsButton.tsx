@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Edit2, Loader2 } from 'lucide-react';
+import { Edit2, Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ChangeContactDetailsButtonProps {
@@ -57,6 +57,57 @@ export default function ChangeContactDetailsButton({
       });
     }
   };
+
+  const [smartPasteText, setSmartPasteText] = useState('');
+
+  // Handle Smart Paste parsing
+  useEffect(() => {
+    if (!smartPasteText.trim()) return;
+
+    const timer = setTimeout(() => {
+      const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi;
+      const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?(?:\d{5}[-.\s]?\d{5}|\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{4}[-.\s]?\d{3}[-.\s]?\d{3}|\d{10})/g;
+      const linkedinRegex = /(https?:\/\/(www\.)?linkedin\.com\/in\/[^\s]+)/gi;
+      const urlRegex = /(https?:\/\/[^\s]+)/gi;
+
+      const emails = smartPasteText.match(emailRegex);
+      const phones = smartPasteText.match(phoneRegex);
+      const linkedins = smartPasteText.match(linkedinRegex);
+      const urls = smartPasteText.match(urlRegex);
+
+      setFormData(prev => {
+        const newData = { ...prev };
+        
+        if (emails && emails.length > 0 && !prev.email) newData.email = emails[0];
+        if (phones && phones.length > 0 && !prev.mobile) newData.mobile = phones[0].trim();
+        if (linkedins && linkedins.length > 0 && !prev.linkedin_url) newData.linkedin_url = linkedins[0];
+        
+        // Advanced Name Extraction
+        let cleanText = smartPasteText;
+        if (emails) emails.forEach(e => cleanText = cleanText.replace(e, ''));
+        if (phones) phones.forEach(p => cleanText = cleanText.replace(p, ''));
+        if (linkedins) linkedins.forEach(l => cleanText = cleanText.replace(l, ''));
+        if (urls) urls.forEach(u => cleanText = cleanText.replace(u, ''));
+        
+        // Remove common titles and prefixes
+        cleanText = cleanText.replace(/HR|Manager|Talent|Acquisition|Lead|Director|Head|Mr\.|Ms\.|Mrs\./gi, '');
+        // Keep only letters and spaces
+        cleanText = cleanText.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        const words = cleanText.split(' ').filter(w => w.length > 1);
+        if (words.length > 0 && !prev.name) {
+          newData.name = words.slice(0, 2).join(' ');
+        }
+
+        return newData;
+      });
+
+      toast.success('Smart Paste extracted available information.');
+      setSmartPasteText('');
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [smartPasteText]);
 
   const commitMutation = useMutation({
     mutationFn: async () => {
@@ -145,6 +196,19 @@ export default function ChangeContactDetailsButton({
                     </select>
                   </div>
                 )}
+                
+                <div className="mb-5 pb-5 border-b border-indigo-100/50">
+                  <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Wand2 className="w-3.5 h-3.5" /> Smart Paste
+                  </label>
+                  <textarea 
+                    value={smartPasteText}
+                    onChange={(e) => setSmartPasteText(e.target.value)}
+                    placeholder="Paste details here to auto-fill..."
+                    className="w-full h-16 p-3 text-sm bg-white border border-indigo-200 text-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none shadow-sm"
+                  />
+                  <p className="text-[10px] text-indigo-600 mt-1.5 leading-tight">Paste a block of text containing email, phone, and name. We'll extract them for you.</p>
+                </div>
 
                 <div className="space-y-4 text-sm text-slate-700">
                   <div>

@@ -646,7 +646,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                     {extraContacts.map((c, idx) => (
                       <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group">
                         {!isEditing && (
-                          <div className="absolute top-3 right-3 flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2 mb-2 justify-end w-full">
                             {(c.isVerified && !c.isFlagged) && (
                               <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-emerald-200">
                                 <CheckCircle2 className="w-3 h-3" /> Verified
@@ -660,7 +660,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                           </div>
                         )}
                         <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1 pr-24">
+                          <div className="flex-1 pr-12 sm:pr-24 min-w-0">
                             {isEditing ? (
                               <input 
                                 type="text"
@@ -684,7 +684,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                         <div className="space-y-2">
                           {(!c.isFlagged || isEditing) ? (
                             <>
-                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                              <div className="flex items-center gap-2 text-sm text-slate-600 min-w-0">
                                 <Phone className="w-4 h-4 text-slate-400 shrink-0" />
                                 {isEditing ? (
                                   <input 
@@ -692,13 +692,13 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                                     placeholder="Phone"
                                     value={c.phone}
                                     onChange={e => handleExtraContactChange(idx, 'phone', e.target.value)}
-                                    className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                                    className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 min-w-0"
                                   />
                                 ) : (
-                                  <span className="truncate">{c.phone || 'N/A'}</span>
+                                  <span className="truncate w-full">{c.phone || 'N/A'}</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                              <div className="flex items-center gap-2 text-sm text-slate-600 min-w-0 mt-1">
                                 <Mail className="w-4 h-4 text-slate-400 shrink-0" />
                                 {isEditing ? (
                                   <input 
@@ -706,10 +706,10 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                                     placeholder="Email"
                                     value={c.email}
                                     onChange={e => handleExtraContactChange(idx, 'email', e.target.value)}
-                                    className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                                    className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 min-w-0"
                                   />
                                 ) : (
-                                  <span className="truncate">{c.email || 'N/A'}</span>
+                                  <span className="truncate w-full">{c.email || 'N/A'}</span>
                                 )}
                               </div>
                             </>

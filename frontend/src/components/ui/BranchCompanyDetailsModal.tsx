@@ -380,7 +380,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {hrContacts.map((hr: any) => (
                   <div key={hr._id} className="bg-slate-50 border border-slate-200 p-4 rounded-xl relative group">
-                    <div className="absolute top-3 right-3 flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 mb-2 justify-end w-full">
                       {(hr.is_additional && !hr.is_incorrect) && (
                         <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
                           Additional Contact
@@ -397,14 +397,14 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                         </div>
                       )}
                     </div>
-                    <div className="pr-24">
+                    <div className="pr-12 sm:pr-24 min-w-0">
                       <p className="font-bold text-slate-900 truncate min-w-0">{hr.name || 'Unknown'}</p>
                       <p className="text-xs text-indigo-600 font-medium mb-2 truncate min-w-0">{hr.designation || 'HR'}</p>
                     </div>
                     {!hr.is_incorrect ? (
                       <div className="space-y-1 mt-1">
-                        {hr.mobile && <p className="text-sm text-slate-600 flex items-center gap-2"><PhoneCall className="w-3 h-3 shrink-0" /> <span className="truncate">{hr.mobile}</span></p>}
-                        {hr.email && <p className="text-sm text-slate-600 flex items-center gap-2"><Mail className="w-3 h-3 shrink-0" /> <span className="truncate" title={hr.email}>{hr.email}</span></p>}
+                        {hr.mobile && <p className="text-sm text-slate-600 flex items-center gap-2 min-w-0"><PhoneCall className="w-3 h-3 shrink-0" /> <span className="truncate w-full">{hr.mobile}</span></p>}
+                        {hr.email && <p className="text-sm text-slate-600 flex items-center gap-2 min-w-0"><Mail className="w-3 h-3 shrink-0" /> <span className="truncate w-full" title={hr.email}>{hr.email}</span></p>}
                       </div>
                     ) : (
                       <div className="mt-2 text-xs text-slate-900 font-medium">
