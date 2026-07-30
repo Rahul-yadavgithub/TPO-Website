@@ -9,9 +9,12 @@ import { toast } from 'sonner';
 interface ValidateContactButtonProps {
   companyId: string;
   branchId: string;
+  currentHr?: any;
+  additionalContacts?: any[];
+  pendingContact?: any;
 }
 
-export default function ValidateContactButton({ companyId, branchId }: ValidateContactButtonProps) {
+export default function ValidateContactButton({ companyId, branchId, currentHr, additionalContacts = [], pendingContact }: ValidateContactButtonProps) {
   const queryClient = useQueryClient();
   const [isHovered, setIsHovered] = useState(false);
 
@@ -52,6 +55,29 @@ export default function ValidateContactButton({ companyId, branchId }: ValidateC
       toast.error(err.response?.data?.message || 'Failed to validate contact');
     }
   });
+
+  const allAvailableContacts = [
+    ...(currentHr ? [{ id: 'primary', label: currentHr.name || 'Unknown Name', data: currentHr }] : []),
+    ...additionalContacts.map((c, i) => ({ id: `additional-${i}`, label: c.hrName || 'Unknown Name', data: { name: c.hrName, email: c.hrEmail, mobile: c.hrPhone, designation: 'Additional HR' } })),
+    ...(pendingContact ? [{ id: 'pending', label: pendingContact.name || 'Unknown Name', data: pendingContact }] : [])
+  ];
+
+  const handleAutofillSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    if (!selectedId) return;
+    
+    const selected = allAvailableContacts.find(c => c.id === selectedId);
+    if (selected && selected.data) {
+      setPreviewData({
+        ...previewData,
+        name: selected.data.name || previewData?.name || '',
+        email: selected.data.email || previewData?.email || '',
+        phone: selected.data.phone || selected.data.mobile || previewData?.phone || '',
+        job_title: selected.data.designation || previewData?.job_title || '',
+        linkedin_url: selected.data.linkedin_url || previewData?.linkedin_url || ''
+      });
+    }
+  };
 
   const commitMutation = useMutation({
     mutationFn: async () => {
@@ -122,23 +148,59 @@ export default function ValidateContactButton({ companyId, branchId }: ValidateC
             
             <div className="p-6 space-y-4">
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-                <p className="text-sm text-indigo-900 font-bold mb-1">{previewData.name || 'Unknown Name'}</p>
-                <p className="text-xs text-indigo-700 font-medium mb-3">{previewData.job_title || previewData.designation || 'Human Resources'}</p>
+                {allAvailableContacts.length > 0 && (
+                  <div className="mb-5 pb-5 border-b border-indigo-100/50">
+                    <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2">Autofill from known contacts</label>
+                    <select 
+                      onChange={handleAutofillSelect}
+                      className="w-full text-sm font-medium border border-indigo-200 text-indigo-800 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white shadow-sm"
+                    >
+                      <option value="">-- Select a contact to autofill form --</option>
+                      {allAvailableContacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 
-                <div className="space-y-2 text-sm text-slate-700">
-                  {previewData.email && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 w-16">Email:</span>
-                      <span className="truncate">{previewData.email}</span>
-                    </div>
-                  )}
-                  {previewData.phone && (
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 w-16">Phone:</span>
-                      <span>{previewData.phone}</span>
-                    </div>
-                  )}
-                  <div className="pt-2 border-t border-indigo-100/50 mt-2">
+                <div className="space-y-4 text-sm text-slate-700">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Name</label>
+                    <input 
+                      type="text" 
+                      value={previewData.name || ''}
+                      onChange={(e) => setPreviewData({ ...previewData, name: e.target.value })}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Designation</label>
+                    <input 
+                      type="text" 
+                      value={previewData.job_title || previewData.designation || ''}
+                      onChange={(e) => setPreviewData({ ...previewData, job_title: e.target.value })}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                    <input 
+                      type="email" 
+                      value={previewData.email || ''}
+                      onChange={(e) => setPreviewData({ ...previewData, email: e.target.value })}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                    <input 
+                      type="text" 
+                      value={previewData.phone || ''}
+                      onChange={(e) => setPreviewData({ ...previewData, phone: e.target.value })}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">LinkedIn Profile URL</label>
                     <input 
                       type="url" 

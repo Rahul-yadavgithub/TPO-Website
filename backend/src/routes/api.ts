@@ -1600,6 +1600,12 @@ router.post('/contact-logs', async (req, res) => {
         company.confirmation_status = 'confirmed';
       } else if (outcome === 'brochure_jnf') {
         company.contact_outcome = 'brochure_jnf';
+        company.primary_contact_verified = true;
+        const currentPrimary = await HrContact.findOne({ company_id }).session(session);
+        if (currentPrimary) {
+          currentPrimary.is_verified = true;
+          await currentPrimary.save({ session });
+        }
       } else if (outcome === 'tpo_talk') {
         company.contact_outcome = 'tpo_talk';
         company.is_verified_by_admin = true;
@@ -1890,10 +1896,9 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
     const existingCompanies = await Company.find().select('normalizedName assignedBranch contactOwner').lean();
     const existingMap = new Map(existingCompanies.map((c: any) => [c.normalizedName, c]));
 
-    const validCompanies = [];
+    const validCompaniesMap = new Map<string, any>();
     const duplicateCompanies = [];
     const conflictCompanies = [];
-    const newNamesAdded = new Set();
 
     for (const c of companies) {
       if (!c.companyName) continue;
@@ -1911,14 +1916,23 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
           duplicateCompanies.push(c);
         }
       } else {
-        if (newNamesAdded.has(normalized)) {
-          duplicateCompanies.push(c);
+        if (validCompaniesMap.has(normalized)) {
+          const existingValid = validCompaniesMap.get(normalized);
+          if (!existingValid.additionalContacts) existingValid.additionalContacts = [];
+          existingValid.additionalContacts.push({
+            hrName: c.hrName || '',
+            hrEmail: c.hrEmail || '',
+            hrPhone: c.hrPhone || '',
+            sourceSheet: 'Bulk Upload',
+            academicYear: 'Current Year'
+          });
         } else {
-          validCompanies.push(c);
-          newNamesAdded.add(normalized);
+          validCompaniesMap.set(normalized, { ...c, additionalContacts: [] });
         }
       }
     }
+
+    const validCompanies = Array.from(validCompaniesMap.values());
 
     res.json({
       validCount: validCompanies.length,
@@ -1965,57 +1979,83 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
       return res.status(400).json({ error: 'Companies array is required' });
     }
 
-    const newCompanies: any[] = [];
-    const newHrContacts: any[] = [];
+    const bulkOps: any[] = [];
 
     for (const c of companies) {
       const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
-
       const companyId = new mongoose.Types.ObjectId();
-      newCompanies.push({
-        _id: companyId,
-        companyName: c.companyName,
-        normalizedName,
-        assignedBranch: branchInfo.name,
-        syncStatus: 'pending',
-        status: CompanyStatus.DISCOVERED,
-        placementScore: 0,
-        confidenceScore: 0,
-        aiConfidence: 0,
-        source: {
-          platform: 'EXCEL_IMPORT',
-          sourceUrl: 'EXCEL_IMPORT',
-          discoveredAt: new Date()
-        },
-        discoveryHistory: [],
-        startupSignals: [],
-        confirmation_status: 'not_confirmed',
-        contact_status: 'not_contacted'
-      });
 
-      if (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile) {
-        newHrContacts.push({
-          company_id: companyId,
-          name: c.hrName,
-          mobile: c.hrPhone,
-          email: c.hrEmail,
-          linkedin_url: c.linkedinProfile
-        });
+      bulkOps.push({
+        updateOne: {
+          filter: { normalizedName },
+          update: {
+            $setOnInsert: {
+              _id: companyId,
+              companyName: c.companyName,
+              normalizedName,
+              assignedBranch: branchInfo.name,
+              assignedBranchId: branchInfo._id,
+              syncStatus: 'pending',
+              status: CompanyStatus.DISCOVERED,
+              placementScore: 0,
+              confidenceScore: 0,
+              aiConfidence: 0,
+              source: {
+                platform: 'EXCEL_IMPORT',
+                sourceUrl: 'EXCEL_IMPORT',
+                discoveredAt: new Date()
+              },
+              discoveryHistory: [],
+              startupSignals: [],
+              confirmation_status: 'not_confirmed',
+              contact_status: 'not_contacted'
+            },
+            $push: {
+              additionalContacts: { $each: c.additionalContacts || [] }
+            }
+          },
+          upsert: true
+        }
+      });
+    }
+
+    let insertedCompanies: any[] = [];
+    const newHrContacts: any[] = [];
+
+    if (bulkOps.length > 0) {
+      const result = await Company.bulkWrite(bulkOps, { session });
+      
+      const upsertedIdsArray = Object.values(result.upsertedIds || {});
+      
+      if (upsertedIdsArray.length > 0) {
+        insertedCompanies = await Company.find({ _id: { $in: upsertedIdsArray } }).session(session);
+        
+        for (const c of companies) {
+          const normalizedName = c.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          const inserted = insertedCompanies.find(doc => doc.normalizedName === normalizedName);
+          
+          if (inserted && (c.hrName || c.hrPhone || c.hrEmail || c.linkedinProfile)) {
+            newHrContacts.push({
+              company_id: inserted._id,
+              name: c.hrName,
+              mobile: c.hrPhone,
+              email: c.hrEmail,
+              linkedin_url: c.linkedinProfile
+            });
+          }
+        }
+
+        if (newHrContacts.length > 0) {
+          await HrContact.insertMany(newHrContacts, { session });
+        }
       }
     }
 
-    if (newCompanies.length > 0) {
-      await Company.insertMany(newCompanies, { session });
-    }
-    if (newHrContacts.length > 0) {
-      await HrContact.insertMany(newHrContacts, { session });
-    }
-
-    if (newCompanies.length > 0) {
+    if (insertedCompanies.length > 0) {
       try {
-        const syncResult = await googleSheetService.appendCompaniesToSheet(newCompanies as any[], branchInfo.name);
+        const syncResult = await googleSheetService.appendCompaniesToSheet(insertedCompanies as any[], branchInfo.name);
         if (syncResult.success) {
-          const companyIds = newCompanies.map(c => c._id);
+          const companyIds = insertedCompanies.map(c => c._id);
           await Company.updateMany(
             { _id: { $in: companyIds } },
             { $set: { syncStatus: 'synced', lastSynced: new Date() } },
@@ -2033,7 +2073,7 @@ router.post('/branch/:branch_id/bulk-import-companies', async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    res.json({ success: true, importedCount: newCompanies.length });
+    res.json({ success: true, importedCount: insertedCompanies.length });
   } catch (error) {
     console.error('Bulk import error:', error);
     if (session.inTransaction()) {
@@ -2714,6 +2754,9 @@ router.post('/companies/:company_id/find-hr', hrValidationController.findHrConta
 router.post('/companies/:company_id/hr-contacts/commit', hrValidationController.commitHrContact);
 router.post('/companies/:company_id/hr-contacts/approve-pending', hrValidationController.approvePendingContact);
 router.post('/companies/:company_id/hr-contacts/discard-pending', hrValidationController.discardPendingContact);
+router.patch('/companies/:company_id/hr-contacts/:contact_id/verify', hrValidationController.verifyHrContact);
+router.patch('/companies/:company_id/hr-contacts/:contact_id/flag', protect, hrValidationController.flagHrContact);
+router.delete('/companies/:company_id/hr-contacts/:contact_id', hrValidationController.deleteHrContact);
 router.post('/companies/:company_id/acknowledge-hr-update', hrValidationController.acknowledgeHrUpdate);
 
 // Startup migration for legacy scanned companies

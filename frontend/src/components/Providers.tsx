@@ -37,11 +37,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
           
           if (!isAuthPage && !isRedirecting) {
             isRedirecting = true;
-            try {
-              await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true });
-            } catch (err) {
-              console.error('Logout failed during 401 redirect:', err);
-            }
+            // We do not make an API call to logout here because if the server is down,
+            // it will cause a hang or infinite loop. We just wipe the token and redirect.
             document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
             window.location.href = '/login';
           }

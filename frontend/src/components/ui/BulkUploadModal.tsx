@@ -17,7 +17,10 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
   const [validationResult, setValidationResult] = useState<{
     validCount: number;
     duplicateCount: number;
+    conflictCount: number;
     validCompanies: any[];
+    duplicateCompanies: any[];
+    conflictCompanies: any[];
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -140,18 +143,51 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center flex flex-col justify-center">
                   <div className="text-3xl font-black text-emerald-600 mb-1">{validationResult.validCount}</div>
                   <div className="text-xs font-bold text-emerald-800 uppercase tracking-wide">New Companies</div>
                   <p className="text-[10px] text-emerald-600 mt-1">Ready to be added</p>
                 </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center flex flex-col justify-center">
                   <div className="text-3xl font-black text-amber-600 mb-1">{validationResult.duplicateCount}</div>
-                  <div className="text-xs font-bold text-amber-800 uppercase tracking-wide">Duplicates Skipped</div>
-                  <p className="text-[10px] text-amber-600 mt-1">Already exist in database</p>
+                  <div className="text-xs font-bold text-amber-800 uppercase tracking-wide">Duplicates</div>
+                  <p className="text-[10px] text-amber-600 mt-1">Aggregated / Skipped</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center flex flex-col justify-center">
+                  <div className="text-3xl font-black text-red-600 mb-1">{validationResult.conflictCount}</div>
+                  <div className="text-xs font-bold text-red-800 uppercase tracking-wide">Conflicts</div>
+                  <p className="text-[10px] text-red-600 mt-1">Assigned elsewhere</p>
                 </div>
               </div>
+
+              {validationResult.conflictCount > 0 && (
+                <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap">
+                    <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 shadow-sm z-10">
+                      <tr>
+                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Company Name</th>
+                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Assigned Branch</th>
+                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">POC TPR</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {validationResult.conflictCompanies.map((c, i) => (
+                        <tr key={i} className="hover:bg-slate-50">
+                          <td className="px-4 py-2.5 font-medium text-slate-800 truncate max-w-[200px]" title={c.companyName}>{c.companyName}</td>
+                          <td className="px-4 py-2.5 text-red-600 font-medium">
+                            <div className="flex items-center gap-1.5">
+                              <AlertCircle className="w-3.5 h-3.5" />
+                              {c.conflictBranch}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-600">{c.conflictOwner}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {validationResult.validCount === 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-800">

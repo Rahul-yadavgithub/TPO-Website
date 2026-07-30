@@ -17,8 +17,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isPublicRoute = publicRoutes.includes(pathname);
+  const [isServiceDown, setIsServiceDown] = useState(false);
 
-  const { isLoading, isError, isSuccess } = useQuery({
+  const { isLoading, isError, isSuccess, error } = useQuery({
     queryKey: ['auth-me'],
     queryFn: async () => {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
@@ -31,6 +32,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     enabled: !isPublicRoute,
     staleTime: 30 * 1000,
   });
+
+  // Ensure a robust fallback redirect if the global interceptor is slow or fails
+  useEffect(() => {
+    if (isError && !isPublicRoute) {
+      const axiosError = error as any;
+      const status = axiosError?.response?.status;
+      
+      // If it's a server crash (500+) or network down (undefined response)
+      if (!status || status >= 500) {
+        setIsServiceDown(true);
+      } else if (status === 401 || status === 403) {
+        // Only wipe tokens and redirect for true authentication failures
+        document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.replace('/login');
+      } else {
+        // Fallback for other errors (404, etc)
+        document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.replace('/login');
+      }
+    }
+  }, [isError, isPublicRoute, error]);
 
   // To prevent hydration mismatches, only render the actual state once mounted
   if (!mounted) {
@@ -71,18 +93,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Ensure a robust fallback redirect if the global interceptor is slow or fails
-  useEffect(() => {
-    if (isError && !isPublicRoute) {
-      // Clear any potential hanging tokens immediately
-      document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.replace('/login');
-    }
-  }, [isError, isPublicRoute]);
-
   // If authentication failed (e.g., token expired), show a clean transition state,
   // the useEffect above will redirect them immediately.
   if (isError) {
+    if (isServiceDown) {
+      return (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0d1f3c] text-white p-4">
+          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mb-6">
+            <ShieldCheck className="w-8 h-8 text-red-400" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">Service Temporarily Unavailable</h1>
+          <p className="text-blue-200/80 text-center max-w-md mb-8">
+            Our systems are currently experiencing difficulties or undergoing maintenance. Please return a little later while we restore normal operations.
+          </p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#f0f2f5]">
         <div className="flex flex-col items-center gap-3">

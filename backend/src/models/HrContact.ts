@@ -16,9 +16,11 @@ export interface IHrContact extends Document {
   email?: string;
   designation?: string;
   linkedin_url?: string;
+  is_verified?: boolean;
   is_incorrect?: boolean;
   is_auto_updated?: boolean;
   auto_updated_at?: Date;
+  incorrect_marked_by?: Types.ObjectId;
   history?: IHrContactHistory[];
   
   // New fields for background queue
@@ -47,9 +49,11 @@ const HrContactSchema: Schema = new Schema(
     email: { type: String },
     designation: { type: String },
     linkedin_url: { type: String },
+    is_verified: { type: Boolean, default: false },
     is_incorrect: { type: Boolean, default: false },
     is_auto_updated: { type: Boolean, default: false },
     auto_updated_at: { type: Date },
+    incorrect_marked_by: { type: Schema.Types.ObjectId, ref: 'Branch' },
     history: { type: [HrContactHistorySchema], default: [] },
     
     // New fields for background queue

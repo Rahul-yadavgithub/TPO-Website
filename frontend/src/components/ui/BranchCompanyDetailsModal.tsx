@@ -120,7 +120,19 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
 
   if (!isOpen || !company) return null;
 
-  const hrContacts = company.hr_contacts || [];
+  const hrContacts = [
+    ...(company.hr_contacts || []),
+    ...(company.additionalContacts || []).map((ac: any, idx: number) => ({
+      _id: ac._id || `addl-${idx}`,
+      name: ac.hrName || 'Unknown Name',
+      email: ac.hrEmail,
+      mobile: ac.hrPhone,
+      designation: 'Additional HR (From Sheet)',
+      is_additional: true,
+      is_verified: ac.isVerified,
+      is_incorrect: ac.isFlagged
+    }))
+  ];
   const contactLogs = company.contact_logs || [];
 
   return (
@@ -367,11 +379,38 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             {hrContacts.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {hrContacts.map((hr: any) => (
-                  <div key={hr._id} className="bg-slate-50 border border-slate-200 p-4 rounded-xl">
-                    <p className="font-bold text-slate-900">{hr.name || 'Unknown'}</p>
-                    <p className="text-xs text-indigo-600 font-medium mb-2">{hr.designation || 'HR'}</p>
-                    {hr.mobile && <p className="text-sm text-slate-600 flex items-center gap-2"><PhoneCall className="w-3 h-3" /> {hr.mobile}</p>}
-                    {hr.email && <p className="text-sm text-slate-600 flex items-center gap-2"><Mail className="w-3 h-3" /> {hr.email}</p>}
+                  <div key={hr._id} className="bg-slate-50 border border-slate-200 p-4 rounded-xl relative group">
+                    <div className="absolute top-3 right-3 flex items-center gap-2">
+                      {(hr.is_additional && !hr.is_incorrect) && (
+                        <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
+                          Additional Contact
+                        </div>
+                      )}
+                      {(hr.is_verified && !hr.is_incorrect) && (
+                        <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3" /> Verified
+                        </div>
+                      )}
+                      {hr.is_incorrect && (
+                        <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-red-200">
+                          <ShieldAlert className="w-3 h-3" /> Incorrect
+                        </div>
+                      )}
+                    </div>
+                    <div className="pr-24">
+                      <p className="font-bold text-slate-900 truncate min-w-0">{hr.name || 'Unknown'}</p>
+                      <p className="text-xs text-indigo-600 font-medium mb-2 truncate min-w-0">{hr.designation || 'HR'}</p>
+                    </div>
+                    {!hr.is_incorrect ? (
+                      <div className="space-y-1 mt-1">
+                        {hr.mobile && <p className="text-sm text-slate-600 flex items-center gap-2"><PhoneCall className="w-3 h-3 shrink-0" /> <span className="truncate">{hr.mobile}</span></p>}
+                        {hr.email && <p className="text-sm text-slate-600 flex items-center gap-2"><Mail className="w-3 h-3 shrink-0" /> <span className="truncate" title={hr.email}>{hr.email}</span></p>}
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs text-slate-900 font-medium">
+                        Contact details not correct
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

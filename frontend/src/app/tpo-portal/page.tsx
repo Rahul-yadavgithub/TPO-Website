@@ -231,6 +231,37 @@ export default function TpoPortalPage() {
     }
   });
 
+  const verifyHrContactMutation = useMutation({
+    mutationFn: async ({ companyId, contactId, isVerified, isAdditional }: { companyId: string, contactId: string, isVerified: boolean, isAdditional: boolean }) => {
+      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/hr-contacts/${contactId}/verify`, {
+        is_verified: isVerified,
+        is_additional: isAdditional
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('HR Contact verification updated!');
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
+    },
+    onError: () => toast.error('Failed to update contact verification')
+  });
+
+  const deleteHrContactMutation = useMutation({
+    mutationFn: async ({ companyId, contactId, isAdditional }: { companyId: string, contactId: string, isAdditional: boolean }) => {
+      const res = await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/hr-contacts/${contactId}?is_additional=${isAdditional}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('HR Contact deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
+    },
+    onError: () => toast.error('Failed to delete HR contact')
+  });
+
   // Duplicate Check Effect
   useEffect(() => {
     if (!manualForm.companyName || manualForm.companyName.trim().length < 2) {
@@ -814,9 +845,21 @@ export default function TpoPortalPage() {
                   <div className="mt-6">
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">HR Contacts</h4>
                     <div className="mb-6">
-                      {company.hr_contacts?.length > 0 ? (
+                      {(company.hr_contacts?.length > 0 || company.additionalContacts?.length > 0) ? (
                         <div className="space-y-4">
-                          {company.hr_contacts.map((hr: any) => (
+                          {[
+                            ...(company.hr_contacts || []),
+                            ...(company.additionalContacts || []).map((ac: any, idx: number) => ({
+                              _id: ac._id || `addl-hr-${idx}`,
+                              name: ac.hrName || 'Unknown Name',
+                              email: ac.hrEmail,
+                              mobile: ac.hrPhone,
+                              designation: 'Additional HR (From Sheet)',
+                              is_additional: true,
+                              is_verified: ac.isVerified,
+                              is_incorrect: ac.isFlagged
+                            }))
+                          ].map((hr: any) => (
                             <div key={hr._id} className="space-y-3">
                               {hr.pending_update && (
                                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
@@ -865,6 +908,11 @@ export default function TpoPortalPage() {
                                     </button>
                                   </div>
                                 )}
+                                {hr.is_additional && (
+                                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
+                                    Additional Contact
+                                  </div>
+                                )}
                                 
                                 <div className="flex items-start gap-3">
                                   <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg shrink-0 border border-indigo-100">
@@ -911,6 +959,46 @@ export default function TpoPortalPage() {
                                         Last background scan on {new Date(hr.last_checked_at).toLocaleDateString()} found no new updates.
                                       </div>
                                     )}
+                                  </div>
+
+                                  {/* Verification Toggle & Delete */}
+                                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                    <label className="flex items-center gap-2 cursor-pointer group/toggle">
+                                      <div className="relative">
+                                        <input 
+                                          type="checkbox" 
+                                          className="sr-only" 
+                                          checked={hr.is_verified}
+                                          onChange={(e) => verifyHrContactMutation.mutate({ 
+                                            companyId: company._id, 
+                                            contactId: hr._id, 
+                                            isVerified: e.target.checked, 
+                                            isAdditional: hr.is_additional || false 
+                                          })}
+                                        />
+                                        <div className={`block w-10 h-6 rounded-full transition-colors ${hr.is_verified ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                        <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${hr.is_verified ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                      </div>
+                                      <span className={`text-xs font-bold ${hr.is_verified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                        {hr.is_verified ? 'Verified' : 'Verify Contact'}
+                                      </span>
+                                    </label>
+                                    
+                                    <button 
+                                      onClick={() => {
+                                        if (confirm('Are you sure you want to delete this contact?')) {
+                                          deleteHrContactMutation.mutate({
+                                            companyId: company._id,
+                                            contactId: hr._id,
+                                            isAdditional: hr.is_additional || false
+                                          });
+                                        }
+                                      }}
+                                      className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
+                                      title="Delete Contact"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
                                   </div>
                                 </div>
                               </div>

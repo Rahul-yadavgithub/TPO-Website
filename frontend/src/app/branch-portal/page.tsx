@@ -43,7 +43,6 @@ export default function BranchPortalPage() {
   const [channel, setChannel] = useState<string>('Phone');
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
-  const [showToTPO, setShowToTPO] = useState(false);
   const [returnToUnified, setReturnToUnified] = useState(false);
   
   // Placement Details Edit State
@@ -245,6 +244,56 @@ export default function BranchPortalPage() {
     }
   });
 
+  const verifyHrContactMutation = useMutation({
+    mutationFn: async ({ companyId, contactId, isVerified, isAdditional }: { companyId: string, contactId: string, isVerified: boolean, isAdditional: boolean }) => {
+      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/hr-contacts/${contactId}/verify`, {
+        is_verified: isVerified,
+        is_additional: isAdditional
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('HR Contact verification updated!');
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['companies-branch-overview'] });
+    },
+    onError: () => toast.error('Failed to update contact verification')
+  });
+
+  const deleteHrContactMutation = useMutation({
+    mutationFn: async ({ companyId, contactId, isAdditional }: { companyId: string, contactId: string, isAdditional: boolean }) => {
+      const res = await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/hr-contacts/${contactId}?is_additional=${isAdditional}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('HR Contact deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['companies-branch-overview'] });
+    },
+    onError: () => toast.error('Failed to delete HR contact')
+  });
+
+  const flagHrContactMutation = useMutation({
+    mutationFn: async ({ companyId, contactId, isIncorrect, isAdditional }: { companyId: string, contactId: string, isIncorrect: boolean, isAdditional: boolean }) => {
+      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/hr-contacts/${contactId}/flag`, {
+        is_incorrect: isIncorrect,
+        is_additional: isAdditional
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('HR Contact updated!');
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update contact flag')
+  });
+
   // Duplicate Check Effect
   useEffect(() => {
     if (!manualForm.companyName || manualForm.companyName.trim().length < 2) {
@@ -314,7 +363,7 @@ export default function BranchPortalPage() {
         notes,
         created_by: userProfile?.name || 'TPR', // Dynamically set TPR name
         next_contact_date: outcome === 'call_again' ? nextContactDate : undefined,
-        show_to_tpo: showToTPO
+        show_to_tpo: true
       };
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact-logs`, payload);
       return res.data;
@@ -349,7 +398,6 @@ export default function BranchPortalPage() {
       setChannel('Phone');
       setNotes('');
       setNextContactDate('');
-      setShowToTPO(false);
       // Do not clear activeCompanyId so the page maintains its state
     },
     onError: (error: any) => {
@@ -792,10 +840,12 @@ export default function BranchPortalPage() {
               if (!listSearchQuery.trim()) return list;
               return list.filter((c: any) => c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()));
             })()?.map((company: any) => (
-              <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col md:flex-row">
-                {/* Company Info & HR */}
-                <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50">
-                  <div className="flex flex-col gap-1 mb-4">
+              <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                {/* Top Section: Company Info & HR Contacts */}
+                <div className="flex flex-col lg:flex-row border-b border-slate-200 bg-slate-50">
+                  {/* Left Column: Company Info & Placement Details */}
+                  <div className="p-6 lg:w-1/3 border-b lg:border-b-0 lg:border-r border-slate-200">
+                    <div className="flex flex-col gap-1 mb-4">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
                       {company.is_verified_by_admin ? (
@@ -897,12 +947,31 @@ export default function BranchPortalPage() {
                     </div>
                   </div>
 
-                  <div className="mt-6">
-                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">HR Contacts</h4>
-                    <div className="mb-6">
-                      {company.hr_contacts?.length > 0 ? (
-                        <div className="space-y-4">
-                          {company.hr_contacts.map((hr: any) => (
+                  </div>
+                  
+                  {/* Right Column: HR Contacts Array */}
+                  <div className="p-6 lg:w-2/3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center justify-between">
+                      <span>HR Contacts</span>
+                      <span className="bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 shadow-sm">{company.hr_contacts?.length || 0 + (company.additionalContacts?.length || 0)} Found</span>
+                    </h4>
+                    <div className="mb-5">
+                      {(company.hr_contacts?.length > 0 || company.additionalContacts?.length > 0) ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {[
+                            ...(company.hr_contacts || []),
+                            ...(company.additionalContacts || []).map((ac: any, idx: number) => ({
+                              _id: ac._id || `addl-hr-${idx}`,
+                              name: ac.hrName || 'Unknown Name',
+                              email: ac.hrEmail,
+                              mobile: ac.hrPhone,
+                              designation: 'Additional HR (From Sheet)',
+                              is_additional: true,
+                              is_verified: ac.isVerified,
+                              is_incorrect: ac.isFlagged,
+                              incorrect_marked_by: ac.incorrect_marked_by
+                            }))
+                          ].map((hr: any) => (
                             <div key={hr._id} className="space-y-3">
                               {hr.pending_update && (
                                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
@@ -943,53 +1012,78 @@ export default function BranchPortalPage() {
                               )}
 
                               <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm hover:shadow-md transition-shadow relative group">
-                                {hr.is_auto_updated && (
-                                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-amber-200">
-                                    Auto-Updated
-                                    <button onClick={() => acknowledgeUpdateMutation.mutate(company._id)} className="hover:bg-amber-200 rounded p-0.5 transition-colors" title="Acknowledge & clear">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                )}
+                                <div className="absolute top-3 right-3 flex items-center gap-2">
+                                  {hr.is_auto_updated && (
+                                    <div className="flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-amber-200">
+                                      Auto-Updated
+                                      <button onClick={() => acknowledgeUpdateMutation.mutate(company._id)} className="hover:bg-amber-200 rounded p-0.5 transition-colors" title="Acknowledge & clear">
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                  {(hr.is_additional && !hr.is_incorrect) && (
+                                    <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
+                                      Additional Contact
+                                    </div>
+                                  )}
+                                  {(hr.is_verified && !hr.is_incorrect) && (
+                                    <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3" /> Verified
+                                    </div>
+                                  )}
+                                  {hr.is_incorrect && (
+                                    <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-red-200">
+                                      <ShieldAlert className="w-3 h-3" /> Incorrect
+                                    </div>
+                                  )}
+                                </div>
                                 
                                 <div className="flex items-start gap-3">
                                   <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-lg shrink-0 border border-indigo-100">
                                     {(hr.name || 'U').charAt(0).toUpperCase()}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className="font-bold text-slate-900 truncate pr-20 text-base">{hr.name || 'Unknown Name'}</p>
+                                    <div className="flex items-center gap-2 mb-1 pr-40">
+                                      <p className="font-bold text-slate-900 truncate text-base min-w-0">{hr.name || 'Unknown Name'}</p>
+                                    </div>
                                     <p className="text-indigo-600 font-medium text-xs mb-3 truncate">{hr.designation || 'Human Resources'}</p>
                                     
-                                    <div className="space-y-2 mt-1">
-                                      {hr.mobile && (
-                                        <div className="flex items-start gap-2 text-sm text-slate-600">
-                                          <PhoneCall className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                          <div className="flex flex-col gap-0.5">
-                                            {hr.mobile.split(',').map((phone: string, i: number) => (
-                                              <a key={i} href={`tel:${phone.trim()}`} className="hover:text-indigo-600 transition-colors block truncate">{phone.trim()}</a>
-                                            ))}
+                                    {!hr.is_incorrect ? (
+                                      <div className="space-y-2 mt-1">
+                                        {hr.mobile && (
+                                          <div className="flex items-start gap-2 text-sm text-slate-600">
+                                            <PhoneCall className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                            <div className="flex flex-col gap-0.5">
+                                              {hr.mobile.split(',').map((phone: string, i: number) => (
+                                                <a key={i} href={`tel:${phone.trim()}`} className="hover:text-indigo-600 transition-colors block truncate">{phone.trim()}</a>
+                                              ))}
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
-                                      {hr.email && (
-                                        <div className="flex items-start gap-2 text-sm text-slate-600">
-                                          <Mail className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                          <div className="flex flex-col gap-0.5 min-w-0">
-                                            {hr.email.split(',').map((em: string, i: number) => (
-                                              <a key={i} href={`mailto:${em.trim()}`} className="hover:text-indigo-600 transition-colors block truncate" title={em.trim()}>{em.trim()}</a>
-                                            ))}
+                                        )}
+                                        {hr.email && (
+                                          <div className="flex items-start gap-2 text-sm text-slate-600">
+                                            <Mail className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                            <div className="flex flex-col gap-0.5 min-w-0">
+                                              {hr.email.split(',').map((em: string, i: number) => (
+                                                <a key={i} href={`mailto:${em.trim()}`} className="hover:text-indigo-600 transition-colors block truncate" title={em.trim()}>{em.trim()}</a>
+                                              ))}
+                                            </div>
                                           </div>
-                                        </div>
-                                      )}
-                                      {hr.linkedin_url && (
-                                        <div className="flex items-start gap-2 text-sm text-slate-600">
-                                          <Users className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                                          <a href={hr.linkedin_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate" title={hr.linkedin_url}>
-                                            View LinkedIn Profile
-                                          </a>
-                                        </div>
-                                      )}
-                                    </div>
+                                        )}
+                                        {hr.linkedin_url && (
+                                          <div className="flex items-start gap-2 text-sm text-slate-600">
+                                            <Users className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                                            <a href={hr.linkedin_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate" title={hr.linkedin_url}>
+                                              View LinkedIn Profile
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="mt-2 text-xs text-slate-900 font-medium">
+                                        Contact details not correct
+                                      </div>
+                                    )}
                                     
                                     {hr.last_check_status === 'no_changes' && hr.last_checked_at && (
                                       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-[10px] text-slate-400">
@@ -998,6 +1092,74 @@ export default function BranchPortalPage() {
                                       </div>
                                     )}
                                   </div>
+                                </div>
+
+                                {/* Verification Toggle & Delete */}
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                                  <div className="flex items-center gap-4">
+                                    <label className={`flex items-center gap-2 cursor-pointer group/toggle ${hr.is_incorrect ? 'opacity-50 pointer-events-none' : ''}`} title={hr.is_incorrect ? 'Cannot verify an incorrect contact' : 'Verify this contact'}>
+                                      <div className="relative">
+                                        <input 
+                                          type="checkbox" 
+                                          className="sr-only" 
+                                          checked={hr.is_verified || false}
+                                          disabled={hr.is_incorrect}
+                                          onChange={(e) => verifyHrContactMutation.mutate({ 
+                                            companyId: company._id, 
+                                            contactId: hr.is_additional ? hr.email : hr._id, 
+                                            isVerified: e.target.checked, 
+                                            isAdditional: hr.is_additional || false 
+                                          })}
+                                        />
+                                        <div className={`block w-8 h-4 rounded-full transition-colors ${hr.is_verified ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                        <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${hr.is_verified ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                      </div>
+                                      <span className={`text-[10px] font-bold uppercase tracking-wider ${hr.is_verified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                        Verify
+                                      </span>
+                                    </label>
+
+                                    <label 
+                                      className={`flex items-center gap-2 group/toggle ${(!isAdmin && hr.is_incorrect && hr.incorrect_marked_by !== selectedBranchId) ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+                                      title={(!isAdmin && hr.is_incorrect && hr.incorrect_marked_by !== selectedBranchId) ? 'Only the branch that marked this incorrect can undo it' : 'Mark contact as incorrect'}
+                                    >
+                                      <div className="relative">
+                                        <input 
+                                          type="checkbox" 
+                                          className="sr-only" 
+                                          checked={hr.is_incorrect || false}
+                                          disabled={!isAdmin && hr.is_incorrect && hr.incorrect_marked_by !== selectedBranchId}
+                                          onChange={(e) => flagHrContactMutation.mutate({ 
+                                            companyId: company._id, 
+                                            contactId: hr.is_additional ? hr.email : hr._id, 
+                                            isIncorrect: e.target.checked, 
+                                            isAdditional: hr.is_additional || false 
+                                          })}
+                                        />
+                                        <div className={`block w-8 h-4 rounded-full transition-colors ${hr.is_incorrect ? 'bg-red-500' : 'bg-slate-300'}`}></div>
+                                        <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${hr.is_incorrect ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                      </div>
+                                      <span className={`text-[10px] font-bold uppercase tracking-wider ${hr.is_incorrect ? 'text-red-700' : 'text-slate-500'}`}>
+                                        Wrong
+                                      </span>
+                                    </label>
+                                  </div>
+                                  
+                                  <button 
+                                    onClick={() => {
+                                      if (confirm('Are you sure you want to delete this contact?')) {
+                                        deleteHrContactMutation.mutate({
+                                          companyId: company._id,
+                                          contactId: hr.is_additional ? hr.email : hr._id,
+                                          isAdditional: hr.is_additional || false
+                                        });
+                                      }
+                                    }}
+                                    className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
+                                    title="Delete Contact"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               </div>
 
@@ -1040,7 +1202,13 @@ export default function BranchPortalPage() {
                     
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1">
-                        <ValidateContactButton companyId={company._id} branchId={selectedBranchId} />
+                        <ValidateContactButton 
+                          companyId={company._id} 
+                          branchId={selectedBranchId}
+                          currentHr={company.hr_contacts?.[0]} 
+                          additionalContacts={company.additionalContacts}
+                          pendingContact={company.hr_contacts?.[0]?.pending_update}
+                        />
                       </div>
                       <div className="flex-1">
                         <ChangeContactDetailsButton 
@@ -1048,6 +1216,8 @@ export default function BranchPortalPage() {
                           branchId={selectedBranchId}
                           branchName={branches?.find((b: any) => b._id === selectedBranchId)?.name}
                           currentHr={company.hr_contacts?.[0]} 
+                          additionalContacts={company.additionalContacts}
+                          pendingContact={company.hr_contacts?.[0]?.pending_update}
                           is_verified_by_admin={company.is_verified_by_admin}
                         />
                       </div>
@@ -1055,8 +1225,8 @@ export default function BranchPortalPage() {
                   </div>
                 </div>
 
-                {/* Timeline & Actions */}
-                <div className="p-6 md:w-2/3 flex flex-col">
+                {/* Bottom Section: Timeline & Actions */}
+                <div className="p-6 bg-white flex flex-col">
                   {/* Log Action Form */}
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
                     {activeCompanyId === company._id ? (
@@ -1114,18 +1284,7 @@ export default function BranchPortalPage() {
                           />
                         </div>
 
-                        <div className="flex items-center gap-2 mt-4 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
-                          <input 
-                            type="checkbox" 
-                            id={`showToTPO-${company._id}`} 
-                            className="w-4 h-4 text-indigo-600 bg-white border-indigo-300 rounded focus:ring-indigo-500 focus:ring-2"
-                            checked={showToTPO}
-                            onChange={(e) => setShowToTPO(e.target.checked)}
-                          />
-                          <label htmlFor={`showToTPO-${company._id}`} className="text-sm font-medium text-indigo-900 cursor-pointer">
-                            Show full log details to TPOs
-                          </label>
-                        </div>
+
 
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
                           <button 

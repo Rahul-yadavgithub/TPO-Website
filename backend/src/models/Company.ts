@@ -78,6 +78,7 @@ export interface ICompany extends Document {
     academicYear: string;
     isVerified?: boolean;
     isFlagged?: boolean;
+    incorrect_marked_by?: mongoose.Types.ObjectId;
   }>;
 
   createdAt: Date;
@@ -188,7 +189,8 @@ const CompanySchema: Schema = new Schema(
       sourceSheet: { type: String },
       academicYear: { type: String },
       isVerified: { type: Boolean, default: false },
-      isFlagged: { type: Boolean, default: false }
+      isFlagged: { type: Boolean, default: false },
+      incorrect_marked_by: { type: Schema.Types.ObjectId, ref: 'Branch' }
     }],
 
     // Review & Confirmation

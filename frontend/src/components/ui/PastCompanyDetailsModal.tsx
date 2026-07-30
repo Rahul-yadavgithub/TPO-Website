@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, History, AlertCircle, Edit2, Save, Trash2, Loader2, ShieldCheck, PhoneCall, ChevronDown, XCircle } from 'lucide-react';
+import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, History, AlertCircle, Edit2, Save, Trash2, Loader2, ShieldCheck, PhoneCall, ChevronDown, XCircle, ShieldAlert } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -645,8 +645,22 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {extraContacts.map((c, idx) => (
                       <div key={idx} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group">
+                        {!isEditing && (
+                          <div className="absolute top-3 right-3 flex items-center gap-2">
+                            {(c.isVerified && !c.isFlagged) && (
+                              <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" /> Verified
+                              </div>
+                            )}
+                            {c.isFlagged && (
+                              <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-red-200">
+                                <ShieldAlert className="w-3 h-3" /> Incorrect
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
+                          <div className="flex-1 pr-24">
                             {isEditing ? (
                               <input 
                                 type="text"
@@ -656,9 +670,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                                 className="w-full font-semibold text-slate-900 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 mb-2 text-sm"
                               />
                             ) : (
-                              <h5 className="font-bold text-slate-800 flex items-center gap-2">
-                                {c.isVerified && <ShieldCheck className="w-4 h-4 text-emerald-500" />}
-                                {c.isFlagged && <AlertCircle className="w-4 h-4 text-red-500" />}
+                              <h5 className="font-bold text-slate-800 flex items-center gap-2 truncate min-w-0">
                                 {c.name || 'No Name'}
                               </h5>
                             )}
@@ -670,41 +682,42 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                           )}
                         </div>
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <Phone className="w-4 h-4 text-slate-400" />
-                            {isEditing ? (
-                              <input 
-                                type="text"
-                                placeholder="Phone"
-                                value={c.phone}
-                                onChange={e => handleExtraContactChange(idx, 'phone', e.target.value)}
-                                className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
-                              />
-                            ) : (
-                              <span>{c.phone || 'N/A'}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <Mail className="w-4 h-4 text-slate-400" />
-                            {isEditing ? (
-                              <input 
-                                type="text"
-                                placeholder="Email"
-                                value={c.email}
-                                onChange={e => handleExtraContactChange(idx, 'email', e.target.value)}
-                                className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
-                              />
-                            ) : (
-                              <span className="flex items-center gap-2 flex-wrap">
-                                {c.email || 'N/A'}
-                                {c.isFlagged && (
-                                  <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                                    <XCircle className="w-3 h-3" /> Incorrect
-                                  </span>
+                          {(!c.isFlagged || isEditing) ? (
+                            <>
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                                {isEditing ? (
+                                  <input 
+                                    type="text"
+                                    placeholder="Phone"
+                                    value={c.phone}
+                                    onChange={e => handleExtraContactChange(idx, 'phone', e.target.value)}
+                                    className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                ) : (
+                                  <span className="truncate">{c.phone || 'N/A'}</span>
                                 )}
-                              </span>
-                            )}
-                          </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+                                {isEditing ? (
+                                  <input 
+                                    type="text"
+                                    placeholder="Email"
+                                    value={c.email}
+                                    onChange={e => handleExtraContactChange(idx, 'email', e.target.value)}
+                                    className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                ) : (
+                                  <span className="truncate">{c.email || 'N/A'}</span>
+                                )}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="mt-2 text-xs text-slate-900 font-medium">
+                              Contact details not correct
+                            </div>
+                          )}
                         </div>
                         {isEditing && (
                           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4">

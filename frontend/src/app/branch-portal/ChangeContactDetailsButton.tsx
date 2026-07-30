@@ -11,10 +11,20 @@ interface ChangeContactDetailsButtonProps {
   branchId: string;
   branchName?: string;
   currentHr?: any;
+  additionalContacts?: any[];
+  pendingContact?: any;
   is_verified_by_admin?: boolean;
 }
 
-export default function ChangeContactDetailsButton({ companyId, branchId, branchName, currentHr, is_verified_by_admin }: ChangeContactDetailsButtonProps) {
+export default function ChangeContactDetailsButton({ 
+  companyId, 
+  branchId, 
+  branchName, 
+  currentHr, 
+  additionalContacts = [], 
+  pendingContact,
+  is_verified_by_admin 
+}: ChangeContactDetailsButtonProps) {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   
@@ -25,6 +35,28 @@ export default function ChangeContactDetailsButton({ companyId, branchId, branch
     designation: currentHr?.designation || '',
     linkedin_url: currentHr?.linkedin_url || ''
   });
+
+  const allAvailableContacts = [
+    ...(currentHr ? [{ id: 'primary', label: currentHr.name || 'Unknown Name', data: currentHr }] : []),
+    ...additionalContacts.map((c, i) => ({ id: `additional-${i}`, label: c.hrName || 'Unknown Name', data: { name: c.hrName, email: c.hrEmail, mobile: c.hrPhone, designation: 'Additional HR' } })),
+    ...(pendingContact ? [{ id: 'pending', label: pendingContact.name || 'Unknown Name', data: pendingContact }] : [])
+  ];
+
+  const handleAutofillSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedId = e.target.value;
+    if (!selectedId) return;
+    
+    const selected = allAvailableContacts.find(c => c.id === selectedId);
+    if (selected && selected.data) {
+      setFormData({
+        name: selected.data.name || '',
+        email: selected.data.email || '',
+        mobile: selected.data.mobile || '',
+        designation: selected.data.designation || '',
+        linkedin_url: selected.data.linkedin_url || ''
+      });
+    }
+  };
 
   const commitMutation = useMutation({
     mutationFn: async () => {
@@ -99,6 +131,21 @@ export default function ChangeContactDetailsButton({ companyId, branchId, branch
             <div className="p-6 space-y-4">
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                 
+                {allAvailableContacts.length > 0 && (
+                  <div className="mb-5 pb-5 border-b border-indigo-100/50">
+                    <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2">Autofill from known contacts</label>
+                    <select 
+                      onChange={handleAutofillSelect}
+                      className="w-full text-sm font-medium border border-indigo-200 text-indigo-800 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white shadow-sm"
+                    >
+                      <option value="">-- Select a contact to autofill form --</option>
+                      {allAvailableContacts.map(c => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="space-y-4 text-sm text-slate-700">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">Name</label>
