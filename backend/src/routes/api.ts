@@ -375,7 +375,7 @@ router.post('/companies/manual-company', async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { companyName, website, hrName, hrPhone, hrEmail, linkedinProfile, assignedBranchId, program, is_verified_by_admin } = req.body;
+    const { companyName, website, hrName, hrPhone, hrEmail, linkedinProfile, assignedBranchId, program, is_verified_by_admin, primary_contact_flagged } = req.body;
     if (!companyName) return res.status(400).json({ error: 'Company name is required' });
 
     const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -384,7 +384,18 @@ router.post('/companies/manual-company', async (req: any, res) => {
     if (company) {
       // It exists. If it's already verified by admin, we shouldn't allow changing it unless the user is an admin.
       // Wait, the user IS an admin (checked at top).
-      if (is_verified_by_admin !== undefined) company.is_verified_by_admin = is_verified_by_admin;
+      if (is_verified_by_admin !== undefined) {
+        company.is_verified_by_admin = is_verified_by_admin;
+        company.primary_contact_verified = is_verified_by_admin;
+        if (is_verified_by_admin) company.primary_contact_flagged = false;
+      }
+      if (primary_contact_flagged !== undefined) {
+        company.primary_contact_flagged = primary_contact_flagged;
+        if (primary_contact_flagged) {
+          company.primary_contact_verified = false;
+          company.is_verified_by_admin = false;
+        }
+      }
       if (assignedBranchId) company.assignedBranchId = assignedBranchId;
       if (program) company.program = program;
       
@@ -396,6 +407,7 @@ router.post('/companies/manual-company', async (req: any, res) => {
         hrContact.mobile = hrPhone || hrContact.mobile;
         hrContact.email = hrEmail || hrContact.email;
         hrContact.linkedin_url = linkedinProfile || hrContact.linkedin_url;
+        hrContact.is_incorrect = primary_contact_flagged || false;
         await hrContact.save({ session });
       } else if (hrName || hrPhone || hrEmail || linkedinProfile) {
         await HrContact.create([{
@@ -403,7 +415,8 @@ router.post('/companies/manual-company', async (req: any, res) => {
           name: hrName,
           mobile: hrPhone,
           email: hrEmail,
-          linkedin_url: linkedinProfile
+          linkedin_url: linkedinProfile,
+          is_incorrect: primary_contact_flagged || false
         }], { session });
       }
     } else {
@@ -428,7 +441,9 @@ router.post('/companies/manual-company', async (req: any, res) => {
         assignedBranch: 'Pending Assignment',
         assignedBranchId,
         program,
-        is_verified_by_admin: is_verified_by_admin || false
+        is_verified_by_admin: is_verified_by_admin || false,
+        primary_contact_verified: is_verified_by_admin || false,
+        primary_contact_flagged: primary_contact_flagged || false
       });
 
       await company.save({ session });
@@ -439,7 +454,8 @@ router.post('/companies/manual-company', async (req: any, res) => {
           name: hrName,
           mobile: hrPhone,
           email: hrEmail,
-          linkedin_url: linkedinProfile
+          linkedin_url: linkedinProfile,
+          is_incorrect: primary_contact_flagged || false
         }], { session });
       }
     }
@@ -654,7 +670,7 @@ router.put('/companies/:id/override-assign', async (req, res) => {
   session.startTransaction();
   try {
     const companyId = req.params.id;
-    const { branch_id, program, extractedData } = req.body;
+    const { branch_id, program, extractedData, tpoType, assignedTPO } = req.body;
 
     const company = await Company.findById(companyId).session(session);
     if (!company) {
@@ -664,16 +680,19 @@ router.put('/companies/:id/override-assign', async (req, res) => {
     }
 
     let branch;
-    if (branch_id) {
+    if (tpoType && assignedTPO) {
+      company.tpoType = tpoType;
+      company.assignedTPO = assignedTPO;
+      company.assignedBranch = 'TPO'; // Mark as handled by TPO
+      company.syncStatus = 'pending';
+    } else if (branch_id) {
       branch = await Branch.findById(branch_id).session(session);
       if (!branch) {
         await session.abortTransaction();
         session.endSession();
         return res.status(404).json({ error: 'Branch not found' });
       }
-    }
 
-    if (branch) {
       const lockKey = `sync_lock_${branch.name}`;
       const locked = await acquireLock(lockKey, 30);
       if (!locked) {
@@ -1525,16 +1544,23 @@ router.post('/contact-logs', async (req, res) => {
   session.startTransaction();
 
   try {
-    const { company_id, branch_id, contact_date, channel, outcome, notes, created_by, next_contact_date } = req.body;
+    const { company_id, branch_id, contact_date, channel, outcome, notes, created_by, next_contact_date, show_to_tpr, tpo_name } = req.body;
+
+    let validBranchId = undefined;
+    if (branch_id && mongoose.Types.ObjectId.isValid(branch_id)) {
+      validBranchId = branch_id;
+    }
 
     const newLog = await ContactLog.create([{
       company_id,
-      branch_id,
+      branch_id: validBranchId,
       contact_date: contact_date || new Date(),
       channel,
       outcome,
       notes,
-      created_by
+      created_by,
+      show_to_tpr: show_to_tpr || false,
+      tpo_name
     }], { session });
 
     const company = await Company.findById(company_id).session(session);
@@ -1568,6 +1594,20 @@ router.post('/contact-logs', async (req, res) => {
         new_value: `Logged: ${outcome}`,
         changed_by: created_by
       }], { session });
+      
+      // If a TPO staff is logging a contact for a company that belongs to a branch, notify the branch
+      if (tpo_name && company.assignedBranch && company.assignedBranch !== 'Pending Assignment') {
+        const branchObj = await Branch.findOne({ name: company.assignedBranch }).session(session);
+        if (branchObj) {
+          // Import BranchNotification if not already imported, wait, let's use the mongoose model directly
+          const BranchNotification = mongoose.model('BranchNotification');
+          await BranchNotification.create([{
+            branchId: branchObj._id,
+            type: 'info',
+            message: `TPO ${tpo_name} has made a call to ${company.companyName} (${outcome}).`
+          }], { session });
+        }
+      }
     }
 
     await session.commitTransaction();

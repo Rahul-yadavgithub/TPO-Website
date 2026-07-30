@@ -30,6 +30,7 @@ import apiRoutes from './routes/api';
 import authRoutes from './routes/auth';
 import previousCompaniesRoutes from './routes/previousCompanies';
 import adminRoutes from './routes/admin';
+import tpoRoutes from './routes/tpo';
 
 // Connect DB
 connectDB().then(() => {
@@ -45,6 +46,7 @@ initSchedulers();
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/previous-companies', previousCompaniesRoutes);
+app.use('/api/tpo', tpoRoutes);
 app.use('/api', apiRoutes);
 
 // Basic route

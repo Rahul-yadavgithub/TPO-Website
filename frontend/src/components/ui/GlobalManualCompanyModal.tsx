@@ -31,6 +31,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   const [conflictMessage, setConflictMessage] = useState('');
   const [isConflict, setIsConflict] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
+  const [isFlagged, setIsFlagged] = useState(false);
   const [additionalContacts, setAdditionalContacts] = useState<any[]>([]);
   const [primaryContactDetails, setPrimaryContactDetails] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('Primary');
@@ -154,6 +155,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               section: comp.section || 'Uncategorized'
             });
             setIsVerified(comp.is_verified_by_admin || false);
+            setIsFlagged(comp.primary_contact_flagged || false);
             
             if (comp.additionalContacts && comp.additionalContacts.length > 0) {
               setAdditionalContacts(comp.additionalContacts);
@@ -213,6 +215,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 linkedinProfile: res.data.company?.linkedinCompanyUrl || prev.linkedinProfile
               }));
               setIsVerified(comp.is_verified_by_admin || false);
+              setIsFlagged(comp.primary_contact_flagged || false);
               toast.info('Company exists in this branch. Switched to Update Mode.');
             }
           } else {
@@ -267,9 +270,9 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
           }
           return acc;
         }, {} as Record<string, string>);
-        payload = { ...payload, extraData, is_verified_by_admin: isVerified, targetSection: activeTab };
+        payload = { ...payload, extraData, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, targetSection: activeTab };
       } else {
-        payload = { ...payload, is_verified_by_admin: isVerified };
+        payload = { ...payload, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged };
       }
 
       await axios.post(getEndpoint(), payload, { withCredentials: true });
@@ -670,17 +673,36 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
               </div>
             )}
             
-            <div className="pt-4 border-t border-slate-100">
-              <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
+            <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+              <label className="flex-1 flex items-center gap-3 cursor-pointer p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors">
                 <input
                   type="checkbox"
                   checked={isVerified}
-                  onChange={(e) => setIsVerified(e.target.checked)}
-                  className="w-5 h-5 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                  onChange={(e) => {
+                    setIsVerified(e.target.checked);
+                    if (e.target.checked) setIsFlagged(false);
+                  }}
+                  className="w-5 h-5 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
                 />
                 <div className="flex flex-col">
-                  <span className="text-sm font-bold text-slate-900">Verify Contact Details</span>
-                  <span className="text-xs text-slate-500">Mark this company as 100% verified to lock details for TPRs.</span>
+                  <span className="text-sm font-bold text-slate-900">Verify Details</span>
+                  <span className="text-xs text-slate-500">Lock details.</span>
+                </div>
+              </label>
+              
+              <label className="flex-1 flex items-center gap-3 cursor-pointer p-3 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={isFlagged}
+                  onChange={(e) => {
+                    setIsFlagged(e.target.checked);
+                    if (e.target.checked) setIsVerified(false);
+                  }}
+                  className="w-5 h-5 text-red-600 border-red-300 rounded focus:ring-red-500"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-red-900">Mark Incorrect</span>
+                  <span className="text-xs text-red-700">Flag as wrong contact.</span>
                 </div>
               </label>
             </div>

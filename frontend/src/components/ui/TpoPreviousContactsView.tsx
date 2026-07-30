@@ -139,12 +139,13 @@ function extractAllContacts(company: any): ExtractedContact[] {
   return uniqueContacts;
 }
 
-interface PreviousContactsViewProps {
-  branchId: string;
+interface TpoTpoPreviousContactsViewProps {
+  tpoType: string;
+  tpoName: string;
   onBack: () => void;
 }
 
-export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewProps) {
+export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPreviousContactsViewProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'available' | 'my_requests' | 'others_requests'>('available');
   const [searchQuery, setSearchQuery] = useState('');
@@ -169,12 +170,12 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
 
   // 1. Fetch Status Counts
   const { data: counts } = useQuery({
-    queryKey: ['previous-counts', branchId],
+    queryKey: ['previous-counts', tpoName],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/status-counts?branchId=${branchId}`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/status-counts?tpoName=${tpoName}`, { withCredentials: true });
       return res.data.data;
     },
-    enabled: !!branchId
+    enabled: !!tpoName
   });
 
   // 2. Fetch Available Companies (Paginated)
@@ -188,40 +189,40 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
 
   // 3. Fetch My Requested Companies (Paginated)
   const { data: myRequestedData, isLoading: myRequestedLoading } = useQuery({
-    queryKey: ['previous-my-requested', myRequestedPage, branchId, myRequestsSubTab],
+    queryKey: ['previous-my-requested', myRequestedPage, tpoName, myRequestsSubTab],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=my_requests&page=${myRequestedPage}&limit=10&branchId=${branchId}&subTab=${myRequestsSubTab}`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=my_requests&page=${myRequestedPage}&limit=10&tpoName=${tpoName}&subTab=${myRequestsSubTab}`, { withCredentials: true });
       return res.data;
     },
-    enabled: !!branchId
+    enabled: !!tpoName
   });
 
   // 4. Fetch Others Requested Companies (Paginated)
   const { data: othersRequestedData, isLoading: othersRequestedLoading } = useQuery({
-    queryKey: ['previous-others-requested', othersRequestedPage, branchId],
+    queryKey: ['previous-others-requested', othersRequestedPage, tpoName],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=others_requests&page=${othersRequestedPage}&limit=10&branchId=${branchId}`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=others_requests&page=${othersRequestedPage}&limit=10&tpoName=${tpoName}`, { withCredentials: true });
       return res.data;
     },
-    enabled: !!branchId
+    enabled: !!tpoName
   });
 
   // 4. Fetch User's Requests (To check if approved)
   const { data: userRequests } = useQuery({
-    queryKey: ['previous-user-requests', branchId],
+    queryKey: ['previous-user-requests', tpoName],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/requests/${branchId}`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/requests/${tpoName}`, { withCredentials: true });
       return res.data.data; // Array of PreviousCompanyContactRequest
     },
-    enabled: !!branchId
+    enabled: !!tpoName
   });
 
   // 5. Search
   const { data: searchResults, isLoading: searchLoading } = useQuery({
-    queryKey: ['previous-search', searchQuery, activeTab, branchId],
+    queryKey: ['previous-search', searchQuery, activeTab, tpoName],
     queryFn: async () => {
       if (!searchQuery || searchQuery.length < 2) return [];
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/search?q=${searchQuery}&status=${activeTab}&branchId=${branchId}`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/search?q=${searchQuery}&status=${activeTab}&tpoName=${tpoName}`, { withCredentials: true });
       return res.data.data;
     },
     enabled: searchQuery.length >= 2
@@ -232,7 +233,7 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
     mutationFn: async ({ companyId, companyName }: { companyId: string, companyName: string }) => {
       setRequestingCompanyId(companyId);
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/request`, {
-        companyId, companyName, branchId
+        companyId, companyName, tpoName
       }, { withCredentials: true });
     },
     onSuccess: () => {
@@ -253,14 +254,14 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
 
   
   const { data: currentCompanyDetails, isLoading: isLoadingCurrentCompany } = useQuery({
-    queryKey: ['current-company-details', editingCompanyId, branchId],
+    queryKey: ['current-company-details', editingCompanyId, tpoName],
     queryFn: async () => {
       const company = myRequestedData?.data.find((c: any) => c._id === editingCompanyId);
       if (!company) return null;
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(company.companyName)}&branchId=${branchId}`, { withCredentials: true });
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(company.companyName)}&tpoName=${tpoName}`, { withCredentials: true });
       return res.data;
     },
-    enabled: !!editingCompanyId && !!branchId
+    enabled: !!editingCompanyId && !!tpoName
   });
 
   const [selectedDataSource, setSelectedDataSource] = useState<'current' | 'previous'>('previous');
@@ -269,7 +270,7 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
     mutationFn: async ({ companyId, isVerified, isFlagged }: { companyId: string, isVerified: boolean, isFlagged: boolean }) => {
       await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/${companyId}/contact-info`, {
         ...editForm,
-        branchId,
+        tpoName,
         isVerified,
         isFlagged
       }, { withCredentials: true });
@@ -295,7 +296,6 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
     onSuccess: () => {
       toast.success('Contact status updated successfully!');
       queryClient.invalidateQueries({ queryKey: ['previous-my-requested'] });
-      // We don't close the edit modal, so they can still hit Save & Sync if they want
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Failed to update contact status');
@@ -505,7 +505,7 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                     </div>
                   ) : (
                     displayData?.map((company: any) => {
-                      const isMyRequest = company.contactedByBranchId === branchId;
+                      const isMyRequest = company.contactedByBranchId === tpoName;
                       const myReqDoc = userRequests?.find((r: any) => r.companyId === company._id);
                       const isApproved = isMyRequest && myReqDoc?.status === 'approved';
                     const isEditing = editingCompanyId === company._id;

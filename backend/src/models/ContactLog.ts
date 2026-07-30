@@ -8,6 +8,8 @@ export interface IContactLog extends Document {
   outcome?: string;
   notes?: string;
   created_by?: string;
+  show_to_tpr?: boolean;
+  tpo_name?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,7 +22,9 @@ const ContactLogSchema: Schema = new Schema(
     channel: { type: String },
     outcome: { type: String },
     notes: { type: String },
-    created_by: { type: String }
+    created_by: { type: String },
+    show_to_tpr: { type: Boolean, default: false },
+    tpo_name: { type: String }
   },
   { timestamps: true }
 );

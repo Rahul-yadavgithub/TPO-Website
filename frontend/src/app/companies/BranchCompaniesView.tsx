@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Search, CheckCircle2, Info, Loader2, Building2, Plus, AlertCircle, Filter, X } from 'lucide-react';
+import { Search, CheckCircle2, Info, Loader2, Building2, Plus, AlertCircle, Filter, X, ShieldCheck } from 'lucide-react';
 import { BranchCompanyDetailsModal } from '@/components/ui/BranchCompanyDetailsModal';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 
@@ -234,7 +234,18 @@ export function BranchCompaniesView() {
                   return (
                     <tr key={company._id} className="border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors group">
                       <td className="px-6 py-4">
-                        <span className="font-bold text-slate-900 text-base">{company.companyName}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 text-base">{company.companyName}</span>
+                          {company.is_verified_by_admin ? (
+                            <span title="Verified Master Company" className="flex items-center">
+                              <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            </span>
+                          ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
+                            <span title="Contact Verified" className="flex items-center">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                           <span className="bg-slate-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">{company.academic_year || 'Current Year'}</span>
                         </div>
@@ -263,8 +274,13 @@ export function BranchCompaniesView() {
                       <td className="px-6 py-4 text-center">
                         {company.is_verified_by_admin ? (
                           <div className="inline-flex flex-col items-center gap-1">
-                            <CheckCircle2 className="w-6 h-6 text-green-500" />
+                            <ShieldCheck className="w-6 h-6 text-green-500" />
                             <span className="text-[10px] font-bold text-green-700 uppercase tracking-wider">Verified</span>
+                          </div>
+                        ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <CheckCircle2 className="w-6 h-6 text-green-500" />
+                            <span className="text-[10px] font-bold text-green-700 uppercase tracking-wider">Contact Verified</span>
                           </div>
                         ) : (
                           <span className="text-xs text-slate-400 italic">Pending</span>

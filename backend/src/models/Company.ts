@@ -69,6 +69,7 @@ export interface ICompany extends Document {
   linkedinRecruiterUrl?: string;
   careersUrl?: string;
   primary_contact_verified?: boolean;
+  primary_contact_flagged?: boolean;
   additionalContacts?: Array<{
     hrName: string;
     hrEmail: string;
@@ -76,6 +77,7 @@ export interface ICompany extends Document {
     sourceSheet: string;
     academicYear: string;
     isVerified?: boolean;
+    isFlagged?: boolean;
   }>;
 
   createdAt: Date;
@@ -104,6 +106,8 @@ export interface ICompany extends Document {
   // Branch Assignment & Sync
   assignedBranch?: string;
   assignedBranchId?: mongoose.Types.ObjectId;
+  assignedTPO?: string;
+  tpoType?: 'Faculty' | 'Staff';
   program?: string;
   syncStatus: 'pending' | 'synced' | 'failed';
   lastSynced?: Date;
@@ -176,13 +180,15 @@ const CompanySchema: Schema = new Schema(
     linkedinRecruiterUrl: { type: String },
     careersUrl: { type: String },
     primary_contact_verified: { type: Boolean, default: false },
+    primary_contact_flagged: { type: Boolean, default: false },
     additionalContacts: [{
       hrName: { type: String },
       hrEmail: { type: String },
       hrPhone: { type: String },
       sourceSheet: { type: String },
       academicYear: { type: String },
-      isVerified: { type: Boolean, default: false }
+      isVerified: { type: Boolean, default: false },
+      isFlagged: { type: Boolean, default: false }
     }],
 
     // Review & Confirmation
@@ -205,7 +211,7 @@ const CompanySchema: Schema = new Schema(
     reviewed_by: { type: String },
     pending_delete: { type: Boolean, default: false },
 
-    // Branch Assignment & Sync
+    // Branch & TPO Assignment & Sync
     assignedBranch: {
       type: String,
       default: 'Pending Assignment'
@@ -214,6 +220,8 @@ const CompanySchema: Schema = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'Branch'
     },
+    assignedTPO: { type: String },
+    tpoType: { type: String, enum: ['Faculty', 'Staff'] },
     program: {
       type: String,
       enum: ['B.Tech', 'M.Tech', 'Open to all', '']

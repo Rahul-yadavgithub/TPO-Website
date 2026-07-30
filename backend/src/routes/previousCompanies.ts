@@ -207,6 +207,47 @@ router.get('/list', async (req, res) => {
   }
 });
 
+// @route   GET /api/previous-companies/all-tpo
+// @desc    Get all previous companies for TPO portal without restriction
+router.get('/all-tpo', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+    const section = req.query.section as string;
+    const q = req.query.q as string;
+    const filterByVerified = req.query.verified === 'true';
+
+    let query: any = {};
+    if (section) query.section = section;
+    if (q) {
+      query.$text = { $search: q };
+    }
+    if (filterByVerified) {
+      query.primary_contact_verified = true;
+    }
+
+    const total = await PreviousCompany.countDocuments(query);
+    const companies = await PreviousCompany.find(query)
+      .sort(q ? { score: { $meta: 'textScore' } } : { createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.json({
+      success: true,
+      data: companies,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Fetch all for TPO error:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
 // @route   GET /api/previous-companies/all
 // @desc    Get paginated list of all previous companies (Admin view)
 router.get('/all', async (req: any, res) => {
@@ -306,6 +347,9 @@ router.post('/request', async (req: AuthRequest, res) => {
     const normalizedName = companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
     const activeCompany = await Company.findOne({ normalizedName });
     if (activeCompany) {
+      if (activeCompany.assignedTPO) {
+        return res.status(409).json({ success: false, message: `This company is already being called by TPO ${activeCompany.tpoType || 'Staff'}: ${activeCompany.assignedTPO}.` });
+      }
       if (activeCompany.assignedBranchId && activeCompany.assignedBranchId.toString() !== branchId) {
         return res.status(409).json({ success: false, message: `This company is already active and contacted by the ${activeCompany.assignedBranch} department. Please do not duplicate outreach.` });
       }
@@ -341,7 +385,12 @@ router.post('/request', async (req: AuthRequest, res) => {
 // @desc    Get all requests for a specific branch
 router.get('/requests/:branchId', async (req, res) => {
   try {
-    const requests = await PreviousCompanyContactRequest.find({ branchId: req.params.branchId })
+    const { branchId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(branchId)) {
+      // It's likely a TPO name, and TPOs bypass the request system.
+      return res.status(200).json({ success: true, data: [] });
+    }
+    const requests = await PreviousCompanyContactRequest.find({ branchId })
       .sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: requests });
   } catch (error) {
@@ -385,7 +434,7 @@ router.post('/manual', async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData, is_verified_by_admin, targetSection } = req.body;
+    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData, is_verified_by_admin, targetSection, primary_contact_flagged } = req.body;
     if (!companyName || !academicYear) {
       await session.abortTransaction();
       session.endSession();
@@ -413,6 +462,14 @@ router.post('/manual', async (req: any, res) => {
         company.hrPhone = hrPhone || company.hrPhone;
         company.hrEmail = hrEmail || company.hrEmail;
         company.section = section || company.section;
+        if (primary_contact_flagged !== undefined) {
+          company.primary_contact_flagged = primary_contact_flagged;
+          if (primary_contact_flagged) company.primary_contact_verified = false;
+        }
+        if (is_verified_by_admin !== undefined) {
+          company.primary_contact_verified = is_verified_by_admin;
+          if (is_verified_by_admin) company.primary_contact_flagged = false;
+        }
       }
       
       if (academicYear) company.academicYear = academicYear;
@@ -430,7 +487,9 @@ router.post('/manual', async (req: any, res) => {
         hrPhone,
         section: section || 'Uncategorized',
         extraData: extraData || {},
-        is_verified_by_admin: is_verified_by_admin || false
+        is_verified_by_admin: is_verified_by_admin || false,
+        primary_contact_verified: is_verified_by_admin || false,
+        primary_contact_flagged: primary_contact_flagged || false
       });
     }
     
@@ -468,12 +527,63 @@ router.post('/manual', async (req: any, res) => {
   }
 });
 
+// @route   PATCH /api/previous-companies/:id/update-contact-status
+// @desc    Update only the verified/flagged status of a specific contact without syncing
+router.patch('/:id/update-contact-status', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { contactId, isVerified, isFlagged } = req.body;
+
+    const previousCompany = await PreviousCompany.findById(id);
+    if (!previousCompany) {
+      return res.status(404).json({ success: false, message: 'Previous company not found' });
+    }
+
+    if (contactId === 'primary') {
+      if (isVerified !== undefined) previousCompany.primary_contact_verified = isVerified;
+      if (isFlagged !== undefined) previousCompany.primary_contact_flagged = isFlagged;
+    } else if (contactId.startsWith('additional-')) {
+      const idx = parseInt(contactId.split('-')[1]);
+      if (previousCompany.additionalContacts && previousCompany.additionalContacts[idx]) {
+        if (isVerified !== undefined) previousCompany.additionalContacts[idx].isVerified = isVerified;
+        if (isFlagged !== undefined) previousCompany.additionalContacts[idx].isFlagged = isFlagged;
+      }
+    } else if (contactId.startsWith('extra-')) {
+      const idxStr = contactId.split('-')[1];
+      if (previousCompany.extraData) {
+        if (isVerified !== undefined) previousCompany.extraData[`OTHER HR VERIFIED ${idxStr}`.trim()] = isVerified.toString();
+        if (isFlagged !== undefined) previousCompany.extraData[`OTHER HR FLAGGED ${idxStr}`.trim()] = isFlagged.toString();
+        previousCompany.markModified('extraData');
+      }
+    }
+
+    let anyVerified = false;
+    if (previousCompany.primary_contact_verified) anyVerified = true;
+    if (previousCompany.additionalContacts && previousCompany.additionalContacts.some((c: any) => c.isVerified)) anyVerified = true;
+    if (previousCompany.extraData) {
+      const isAnyExtraVerified = Object.keys(previousCompany.extraData).some(key => key.includes('VERIFIED') && previousCompany.extraData![key] === 'true');
+      if (isAnyExtraVerified) anyVerified = true;
+    }
+    
+    // Auto-sync company level verification status
+    previousCompany.is_verified_by_admin = anyVerified;
+
+    previousCompany.updatedByTprName = req.user.name;
+    await previousCompany.save();
+
+    res.json({ success: true, message: 'Contact status updated successfully' });
+  } catch (error) {
+    console.error('Update contact status error:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
 // @route   PATCH /api/previous-companies/:id/contact-info
 // @desc    Update contact info of an approved previous company and add to current year
 router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
-    const { hrName, hrEmail, hrPhone, branchId, isVerified } = req.body;
+    const { hrName, hrEmail, hrPhone, branchId, isVerified, isFlagged } = req.body;
 
     const previousCompany = await PreviousCompany.findById(id);
     if (!previousCompany) {
@@ -498,6 +608,11 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
     
     if (isVerified) {
       previousCompany.primary_contact_verified = true;
+      previousCompany.primary_contact_flagged = false;
+    }
+    if (isFlagged) {
+      previousCompany.primary_contact_flagged = true;
+      previousCompany.primary_contact_verified = false;
     }
 
     // We no longer just update contactStatus and sync. 
@@ -535,7 +650,8 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
         lastContactStatus: 'not_contacted',
         totalDrivesConducted: 0,
         syncStatus: 'pending',
-        primary_contact_verified: isVerified || false
+        primary_contact_verified: isVerified || false,
+        primary_contact_flagged: isFlagged || false
       });
       await currentCompany.save();
 
@@ -543,7 +659,8 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
         company_id: currentCompany._id,
         name: hrName,
         mobile: hrPhone,
-        email: hrEmail
+        email: hrEmail,
+        is_incorrect: isFlagged || false
       });
       await hrContact.save();
     } else {
@@ -552,6 +669,11 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
       currentCompany.syncStatus = 'pending';
       if (isVerified) {
         currentCompany.primary_contact_verified = true;
+        currentCompany.primary_contact_flagged = false;
+      }
+      if (isFlagged) {
+        currentCompany.primary_contact_flagged = true;
+        currentCompany.primary_contact_verified = false;
       }
       await currentCompany.save();
 
@@ -562,6 +684,7 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
       hrContact.name = hrName;
       hrContact.mobile = hrPhone;
       hrContact.email = hrEmail;
+      hrContact.is_incorrect = isFlagged || false;
       await hrContact.save();
     }
 

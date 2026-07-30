@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, History, AlertCircle, Edit2, Save, Trash2, Loader2, ShieldCheck } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, History, AlertCircle, Edit2, Save, Trash2, Loader2, ShieldCheck, PhoneCall, ChevronDown, XCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
 
@@ -11,6 +11,7 @@ interface AdditionalContact {
   sourceSheet: string;
   academicYear: string;
   isVerified?: boolean;
+  isFlagged?: boolean;
 }
 
 interface ExtraContact {
@@ -19,6 +20,7 @@ interface ExtraContact {
   phone: string;
   email: string;
   isVerified: boolean;
+  isFlagged: boolean;
 }
 
 interface PastCompany {
@@ -36,6 +38,8 @@ interface PastCompany {
   additionalContacts?: AdditionalContact[];
   is_verified_by_admin?: boolean;
   primary_contact_verified?: boolean;
+  primary_contact_flagged?: boolean;
+  assignedTPO?: string;
 }
 
 interface PastCompanyDetailsModalProps {
@@ -51,6 +55,15 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   const [extraContacts, setExtraContacts] = useState<ExtraContact[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewSection, setIsNewSection] = useState(false);
+  
+  // TPO Assignment State
+  const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+  const [assignCategory, setAssignCategory] = useState<'Faculty' | 'Staff' | ''>('');
+  const [assignTpoName, setAssignTpoName] = useState('');
+  const [isAssigning, setIsAssigning] = useState(false);
+
+  const TPO_STAFF = ["Chandradev Raj Singh", "Atul Negi"];
+  const TPO_FACULTY = ["Dr. Somesh Kr. Sharma", "Dr. Ray Singh Meena", "Dr. Swaraj Chowdhury", "Dr. Jiwanjot Singh", "Dr. Sreeram TS"];
   
   const queryClient = useQueryClient();
 
@@ -78,6 +91,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
         const emailMatch = k.match(/^OTHER HR EMAIL\s*(\d*)$/i) || k.match(/^OTHER HR MAIL\s*(\d*)$/i);
         const phoneMatch = k.match(/^OTHER HR MOBILE\s*(\d*)$/i) || k.match(/^OTHER HR PHONE\s*(\d*)$/i) || k.match(/^OTHER HR NUMBER\s*(\d*)$/i);
         const verifiedMatch = k.match(/^OTHER HR VERIFIED\s*(\d*)$/i);
+        const flaggedMatch = k.match(/^OTHER HR FLAGGED\s*(\d*)$/i);
 
         let isHrContact = false;
         let suffix = '';
@@ -86,10 +100,11 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
         else if (emailMatch) { suffix = emailMatch[1]; isHrContact = true; }
         else if (phoneMatch) { suffix = phoneMatch[1]; isHrContact = true; }
         else if (verifiedMatch) { suffix = verifiedMatch[1]; isHrContact = true; }
+        else if (flaggedMatch) { suffix = flaggedMatch[1]; isHrContact = true; }
 
         if (isHrContact) {
           if (!hrContactsMap[suffix]) {
-            hrContactsMap[suffix] = { id: suffix, name: '', phone: '', email: '', isVerified: false };
+            hrContactsMap[suffix] = { id: suffix, name: '', phone: '', email: '', isVerified: false, isFlagged: false };
           }
           if (nameMatch) hrContactsMap[suffix].name = String(v);
           if (emailMatch) hrContactsMap[suffix].email = String(v);
@@ -113,6 +128,25 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
     }
   }, [company]);
 
+  const updateStatusMutation = useMutation({
+    mutationFn: async (data: { contactType: 'primary' | 'additional' | 'extra', contactIndex?: number, isVerified?: boolean, isFlagged?: boolean }) => {
+      const contactId = data.contactType === 'primary' ? 'primary' : `${data.contactType}-${data.contactIndex}`;
+      const res = await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/previous-companies/${company?._id}/update-contact-status`,
+        { contactId, isVerified: data.isVerified, isFlagged: data.isFlagged },
+        { withCredentials: true }
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Contact status updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['past-companies'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to update contact status');
+    }
+  });
+
   if (!isOpen || !company) return null;
 
   const handleSave = async () => {
@@ -131,6 +165,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
           if (contact.email) finalExtraData[`OTHER HR EMAIL ${suffix}`.trim()] = contact.email;
           if (contact.phone) finalExtraData[`OTHER HR MOBILE ${suffix}`.trim()] = contact.phone;
           if (contact.isVerified) finalExtraData[`OTHER HR VERIFIED ${suffix}`.trim()] = 'true';
+          if (contact.isFlagged) finalExtraData[`OTHER HR FLAGGED ${suffix}`.trim()] = 'true';
         }
       });
       
@@ -166,7 +201,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
 
   const handleAddAdditionalContact = () => {
     const newContacts = [...(formData.additionalContacts || [])];
-    newContacts.push({ hrName: '', hrEmail: '', hrPhone: '', sourceSheet: 'Manual Entry', academicYear: new Date().getFullYear().toString(), isVerified: false });
+    newContacts.push({ hrName: '', hrEmail: '', hrPhone: '', sourceSheet: 'Manual Entry', academicYear: new Date().getFullYear().toString(), isVerified: false, isFlagged: false });
     setFormData({ ...formData, additionalContacts: newContacts });
   };
 
@@ -184,7 +219,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
 
   const handleAddExtraContact = () => {
     const nextId = (extraContacts.length + 1).toString();
-    setExtraContacts([...extraContacts, { id: nextId, name: '', phone: '', email: '', isVerified: false }]);
+    setExtraContacts([...extraContacts, { id: nextId, name: '', phone: '', email: '', isVerified: false, isFlagged: false }]);
   };
 
   const handleExtraDataChange = (id: string, field: 'key' | 'value', val: string) => {
@@ -197,6 +232,34 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
 
   const handleAddExtraData = () => {
     setEditExtraData([...editExtraData, { id: `extra-new-${Date.now()}`, key: '', value: '' }]);
+  };
+
+  const handleAssignToTpo = async () => {
+    if (!assignCategory || !assignTpoName) {
+      toast.error('Please select both category and name');
+      return;
+    }
+
+    setIsAssigning(true);
+    try {
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/tpo/${encodeURIComponent(assignTpoName)}/assign-past-company`,
+        {
+          pastCompanyId: company._id,
+          tpoType: assignCategory
+        },
+        { withCredentials: true }
+      );
+      toast.success(`Successfully assigned ${company.companyName} to ${assignTpoName}`);
+      setShowAssignDropdown(false);
+      setAssignCategory('');
+      setAssignTpoName('');
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.response?.data?.error || 'Failed to assign company');
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   return (
@@ -231,11 +294,15 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
               ) : (
                 <div className="flex items-center gap-3">
                   <h2 className="text-xl font-bold text-slate-900">{company.companyName}</h2>
-                  {company.is_verified_by_admin && (
+                  {company.is_verified_by_admin ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
                       <ShieldCheck className="w-3.5 h-3.5" /> Verified
                     </span>
-                  )}
+                  ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                    </span>
+                  ) : null}
                 </div>
               )}
               <div className="flex items-center gap-2 mt-2">
@@ -289,6 +356,86 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {!isEditing && (
+              <div className="relative">
+                {company.assignedTPO ? (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl font-medium text-sm border border-indigo-100">
+                    <CheckCircle2 className="w-4 h-4 text-indigo-600" />
+                    Assigned to {company.assignedTPO}
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowAssignDropdown(!showAssignDropdown)}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors font-medium text-sm border border-indigo-100"
+                    >
+                      <PhoneCall className="w-4 h-4" /> Assign to TPO
+                    </button>
+                    
+                    {showAssignDropdown && (
+                      <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-slate-200 p-4 z-50">
+                    <h4 className="text-sm font-semibold text-slate-800 mb-3">Assign Company</h4>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 mb-1 block">Category</label>
+                        <select
+                          value={assignCategory}
+                          onChange={(e) => {
+                            setAssignCategory(e.target.value as 'Faculty' | 'Staff');
+                            setAssignTpoName('');
+                          }}
+                          className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 bg-white"
+                        >
+                          <option value="">Select Category</option>
+                          <option value="Faculty">Faculty</option>
+                          <option value="Staff">Staff</option>
+                        </select>
+                      </div>
+
+                      {assignCategory && (
+                        <div>
+                          <label className="text-xs font-medium text-slate-500 mb-1 block">Assignee Name</label>
+                          <select
+                            value={assignTpoName}
+                            onChange={(e) => setAssignTpoName(e.target.value)}
+                            className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 bg-white"
+                          >
+                            <option value="">Select Name</option>
+                            {(assignCategory === 'Faculty' ? TPO_FACULTY : TPO_STAFF).map(name => (
+                              <option key={name} value={name}>{name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex gap-2">
+                        <button
+                          onClick={() => {
+                            setShowAssignDropdown(false);
+                            setAssignCategory('');
+                            setAssignTpoName('');
+                          }}
+                          className="flex-1 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleAssignToTpo}
+                          disabled={!assignCategory || !assignTpoName || isAssigning}
+                          className="flex-1 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center justify-center"
+                        >
+                          {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                </>
+              )}
+              </div>
+            )}
+            
             {!isEditing ? (
               <button 
                 onClick={() => setIsEditing(true)}
@@ -326,19 +473,51 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                 <h3 className="font-semibold text-slate-900">Primary Contact (Last Used)</h3>
               </div>
               {isEditing ? (
-                <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
-                  <input 
-                    type="checkbox" 
-                    checked={formData.primary_contact_verified || false} 
-                    onChange={e => setFormData({...formData, primary_contact_verified: e.target.checked})}
-                    className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
-                  />
-                  <span className="text-sm font-semibold text-emerald-700">Verify Primary Contact</span>
-                </label>
-              ) : formData.primary_contact_verified && (
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Verified
-                </span>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.primary_contact_verified || false} 
+                      onChange={e => setFormData({...formData, primary_contact_verified: e.target.checked, primary_contact_flagged: e.target.checked ? false : formData.primary_contact_flagged})}
+                      className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-semibold text-emerald-700">Verify Primary Contact</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap bg-red-50 px-3 py-1 rounded-lg border border-red-100">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.primary_contact_flagged || false} 
+                      onChange={e => setFormData({...formData, primary_contact_flagged: e.target.checked, primary_contact_verified: e.target.checked ? false : formData.primary_contact_verified})}
+                      className="w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-semibold text-red-700">Mark Incorrect</span>
+                  </label>
+                </div>
+              ) : (
+                <div className="flex gap-4 items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Verified:</span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={formData.primary_contact_verified || false} 
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFormData({ ...formData, primary_contact_verified: checked });
+                          updateStatusMutation.mutate({ contactType: 'primary', isVerified: checked, isFlagged: formData.primary_contact_flagged });
+                        }}
+                        disabled={updateStatusMutation.isPending}
+                      />
+                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                  </div>
+                  {formData.primary_contact_flagged && (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-700 px-2.5 py-1 rounded-full border border-red-200 shadow-sm">
+                      <AlertCircle className="w-3.5 h-3.5" /> Incorrect
+                    </span>
+                  )}
+                </div>
               )}
             </div>
             <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -355,7 +534,14 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                         className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-sm"
                       />
                     ) : (
-                      <span className="font-medium">{company.hrName || 'Not provided'}</span>
+                      <div className="font-medium flex items-center gap-2 flex-wrap">
+                        {formData.primary_contact_flagged && (
+                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <XCircle className="w-3 h-3" /> Incorrect
+                          </span>
+                        )}
+                        {company.hrName || 'Not provided'}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -371,7 +557,14 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                         className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-sm"
                       />
                     ) : (
-                      <span>{company.hrPhone || 'Not provided'}</span>
+                      <span className="flex items-center gap-2 flex-wrap">
+                        {formData.primary_contact_flagged && (
+                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <XCircle className="w-3 h-3" /> Incorrect
+                          </span>
+                        )}
+                        {company.hrPhone || 'Not provided'}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -389,7 +582,14 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                         className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-sm"
                       />
                     ) : (
-                      <span className={company.hrEmail ? "" : "text-slate-400 italic"}>{company.hrEmail || 'Not provided'}</span>
+                      <span className={`flex items-center gap-2 flex-wrap ${company.hrEmail ? "" : "text-slate-400 italic"}`}>
+                        {formData.primary_contact_flagged && (
+                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                            <XCircle className="w-3 h-3" /> Incorrect
+                          </span>
+                        )}
+                        {company.hrEmail || 'Not provided'}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -457,8 +657,9 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                               />
                             ) : (
                               <h5 className="font-bold text-slate-800 flex items-center gap-2">
-                                {c.name || 'No Name'}
                                 {c.isVerified && <ShieldCheck className="w-4 h-4 text-emerald-500" />}
+                                {c.isFlagged && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                {c.name || 'No Name'}
                               </h5>
                             )}
                           </div>
@@ -494,26 +695,70 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                                 className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500"
                               />
                             ) : (
-                              <span className="truncate">{c.email || 'N/A'}</span>
+                              <span className="flex items-center gap-2 flex-wrap">
+                                {c.email || 'N/A'}
+                                {c.isFlagged && (
+                                  <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                    <XCircle className="w-3 h-3" /> Incorrect
+                                  </span>
+                                )}
+                              </span>
                             )}
                           </div>
                         </div>
                         {isEditing && (
-                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4">
                             <label className="flex items-center gap-2 cursor-pointer">
                               <input 
                                 type="checkbox"
                                 checked={c.isVerified}
-                                onChange={e => handleExtraContactChange(idx, 'isVerified', e.target.checked)}
+                                onChange={e => {
+                                  handleExtraContactChange(idx, 'isVerified', e.target.checked);
+                                  if (e.target.checked) handleExtraContactChange(idx, 'isFlagged', false);
+                                }}
                                 className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
                               />
                               <span className="text-xs font-semibold text-emerald-700">Verified</span>
                             </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input 
+                                type="checkbox"
+                                checked={c.isFlagged}
+                                onChange={e => {
+                                  handleExtraContactChange(idx, 'isFlagged', e.target.checked);
+                                  if (e.target.checked) handleExtraContactChange(idx, 'isVerified', false);
+                                }}
+                                className="w-4 h-4 text-red-600 border-slate-300 rounded focus:ring-red-500 cursor-pointer"
+                              />
+                              <span className="text-xs font-semibold text-red-700">Incorrect</span>
+                            </label>
                           </div>
                         )}
                         {!isEditing && (
-                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                             <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Source: EXTRA DATA</div>
+                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Source: EXTRA DATA</div>
+                            
+                            <div className="flex gap-2 items-center">
+                              {c.isFlagged && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
+                                  <AlertCircle className="w-3 h-3" /> Incorrect
+                                </span>
+                              )}
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  className="sr-only peer" 
+                                  checked={c.isVerified || false} 
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    handleExtraContactChange(idx, 'isVerified', checked);
+                                    updateStatusMutation.mutate({ contactType: 'extra', contactIndex: parseInt(c.id.replace(/\D/g, '') || String(idx)), isVerified: checked, isFlagged: c.isFlagged });
+                                  }}
+                                  disabled={updateStatusMutation.isPending}
+                                />
+                                <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                              </label>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -557,7 +802,16 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                         </tr>
                       ))
                     ) : (
-                      Object.entries(company.extraData || {}).map(([key, value], idx) => (
+                      Object.entries(company.extraData || {})
+                        .filter(([k]) => {
+                          const isHrContact = /^OTHER HR NAME\s*(\d*)$/i.test(k) || 
+                                              /^OTHER HR EMAIL\s*(\d*)$/i.test(k) || /^OTHER HR MAIL\s*(\d*)$/i.test(k) || 
+                                              /^OTHER HR MOBILE\s*(\d*)$/i.test(k) || /^OTHER HR PHONE\s*(\d*)$/i.test(k) || /^OTHER HR NUMBER\s*(\d*)$/i.test(k) || 
+                                              /^OTHER HR VERIFIED\s*(\d*)$/i.test(k) || 
+                                              /^OTHER HR FLAGGED\s*(\d*)$/i.test(k);
+                          return !isHrContact;
+                        })
+                        .map(([key, value], idx) => (
                         <tr key={idx} className="hover:bg-slate-50/30 transition-colors">
                           <th className="px-5 py-3 font-medium text-slate-600 bg-slate-50/30 w-1/3 border-r border-slate-100">
                             {key}
@@ -619,7 +873,14 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                               className="w-full border border-slate-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500"
                             />
                           ) : (
-                            contact.hrName || 'Unknown'
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {contact.isFlagged && (
+                                <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                  <XCircle className="w-3 h-3" /> Incorrect
+                                </span>
+                              )}
+                              {contact.hrName || 'Not provided'}
+                            </div>
                           )}
                         </td>
                         <td className="px-5 py-3">
@@ -650,13 +911,25 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                             ) : (
                               <>
                                 {contact.hrPhone && (
-                                  <span className="flex items-center gap-1.5 text-slate-600">
-                                    <Phone className="w-3 h-3 text-slate-400" /> {contact.hrPhone}
+                                  <span className="flex items-center gap-1.5 text-slate-600 flex-wrap">
+                                    {contact.isFlagged && (
+                                      <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                        <XCircle className="w-3 h-3" /> Incorrect
+                                      </span>
+                                    )}
+                                    <Phone className="w-3 h-3 text-slate-400" /> 
+                                    {contact.hrPhone}
                                   </span>
                                 )}
                                 {contact.hrEmail && (
-                                  <span className="flex items-center gap-1.5 text-slate-600">
-                                    <Mail className="w-3 h-3 text-slate-400" /> {contact.hrEmail}
+                                  <span className="flex items-center gap-1.5 text-slate-600 flex-wrap">
+                                    {contact.isFlagged && (
+                                      <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                                        <XCircle className="w-3 h-3" /> Incorrect
+                                      </span>
+                                    )}
+                                    <Mail className="w-3 h-3 text-slate-400" /> 
+                                    {contact.hrEmail}
                                   </span>
                                 )}
                                 {!contact.hrPhone && !contact.hrEmail && (
@@ -698,18 +971,54 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                         </td>
                         <td className="px-5 py-3 text-center">
                           {isEditing ? (
-                            <input 
-                              type="checkbox"
-                              checked={contact.isVerified || false}
-                              onChange={e => handleAdditionalContactChange(idx, 'isVerified', e.target.checked)}
-                              className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
-                            />
-                          ) : contact.isVerified ? (
-                            <span className="inline-flex items-center justify-center p-1 bg-emerald-50 text-emerald-600 rounded-full">
-                              <ShieldCheck className="w-4 h-4" />
-                            </span>
+                            <div className="flex flex-col gap-1 items-center">
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  checked={contact.isVerified || false}
+                                  onChange={e => {
+                                    handleAdditionalContactChange(idx, 'isVerified', e.target.checked);
+                                    if(e.target.checked) handleAdditionalContactChange(idx, 'isFlagged', false);
+                                  }}
+                                  className="w-3 h-3 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500 cursor-pointer"
+                                />
+                                <span className="text-[10px] text-emerald-700">Verify</span>
+                              </label>
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  checked={contact.isFlagged || false}
+                                  onChange={e => {
+                                    handleAdditionalContactChange(idx, 'isFlagged', e.target.checked);
+                                    if(e.target.checked) handleAdditionalContactChange(idx, 'isVerified', false);
+                                  }}
+                                  className="w-3 h-3 text-red-600 border-slate-300 rounded focus:ring-red-500 cursor-pointer"
+                                />
+                                <span className="text-[10px] text-red-700">Flag</span>
+                              </label>
+                            </div>
                           ) : (
-                            <span className="text-slate-300">-</span>
+                            <div className="flex flex-col gap-1 items-center">
+                              {contact.isFlagged && (
+                                <span className="inline-flex items-center justify-center p-1 bg-red-50 text-red-600 rounded-full mb-1" title="Incorrect">
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                              <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                  type="checkbox" 
+                                  className="sr-only peer" 
+                                  checked={contact.isVerified || false} 
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    handleAdditionalContactChange(idx, 'isVerified', checked);
+                                    updateStatusMutation.mutate({ contactType: 'additional', contactIndex: idx, isVerified: checked, isFlagged: contact.isFlagged });
+                                  }}
+                                  disabled={updateStatusMutation.isPending}
+                                />
+                                <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                              </label>
+                            </div>
                           )}
                         </td>
                         {isEditing && (
@@ -760,6 +1069,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   const emailMatch = k.match(/^OTHER HR EMAIL\s*(\d*)$/i) || k.match(/^OTHER HR MAIL\s*(\d*)$/i);
                   const phoneMatch = k.match(/^OTHER HR MOBILE\s*(\d*)$/i) || k.match(/^OTHER HR PHONE\s*(\d*)$/i) || k.match(/^OTHER HR NUMBER\s*(\d*)$/i);
                   const verifiedMatch = k.match(/^OTHER HR VERIFIED\s*(\d*)$/i);
+                  const flaggedMatch = k.match(/^OTHER HR FLAGGED\s*(\d*)$/i);
 
                   let isHrContact = false;
                   let suffix = '';
@@ -768,15 +1078,17 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   else if (emailMatch) { suffix = emailMatch[1]; isHrContact = true; }
                   else if (phoneMatch) { suffix = phoneMatch[1]; isHrContact = true; }
                   else if (verifiedMatch) { suffix = verifiedMatch[1]; isHrContact = true; }
+                  else if (flaggedMatch) { suffix = flaggedMatch[1]; isHrContact = true; }
 
                   if (isHrContact) {
                     if (!hrContactsMap[suffix]) {
-                      hrContactsMap[suffix] = { id: suffix, name: '', phone: '', email: '', isVerified: false };
+                      hrContactsMap[suffix] = { id: suffix, name: '', phone: '', email: '', isVerified: false, isFlagged: false };
                     }
                     if (nameMatch) hrContactsMap[suffix].name = String(v);
                     if (emailMatch) hrContactsMap[suffix].email = String(v);
                     if (phoneMatch) hrContactsMap[suffix].phone = String(v);
                     if (verifiedMatch) hrContactsMap[suffix].isVerified = String(v).toLowerCase() === 'true';
+                    if (flaggedMatch) hrContactsMap[suffix].isFlagged = String(v).toLowerCase() === 'true';
                   } else {
                     genericExtra.push({
                       id: `extra-${Date.now()}-${Math.random()}`,

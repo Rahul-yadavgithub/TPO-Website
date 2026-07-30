@@ -8,6 +8,7 @@ export interface IPreviousCompany extends Document {
   hrEmail?: string;
   hrPhone?: string;
   primary_contact_verified?: boolean;
+  primary_contact_flagged?: boolean;
   additionalContacts?: Array<{
     hrName: string;
     hrEmail: string;
@@ -15,6 +16,7 @@ export interface IPreviousCompany extends Document {
     sourceSheet: string;
     academicYear: string;
     isVerified?: boolean;
+    isFlagged?: boolean;
   }>;
   notes?: string;
   syncStatus?: 'pending' | 'synced' | 'failed';
@@ -26,6 +28,8 @@ export interface IPreviousCompany extends Document {
   contactedByTprEmail?: string;
   updatedByTprName?: string;
   is_verified_by_admin?: boolean;
+  assignedTPO?: string;
+  assignedTpoType?: string;
   section: string;
   extraData?: Record<string, any>;
   createdAt: Date;
@@ -40,13 +44,15 @@ const PreviousCompanySchema: Schema = new Schema({
   hrEmail: { type: String },
   hrPhone: { type: String },
   primary_contact_verified: { type: Boolean, default: false },
+  primary_contact_flagged: { type: Boolean, default: false },
   additionalContacts: [{
     hrName: { type: String },
     hrEmail: { type: String },
     hrPhone: { type: String },
     sourceSheet: { type: String },
     academicYear: { type: String },
-    isVerified: { type: Boolean, default: false }
+    isVerified: { type: Boolean, default: false },
+    isFlagged: { type: Boolean, default: false }
   }],
   notes: { type: String },
   syncStatus: { type: String, enum: ['pending', 'synced', 'failed'], default: 'pending' },
@@ -58,6 +64,8 @@ const PreviousCompanySchema: Schema = new Schema({
   contactedByTprEmail: { type: String },
   updatedByTprName: { type: String },
   is_verified_by_admin: { type: Boolean, default: false },
+  assignedTPO: { type: String },
+  assignedTpoType: { type: String },
   section: { type: String, required: true, default: 'Uncategorized' },
   extraData: { type: Schema.Types.Mixed, default: {} }
 }, { timestamps: true, collection: 'PreviousCompany' });

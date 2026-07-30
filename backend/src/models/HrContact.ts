@@ -16,6 +16,7 @@ export interface IHrContact extends Document {
   email?: string;
   designation?: string;
   linkedin_url?: string;
+  is_incorrect?: boolean;
   is_auto_updated?: boolean;
   auto_updated_at?: Date;
   history?: IHrContactHistory[];
@@ -46,6 +47,7 @@ const HrContactSchema: Schema = new Schema(
     email: { type: String },
     designation: { type: String },
     linkedin_url: { type: String },
+    is_incorrect: { type: Boolean, default: false },
     is_auto_updated: { type: Boolean, default: false },
     auto_updated_at: { type: Date },
     history: { type: [HrContactHistorySchema], default: [] },

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, ShieldCheck } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, MessageSquare, ShieldCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -12,17 +12,20 @@ import ApiKeyConfig from './ApiKeyConfig';
 import ValidateContactButton from './ValidateContactButton';
 import ChangeContactDetailsButton from './ChangeContactDetailsButton';
 import { BulkUploadModal } from '@/components/ui/BulkUploadModal';
-import { PreviousContactsView } from '@/components/ui/PreviousContactsView';
 
-export default function BranchPortalPage() {
+export default function TpoPortalPage() {
   const queryClient = useQueryClient();
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [selectedTPO, setSelectedTPO] = useState<string>('');
+  const [tpoCategory, setTpoCategory] = useState<string>('');
   const [activeView, setActiveView] = useState<'dashboard' | 'contact' | 'single_contact' | 'confirmed' | 'not_confirmed' | 'previous_requests'>('dashboard');
   const [previousView, setPreviousView] = useState<'dashboard' | 'contact' | 'confirmed' | 'not_confirmed' | 'previous_requests'>('dashboard');
   const [dashboardTab, setDashboardTab] = useState<'companies' | 'api'>('companies');
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [lastVisitedCompanyId, setLastVisitedCompanyId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<'not_contacted' | 'call_again' | 'pending' | null>(null);
+  
+  const TPO_STAFF = ["Chandradev Raj Singh", "Atul Negi"];
+  const TPO_FACULTY = ["Dr. Somesh Kr. Sharma", "Dr. Ray Singh Meena", "Dr. Swaraj Chowdhury", "Dr. Jiwanjot Singh", "Dr. Sreeram TS"];
   
   // Fast Client-Side List Search
   const [listSearchQuery, setListSearchQuery] = useState('');
@@ -43,6 +46,7 @@ export default function BranchPortalPage() {
   const [channel, setChannel] = useState<string>('Phone');
   const [notes, setNotes] = useState<string>('');
   const [nextContactDate, setNextContactDate] = useState<string>('');
+  const [showToTPR, setShowToTPR] = useState<boolean>(false);
   const [returnToUnified, setReturnToUnified] = useState(false);
   
   // Placement Details Edit State
@@ -81,102 +85,85 @@ export default function BranchPortalPage() {
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
 
-  // Auto-select branch if standard TPR
+  // Auto-select TPO from deep link
   useEffect(() => {
-    if (userProfile && !isAdmin && userProfile.branchId && !selectedBranchId) {
-      setSelectedBranchId(userProfile.branchId._id || userProfile.branchId);
-    }
-  }, [userProfile, isAdmin, selectedBranchId]);
-
-  const { data: branches, isLoading: branchesLoading } = useQuery({
-    queryKey: ['branches'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`);
-      return res.data;
-    }
-  });
-
-  // Auto-select branch from deep link if branches are loaded
-  useEffect(() => {
-    if (typeof window !== 'undefined' && branches?.length > 0) {
+    if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const branchName = params.get('branchName');
-      if (branchName && !selectedBranchId) {
-        const foundBranch = branches.find((b: any) => b.name === branchName);
-        if (foundBranch) {
-          setSelectedBranchId(foundBranch._id);
+      const tpoName = params.get('tpoName');
+      if (tpoName && !selectedTPO) {
+        if (TPO_STAFF.includes(tpoName)) {
+          setTpoCategory('Staff');
+        } else if (TPO_FACULTY.includes(tpoName)) {
+          setTpoCategory('Faculty');
         }
+        setSelectedTPO(tpoName);
       }
     }
-  }, [branches, selectedBranchId]);
+  }, [selectedTPO]);
 
   const { data: contactTodayList, isLoading: listLoading } = useQuery({
-    queryKey: ['contact-today', selectedBranchId],
+    queryKey: ['contact-today', selectedTPO],
     queryFn: async () => {
-      if (!selectedBranchId) return [];
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/contact-today`);
+      if (!selectedTPO) return [];
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/tpo/${selectedTPO}/contact-today`);
       return res.data;
     },
-    enabled: !!selectedBranchId
+    enabled: !!selectedTPO
   });
 
   const { data: confirmedList, isLoading: confirmedLoading } = useQuery({
-    queryKey: ['confirmed', selectedBranchId],
+    queryKey: ['confirmed', selectedTPO],
     queryFn: async () => {
-      if (!selectedBranchId) return [];
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/confirmed`);
+      if (!selectedTPO) return [];
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/tpo/${selectedTPO}/confirmed`);
       return res.data;
     },
-    enabled: !!selectedBranchId
+    enabled: !!selectedTPO
   });
 
   const { data: notConfirmedList, isLoading: notConfirmedLoading } = useQuery({
-    queryKey: ['not-confirmed', selectedBranchId],
+    queryKey: ['not-confirmed', selectedTPO],
     queryFn: async () => {
-      if (!selectedBranchId) return [];
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/not-confirmed`);
+      if (!selectedTPO) return [];
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/tpo/${selectedTPO}/not-confirmed`);
       return res.data;
     },
-    enabled: !!selectedBranchId
+    enabled: !!selectedTPO
   });
 
   const { data: pastRequests, isLoading: requestsLoading } = useQuery({
-    queryKey: ['previous-requests', selectedBranchId],
+    queryKey: ['previous-requests', selectedTPO],
     queryFn: async () => {
-      if (!selectedBranchId) return [];
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/requests/${selectedBranchId}`);
+      if (!selectedTPO) return [];
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/requests/${selectedTPO}`);
       return res.data.data;
     },
-    enabled: !!selectedBranchId
+    enabled: !!selectedTPO
   });
 
   const markDeleteMutation = useMutation({
     mutationFn: async (companyId: string) => {
       await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/mark-delete`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] })
   });
 
   const syncDeletionsMutation = useMutation({
     mutationFn: async () => {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/sync-deletions`);
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/tpo/${selectedTPO}/sync-deletions`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] })
   });
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const branch = branches?.find((b: any) => b._id === selectedBranchId);
-      if (!branch) throw new Error('Branch not found');
-      // Pass branch.name since our backend sync endpoint expects the branch identifier
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/sync/branch/${branch.name}`);
-      return res.data;
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/tpo/${selectedTPO}/sync`);
     },
     onSuccess: () => {
-      toast.success('Branch synced to Google Sheets successfully!');
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      toast.success('Sync to Google Sheets successfully!');
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to sync branch');
@@ -188,9 +175,9 @@ export default function BranchPortalPage() {
       await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/acknowledge-hr-update`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
     }
   });
 
@@ -200,9 +187,9 @@ export default function BranchPortalPage() {
     },
     onSuccess: () => {
       toast.success('HR Contact updated successfully!');
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to update HR contact');
@@ -215,9 +202,9 @@ export default function BranchPortalPage() {
     },
     onSuccess: () => {
       toast.info('Pending update discarded.');
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to discard update');
@@ -235,9 +222,9 @@ export default function BranchPortalPage() {
     onSuccess: () => {
       toast.success('Placement details updated!');
       setEditingPlacementCompanyId(null);
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
     },
     onError: () => {
       toast.error('Failed to update placement details');
@@ -257,10 +244,13 @@ export default function BranchPortalPage() {
         const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(manualForm.companyName)}`);
         if (res.data.exists) {
           const comp = res.data.company;
-          const currentBranch = branches?.find((b: any) => b._id === selectedBranchId);
-          if (comp.assignedBranch && currentBranch && comp.assignedBranch !== currentBranch.name) {
+          if (comp.assignedTPO && comp.assignedTPO !== selectedTPO) {
             setIsConflict(true);
-            setConflictMessage(`This company is already owned by the ${comp.assignedBranch} branch. You cannot duplicate outreach.`);
+            setConflictMessage(`This company is already owned by ${comp.assignedTPO}. You cannot duplicate outreach.`);
+            setIsDuplicate(false);
+          } else if (comp.assignedBranch && comp.assignedBranch !== 'Pending Assignment') {
+            setIsConflict(true);
+            setConflictMessage(`This company is already owned by the ${comp.assignedBranch} branch. You cannot duplicate outreach in the TPO Portal.`);
             setIsDuplicate(false);
           } else {
             setIsConflict(false);
@@ -289,11 +279,14 @@ export default function BranchPortalPage() {
 
   const addManualCompanyMutation = useMutation({
     mutationFn: async () => {
-      return axios.post(`${process.env.NEXT_PUBLIC_API_URL}/branch/${selectedBranchId}/manual-company`, manualForm);
+      return axios.post(`${process.env.NEXT_PUBLIC_API_URL}/tpo/${selectedTPO}/manual-company`, {
+        ...manualForm,
+        tpoType: tpoCategory
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
       toast.success(isDuplicate ? 'Company updated successfully & queued for sync!' : 'Company added successfully & queued for sync!');
       setShowManualModal(false);
       setManualForm({ companyName: '', hrName: '', hrPhone: '', hrEmail: '', linkedinProfile: '' });
@@ -307,25 +300,27 @@ export default function BranchPortalPage() {
     mutationFn: async (companyId: string) => {
       const payload = {
         company_id: companyId,
-        branch_id: selectedBranchId,
+        tpo_name: selectedTPO,
         channel,
         outcome,
         notes,
         created_by: userProfile?.name || 'TPR', // Dynamically set TPR name
-        next_contact_date: outcome === 'call_again' ? nextContactDate : undefined
+        next_contact_date: outcome === 'call_again' ? nextContactDate : undefined,
+        show_to_tpr: showToTPR
       };
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact-logs`, payload);
       return res.data;
     },
     onSuccess: () => {
       toast.success('Contact log saved successfully!');
-      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
-      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
       setOutcome('');
       setChannel('Phone');
       setNotes('');
       setNextContactDate('');
+      setShowToTPR(false);
       setActiveCompanyId(null);
     },
     onError: (error: any) => {
@@ -350,37 +345,55 @@ export default function BranchPortalPage() {
       )}
 
       <div>
-        <h1 className="text-3xl font-bold text-slate-900">Branch Portal</h1>
-        <p className="text-slate-500 mt-2">Manage daily outreach and track communications with assigned companies.</p>
+        <h1 className="text-3xl font-bold text-slate-900">TPO Portal</h1>
+        <p className="text-slate-500 mt-2">Manage daily outreach and track communications for assigned Faculty and Staff members.</p>
       </div>
 
-      {/* Branch Selector & Sync */}
+      {/* TPO Selector & Sync */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
-        <div className="w-full max-w-md">
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Select Your Branch</label>
-          {branchesLoading || userLoading ? (
-            <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading branches...
-            </div>
-          ) : (
+        <div className="w-full max-w-2xl flex flex-col md:flex-row gap-4">
+          <div className="w-full">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Select Category</label>
             <select 
               className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 disabled:opacity-70 disabled:cursor-not-allowed"
-              value={selectedBranchId}
+              value={tpoCategory}
               onChange={(e) => {
-                setSelectedBranchId(e.target.value);
+                setTpoCategory(e.target.value);
+                setSelectedTPO('');
                 setActiveView('dashboard');
               }}
               disabled={!isAdmin}
             >
-              <option value="">-- Choose Branch --</option>
-              {branches?.map((b: any) => (
-                <option key={b._id} value={b._id}>{b.name}</option>
-              ))}
+              <option value="">-- Choose Category --</option>
+              <option value="Staff">TPO Staff</option>
+              <option value="Faculty">TPO Faculty</option>
             </select>
+          </div>
+          
+          {tpoCategory && (
+            <div className="w-full animate-in fade-in slide-in-from-left-4 duration-300">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Select {tpoCategory} Member</label>
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                value={selectedTPO}
+                onChange={(e) => {
+                  setSelectedTPO(e.target.value);
+                  setActiveView('dashboard');
+                }}
+                disabled={!isAdmin}
+              >
+                <option value="">-- Choose {tpoCategory} --</option>
+                {tpoCategory === 'Staff' ? (
+                  TPO_STAFF.map(name => <option key={name} value={name}>{name}</option>)
+                ) : (
+                  TPO_FACULTY.map(name => <option key={name} value={name}>{name}</option>)
+                )}
+              </select>
+            </div>
           )}
         </div>
         
-        {selectedBranchId && (
+        {selectedTPO && (
           <button
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
@@ -393,7 +406,7 @@ export default function BranchPortalPage() {
       </div>
 
       {/* Dashboard View */}
-      {selectedBranchId && activeView === 'dashboard' && (
+      {selectedTPO && activeView === 'dashboard' && (
         <div className="mt-8 space-y-6">
           {/* Dashboard Tab Switcher */}
           <div className="flex bg-slate-100 p-1 rounded-xl w-full max-w-md">
@@ -538,51 +551,18 @@ export default function BranchPortalPage() {
                 </div>
               </div>
 
-              {/* Previous Year Contact Request Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col lg:col-span-1">
-                <div className="p-6 flex-1 relative overflow-hidden">
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-purple-50 rounded-full blur-xl pointer-events-none" />
-                  <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center mb-4 relative z-10">
-                    <History className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-1 relative z-10">Previous Year Contacts</h3>
-                  <p className="text-slate-500 text-sm relative z-10">Request contact info for past companies.</p>
-                  
-                  <div className="mt-4 flex flex-col gap-1 relative z-10">
-                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                      <span className="text-xs font-semibold text-slate-600 uppercase">Requests Made</span>
-                      <span className="text-sm font-bold text-slate-900">{pastRequests?.length || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center bg-emerald-50 p-2 rounded-lg border border-emerald-100">
-                      <span className="text-xs font-semibold text-emerald-700 uppercase">Contacts Provided</span>
-                      <span className="text-sm font-bold text-emerald-700">{pastRequests?.filter((r: any) => r.status === 'approved').length || 0}</span>
-                    </div>
-                    <div className="flex justify-between items-center bg-red-50 p-2 rounded-lg border border-red-100">
-                      <span className="text-xs font-semibold text-red-700 uppercase">Requests Rejected</span>
-                      <span className="text-sm font-bold text-red-700">{pastRequests?.filter((r: any) => r.status === 'rejected').length || 0}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="border-t border-slate-100 bg-slate-50 p-4">
-                  <button 
-                    onClick={() => setActiveView('previous_requests')}
-                    className="w-full flex items-center justify-center gap-2 text-purple-600 font-medium hover:text-purple-800 transition-colors"
-                  >
-                    Make Request <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+
             </div>
           ) : (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              <ApiKeyConfig branchId={selectedBranchId} />
+              <ApiKeyConfig tpoName={selectedTPO} />
             </div>
           )}
         </div>
       )}
 
       {/* Manual Add Modal */}
-      {selectedBranchId && showManualModal && (
+      {selectedTPO && showManualModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 relative">
             <div className="flex items-center justify-between p-6 border-b border-slate-100">
@@ -691,9 +671,9 @@ export default function BranchPortalPage() {
         </div>
       )}
 
-      {selectedBranchId && showBulkModal && (
+      {selectedTPO && showBulkModal && (
         <BulkUploadModal 
-          branchId={selectedBranchId}
+          branchId={selectedTPO}
           onClose={() => setShowBulkModal(false)}
           onSuccess={() => {
             setShowBulkModal(false);
@@ -702,15 +682,8 @@ export default function BranchPortalPage() {
         />
       )}
 
-      {selectedBranchId && activeView === 'previous_requests' && (
-        <PreviousContactsView 
-          branchId={selectedBranchId} 
-          onBack={() => setActiveView('dashboard')}
-        />
-      )}
-
       {/* Contact Details View */}
-      {selectedBranchId && (activeView === 'contact' || activeView === 'single_contact') && (
+      {selectedTPO && (activeView === 'contact' || activeView === 'single_contact') && (
         <div className="mt-8">
           <div className="relative flex items-center justify-center mb-8">
             <button 
@@ -764,91 +737,35 @@ export default function BranchPortalPage() {
                       <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
                     ) : null}
                   </div>
-                  {/* Placement Details Card */}
-                  <div className="mt-4 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow relative group">
-                    <div className="bg-slate-50 border-b border-slate-100 p-3 flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
-                        <Briefcase className="w-3.5 h-3.5 text-blue-500" /> Placement Details
-                      </h4>
-                      {editingPlacementCompanyId === company._id ? (
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => setEditingPlacementCompanyId(null)}
-                            className="text-xs text-slate-500 hover:text-slate-700 font-semibold transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => updatePlacementDetailsMutation.mutate({ companyId: company._id, driveType: editDriveType, academicYear: editAcademicYear })}
-                            disabled={updatePlacementDetailsMutation.isPending}
-                            className="flex items-center gap-1 text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 px-2.5 py-1.5 rounded-md font-bold transition-colors shadow-sm"
-                          >
-                            {updatePlacementDetailsMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Save
-                          </button>
-                        </div>
-                      ) : (
-                        <button 
-                          onClick={() => {
-                            setEditingPlacementCompanyId(company._id);
-                            setEditDriveType(company.drive_type || '');
-                            setEditAcademicYear(company.academic_year || '');
-                          }}
-                          className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-[10px] uppercase font-bold text-green-700 bg-green-100 hover:bg-green-600 hover:text-white border border-green-200 hover:border-green-600 px-2 py-1 rounded shadow-sm transition-all"
-                        >
-                          <Edit2 className="w-3 h-3" /> Edit
-                        </button>
-                      )}
-                    </div>
-                    <div className="p-4 space-y-3">
-                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                        <span className="text-sm font-medium text-slate-500">Academic Year</span>
-                        {editingPlacementCompanyId === company._id ? (
-                          <input 
-                            type="text"
-                            value={editAcademicYear}
-                            onChange={(e) => setEditAcademicYear(e.target.value)}
-                            placeholder="e.g. 2024-25"
-                            className="bg-white border border-blue-300 text-sm font-semibold text-slate-800 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all shadow-sm w-full sm:w-32 sm:text-right"
-                          />
-                        ) : (
-                          <span className="text-sm font-bold text-slate-900 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md inline-block">
-                            {company.academic_year || 'Not Specified'}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                        <span className="text-sm font-medium text-slate-500">Drive Type</span>
-                        {editingPlacementCompanyId === company._id ? (
-                          <select 
-                            value={editDriveType}
-                            onChange={(e) => setEditDriveType(e.target.value)}
-                            className="bg-white border border-blue-300 text-sm font-semibold text-slate-800 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-all shadow-sm w-full sm:w-auto"
-                          >
-                            <option value="">Not Specified</option>
-                            <option value="Internship">Internship</option>
-                            <option value="Full-time">Full-time</option>
-                            <option value="Internship + Full-time">Internship + Full-time</option>
-                          </select>
-                        ) : (
-                          <span className="text-sm font-bold text-slate-900 bg-slate-100 border border-slate-200 px-3 py-1 rounded-md inline-block">
-                            {company.drive_type || 'Not Specified'}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                        <span className="text-sm font-medium text-slate-500">Status</span>
-                        <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center gap-1.5 inline-flex ${
-                          company.confirmation_status === 'confirmed' ? 'bg-green-50 text-green-700 border border-green-200' : 
-                          company.confirmation_status === 'not_confirmed' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-                          'bg-slate-50 text-slate-700 border border-slate-200'
-                        }`}>
-                          {company.confirmation_status === 'confirmed' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                          {company.confirmation_status.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </div>
+                  {/* Quick Actions */}
+                  <div className="mt-4 flex flex-col gap-3">
+                    {company.hr_contacts?.[0]?.mobile ? (
+                      <a 
+                        href={`tel:${company.hr_contacts[0].mobile.split(',')[0].trim()}`}
+                        className="w-full bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm"
+                      >
+                        <PhoneCall className="w-4 h-4" /> Call the Company
+                      </a>
+                    ) : (
+                      <button 
+                        disabled
+                        className="w-full bg-slate-50 text-slate-400 border border-slate-200 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed shadow-sm"
+                      >
+                        <PhoneCall className="w-4 h-4" /> No Phone Number
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => {
+                        if (activeView !== 'single_contact') {
+                          setPreviousView(activeView);
+                          setActiveView('single_contact');
+                        }
+                        setActiveCompanyId(company._id);
+                      }}
+                      className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm"
+                    >
+                      <MessageSquare className="w-4 h-4" /> Your Recent Conversation
+                    </button>
                   </div>
 
                   <div className="mt-6">
@@ -994,13 +911,13 @@ export default function BranchPortalPage() {
                     
                     <div className="flex flex-col sm:flex-row gap-3">
                       <div className="flex-1">
-                        <ValidateContactButton companyId={company._id} branchId={selectedBranchId} />
+                        <ValidateContactButton companyId={company._id} tpoName={selectedTPO} />
                       </div>
                       <div className="flex-1">
                         <ChangeContactDetailsButton 
                           companyId={company._id} 
-                          branchId={selectedBranchId}
-                          branchName={branches?.find((b: any) => b._id === selectedBranchId)?.name}
+                          tpoName={selectedTPO} tpoType={tpoCategory}
+                          
                           currentHr={company.hr_contacts?.[0]} 
                           is_verified_by_admin={company.is_verified_by_admin}
                         />
@@ -1068,6 +985,19 @@ export default function BranchPortalPage() {
                           />
                         </div>
 
+                        <div className="flex items-center gap-2 mt-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                          <input 
+                            type="checkbox" 
+                            id={`showToTPR-${company._id}`} 
+                            className="w-4 h-4 text-blue-600 bg-white border-blue-300 rounded focus:ring-blue-500 focus:ring-2"
+                            checked={showToTPR}
+                            onChange={(e) => setShowToTPR(e.target.checked)}
+                          />
+                          <label htmlFor={`showToTPR-${company._id}`} className="text-sm font-medium text-blue-900 cursor-pointer">
+                            Show full log details to TPRs
+                          </label>
+                        </div>
+
                         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
                           <button 
                             onClick={() => {
@@ -1133,7 +1063,7 @@ export default function BranchPortalPage() {
       )}
 
       {/* Confirmed List View */}
-      {selectedBranchId && activeView === 'confirmed' && (
+      {selectedTPO && activeView === 'confirmed' && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
@@ -1199,7 +1129,7 @@ export default function BranchPortalPage() {
       )}
 
       {/* Not Confirmed View */}
-      {selectedBranchId && activeView === 'not_confirmed' && (
+      {selectedTPO && activeView === 'not_confirmed' && (
         <div className="mt-8 space-y-8">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
@@ -1416,61 +1346,41 @@ export default function BranchPortalPage() {
             <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
               {historyPanelCompany.contact_logs?.length > 0 ? (
                 <div className="space-y-6">
-                  {historyPanelCompany.contact_logs.map((log: any) => {
-                    const isTpoLog = !!log.tpo_name;
-                    const canViewFullLog = !isTpoLog || log.show_to_tpr;
-
-                    return (
+                  {historyPanelCompany.contact_logs.map((log: any) => (
                     <div key={log._id} className="relative pl-6 pb-6 border-l-2 border-slate-200 last:pb-0 last:border-transparent">
                       <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center">
                         <div className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                       </div>
                       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative -top-1">
-                        {canViewFullLog ? (
-                          <>
-                            <div className="flex justify-between items-start mb-2">
-                              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{format(new Date(log.contact_date), 'MMM d, yyyy h:mm a')}</p>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
-                                ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' : 
-                                  log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
-                                  log.outcome === 'rejected' ? 'bg-red-100 text-red-800' : 
-                                  log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
-                                  log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
-                                  'bg-slate-100 text-slate-800'}`}
-                              >
-                                {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
-                                 log.outcome === 'tpo_talk' ? 'TPO Talk' :
-                                 log.outcome === 'call_again' ? 'Call Again' :
-                                 log.outcome === 'rejected' ? 'Rejected' :
-                                 log.outcome === 'accepted' ? 'Accepted' :
-                                 log.outcome || 'Logged'}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-800 mb-2">
-                              <span className="font-semibold text-indigo-600">{log.created_by}</span> logged a <span className="font-semibold">{log.channel}</span> interaction.
-                            </p>
-                            {log.notes && (
-                              <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm text-slate-600">
-                                {log.notes}
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="flex justify-between items-start">
-                            <div className="flex flex-col">
-                              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{format(new Date(log.contact_date), 'MMM d, yyyy h:mm a')}</p>
-                              <p className="text-sm text-slate-800">
-                                This company was called by TPO Staff <span className="font-semibold text-indigo-600">{log.tpo_name}</span>.
-                              </p>
-                            </div>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800">
-                              TPO Call
-                            </span>
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{format(new Date(log.contact_date), 'MMM d, yyyy h:mm a')}</p>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                            ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' : 
+                              log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
+                              log.outcome === 'rejected' ? 'bg-red-100 text-red-800' : 
+                              log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
+                              log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
+                              'bg-slate-100 text-slate-800'}`}
+                          >
+                            {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
+                             log.outcome === 'tpo_talk' ? 'TPO Talk' :
+                             log.outcome === 'call_again' ? 'Call Again' :
+                             log.outcome === 'rejected' ? 'Rejected' :
+                             log.outcome === 'accepted' ? 'Accepted' :
+                             log.outcome || 'Logged'}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-800 mb-2">
+                          <span className="font-semibold text-indigo-600">{log.created_by}</span> logged a <span className="font-semibold">{log.channel}</span> interaction.
+                        </p>
+                        {log.notes && (
+                          <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 text-sm text-slate-600">
+                            {log.notes}
                           </div>
                         )}
                       </div>
                     </div>
-                  )})}
+                  ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">

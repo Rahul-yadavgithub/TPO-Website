@@ -458,32 +458,7 @@ export default function Dashboard() {
 
 
 
-      {/* Manual Approval Queue Banner */}
-      {!isLoading && (
-        <div className={`mb-8 bg-white rounded-2xl border shadow-sm p-5 md:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${pendingCount > 0 ? 'border-l-4 border-l-amber-400 border-slate-200' : 'border-slate-200'}`}>
-          <div className="flex items-center gap-4">
-            {pendingCount > 0 && (
-              <span className="relative flex-shrink-0">
-                <span className="w-3 h-3 rounded-full bg-amber-400 flex" />
-                <span className="animate-ping absolute inset-0 rounded-full bg-amber-400 opacity-60" />
-              </span>
-            )}
-            <div>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-amber-500">{pendingCount}</span>
-                <span className="text-slate-600 font-medium">companies awaiting review</span>
-              </div>
-              <p className="text-sm text-slate-400 mt-0.5">Review before they are added to the placement database</p>
-            </div>
-          </div>
-          <Link
-            href={isAdmin ? "/requests" : "/branch-portal?view=previous_requests"}
-            className="shrink-0 flex items-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold text-sm transition-colors shadow-sm"
-          >
-            Review Queue <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      )}
+
 
       {/* Error State */}
       {error && (

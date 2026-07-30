@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Archive, Info, Trash2, ShieldCheck, Filter } from 'lucide-react';
+import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2 } from 'lucide-react';
 import { PastCompanyDetailsModal } from '@/components/ui/PastCompanyDetailsModal';
 import { DuplicateCompaniesTable } from '@/components/ui/DuplicateCompaniesTable';
 
@@ -302,11 +302,15 @@ export default function PastCompaniesPage() {
                       <div className="flex flex-col max-w-xs">
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold text-slate-900 text-base">{company.companyName}</span>
-                          {company.is_verified_by_admin && (
+                          {company.is_verified_by_admin ? (
                             <span title="Verified Master Company" className="flex items-center">
                               <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                             </span>
-                          )}
+                          ) : (company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified)) ? (
+                            <span title="Contact Verified" className="flex items-center">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                            </span>
+                          ) : null}
                         </div>
                         <span className="text-xs text-slate-500 mt-1">{company.section}</span>
                       </div>

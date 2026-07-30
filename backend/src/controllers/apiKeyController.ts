@@ -28,7 +28,11 @@ export const apiKeyController = {
   // GET /api/branches/:branch_id/api-keys
   getApiKeys: async (req: Request, res: Response) => {
     try {
-      const { branch_id } = req.params;
+      const branch_id = req.params.branch_id as string;
+      
+      if (!mongoose.Types.ObjectId.isValid(branch_id)) {
+        return res.status(200).json({ success: true, data: {} });
+      }
       
       const keys = await BranchApiKey.find({ branchId: branch_id })
         .populate('platformId', 'name displayName docsUrl')
@@ -73,7 +77,10 @@ export const apiKeyController = {
   // POST /api/branches/:branch_id/api-keys/validate
   validateAndSaveKey: async (req: Request, res: Response) => {
     try {
-      const { branch_id } = req.params;
+      const branch_id = req.params.branch_id as string;
+      if (!mongoose.Types.ObjectId.isValid(branch_id)) {
+        return res.status(400).json({ success: false, message: 'Invalid branch ID' });
+      }
       const { platform_name, api_key_plaintext, label, key_type, total_limit, resets_monthly, added_by } = req.body;
 
       if (!platform_name || !api_key_plaintext || !label || !total_limit) {
@@ -137,7 +144,11 @@ export const apiKeyController = {
   // DELETE /api/branches/:branch_id/api-keys/:key_id
   disableApiKey: async (req: Request, res: Response) => {
     try {
-      const { branch_id, key_id } = req.params;
+      const branch_id = req.params.branch_id as string;
+      const key_id = req.params.key_id as string;
+      if (!mongoose.Types.ObjectId.isValid(branch_id) || !mongoose.Types.ObjectId.isValid(key_id)) {
+        return res.status(400).json({ success: false, message: 'Invalid ID' });
+      }
       
       const key = await BranchApiKey.findOne({ _id: key_id, branchId: branch_id });
       if (!key) return res.status(404).json({ success: false, message: 'Key not found' });
@@ -154,7 +165,11 @@ export const apiKeyController = {
   // POST /api/branches/:branch_id/api-keys/:key_id/replace
   replaceApiKey: async (req: Request, res: Response) => {
     try {
-      const { branch_id, key_id } = req.params;
+      const branch_id = req.params.branch_id as string;
+      const key_id = req.params.key_id as string;
+      if (!mongoose.Types.ObjectId.isValid(branch_id) || !mongoose.Types.ObjectId.isValid(key_id)) {
+        return res.status(400).json({ success: false, message: 'Invalid ID' });
+      }
       const { new_api_key_plaintext } = req.body;
 
       if (!new_api_key_plaintext) {
@@ -201,7 +216,10 @@ export const apiKeyController = {
   // GET /api/branches/:branch_id/notifications
   getNotifications: async (req: Request, res: Response) => {
     try {
-      const { branch_id } = req.params;
+      const branch_id = req.params.branch_id as string;
+      if (!mongoose.Types.ObjectId.isValid(branch_id)) {
+        return res.status(200).json({ success: true, data: [] });
+      }
       const notifications = await BranchNotification.find({ branchId: branch_id, isDismissed: false })
         .sort({ createdAt: -1 });
 
@@ -214,7 +232,11 @@ export const apiKeyController = {
   // POST /api/branches/:branch_id/notifications/:id/dismiss
   dismissNotification: async (req: Request, res: Response) => {
     try {
-      const { branch_id, id } = req.params;
+      const branch_id = req.params.branch_id as string;
+      const id = req.params.id as string;
+      if (!mongoose.Types.ObjectId.isValid(branch_id) || !mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid ID' });
+      }
       const notification = await BranchNotification.findOne({ _id: id, branchId: branch_id });
       if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
 

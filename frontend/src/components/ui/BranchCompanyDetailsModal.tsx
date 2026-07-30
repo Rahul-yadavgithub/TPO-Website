@@ -47,14 +47,27 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
 
   const [assignBranchId, setAssignBranchId] = useState('');
   const [assignProgram, setAssignProgram] = useState('');
+  
+  const [assignMode, setAssignMode] = useState<'branch' | 'tpo'>('branch');
+  const [assignTpoType, setAssignTpoType] = useState<'Faculty' | 'Staff' | ''>('');
+  const [assignTpoName, setAssignTpoName] = useState('');
+
+  const TPO_FACULTY = ["Dr. Somesh Kr. Sharma", "Dr. Ray Singh Meena", "Dr. Swaraj Chowdhury", "Dr. Jiwanjot Singh", "Dr. Sreeram TS"];
+  const TPO_STAFF = ["Chandradev Raj Singh", "Atul Negi"];
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        branch_id: assignBranchId,
-        program: assignProgram,
-        extractedData: pendingDuplicateData || null
-      };
+      const payload = assignMode === 'branch' 
+        ? {
+            branch_id: assignBranchId,
+            program: assignProgram,
+            extractedData: pendingDuplicateData || null
+          }
+        : {
+            tpoType: assignTpoType,
+            assignedTPO: assignTpoName,
+            extractedData: pendingDuplicateData || null
+          };
       const res = await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company._id}/override-assign`, payload, { withCredentials: true });
       return res.data;
     },
@@ -126,49 +139,103 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
               <div>
                 <h3 className={`text-sm font-bold flex items-center gap-2 ${pendingDuplicateData ? 'text-amber-800' : 'text-indigo-800'}`}>
                   {pendingDuplicateData ? <ShieldAlert className="w-4 h-4" /> : <GitMerge className="w-4 h-4" />}
-                  {pendingDuplicateData ? 'Resolve Duplicate & Assign' : 'Assign to Branch'}
+                  {pendingDuplicateData ? 'Resolve Duplicate & Assign' : 'Assign Company'}
                 </h3>
                 <p className={`text-xs mt-1 ${pendingDuplicateData ? 'text-amber-700' : 'text-indigo-600'}`}>
                   {pendingDuplicateData 
-                    ? 'This company already exists. Select a branch and click Override to update its HR details with your new AI extraction and assign it.'
-                    : 'This company was created via Quick Add and needs to be assigned to a branch.'}
+                    ? 'This company already exists. Select a branch or TPO and click Override to update its HR details with your new AI extraction and assign it.'
+                    : 'This company was created via Quick Add and needs to be assigned to a branch or TPO.'}
                 </p>
               </div>
               
-              <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
-                <select 
-                  value={assignProgram}
-                  onChange={(e) => setAssignProgram(e.target.value)}
-                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                >
-                  <option value="" disabled>Select Course...</option>
-                  <option value="B.Tech">B.Tech</option>
-                  <option value="M.Tech">M.Tech</option>
-                  <option value="Open to all">Open to all</option>
-                </select>
-                <select 
-                  value={assignBranchId}
-                  onChange={(e) => setAssignBranchId(e.target.value)}
-                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                >
-                  <option value="" disabled>Select Branch...</option>
-                  {branches?.map((b: any) => (
-                    <option key={b._id} value={b._id}>{b.name}</option>
-                  ))}
-                </select>
+              <div className="flex gap-2 bg-white/50 p-1 rounded-lg border border-slate-200 mb-1 w-fit">
                 <button
-                  onClick={() => assignMutation.mutate()}
-                  disabled={!assignBranchId || !assignProgram || assignMutation.isPending}
-                  className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                    pendingDuplicateData 
-                      ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
-                      : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
-                  }`}
+                  onClick={() => setAssignMode('branch')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'branch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
                 >
-                  {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                  Assign to Branch
+                </button>
+                <button
+                  onClick={() => setAssignMode('tpo')}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'tpo' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+                >
+                  Assign to TPO
                 </button>
               </div>
+
+              {assignMode === 'branch' ? (
+                <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
+                  <select 
+                    value={assignProgram}
+                    onChange={(e) => setAssignProgram(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                  >
+                    <option value="" disabled>Select Course...</option>
+                    <option value="B.Tech">B.Tech</option>
+                    <option value="M.Tech">M.Tech</option>
+                    <option value="Open to all">Open to all</option>
+                  </select>
+                  <select 
+                    value={assignBranchId}
+                    onChange={(e) => setAssignBranchId(e.target.value)}
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                  >
+                    <option value="" disabled>Select Branch...</option>
+                    {branches?.map((b: any) => (
+                      <option key={b._id} value={b._id}>{b.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => assignMutation.mutate()}
+                    disabled={!assignBranchId || !assignProgram || assignMutation.isPending}
+                    className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
+                      pendingDuplicateData 
+                        ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
+                    }`}
+                  >
+                    {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
+                  <select
+                    value={assignTpoType}
+                    onChange={(e) => {
+                      setAssignTpoType(e.target.value as 'Faculty' | 'Staff');
+                      setAssignTpoName('');
+                    }}
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                  >
+                    <option value="" disabled>Select Category...</option>
+                    <option value="Faculty">Faculty</option>
+                    <option value="Staff">Staff</option>
+                  </select>
+                  <select
+                    value={assignTpoName}
+                    onChange={(e) => setAssignTpoName(e.target.value)}
+                    disabled={!assignTpoType}
+                    className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px] disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="" disabled>Select Name...</option>
+                    {assignTpoType === 'Faculty' && TPO_FACULTY.map(name => <option key={name} value={name}>{name}</option>)}
+                    {assignTpoType === 'Staff' && TPO_STAFF.map(name => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                  <button
+                    onClick={() => assignMutation.mutate()}
+                    disabled={!assignTpoType || !assignTpoName || assignMutation.isPending}
+                    className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
+                      pendingDuplicateData 
+                        ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
+                        : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
+                    }`}
+                  >
+                    {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -341,34 +408,54 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {contactLogs.length > 0 ? (
                 // Sort logs by newest first
-                [...contactLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((log: any) => (
+                [...contactLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((log: any) => {
+                  const isTpoLog = !!log.tpo_name;
+                  const canViewFullLog = !isTpoLog || log.show_to_tpr;
+
+                  return (
                   <div key={log._id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{log.created_by}</p>
-                        <p className="text-xs font-medium text-slate-500">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
+                    {canViewFullLog ? (
+                      <>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{log.created_by}</p>
+                            <p className="text-xs font-medium text-slate-500">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                            ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' : 
+                              log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
+                              log.outcome === 'rejected' ? 'bg-red-100 text-red-800' : 
+                              log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
+                              log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
+                              'bg-slate-100 text-slate-800'}`}
+                          >
+                            {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
+                             log.outcome === 'tpo_talk' ? 'TPO Talk' :
+                             log.outcome === 'call_again' ? 'Call Again' :
+                             log.outcome === 'rejected' ? 'Rejected' :
+                             log.outcome === 'accepted' ? 'Accepted' :
+                             log.outcome || 'Logged'}
+                          </span>
+                        </div>
+                        <div className="mt-3">
+                          <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{log.notes || 'No notes provided.'}</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                          <p className="text-xs font-medium text-slate-500 mb-2">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
+                          <p className="text-sm text-slate-800">
+                            This company was called by TPO Staff <span className="font-semibold text-indigo-600">{log.tpo_name}</span>.
+                          </p>
+                        </div>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800">
+                          TPO Call
+                        </span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
-                        ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' : 
-                          log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
-                          log.outcome === 'rejected' ? 'bg-red-100 text-red-800' : 
-                          log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
-                          log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
-                          'bg-slate-100 text-slate-800'}`}
-                      >
-                        {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
-                         log.outcome === 'tpo_talk' ? 'TPO Talk' :
-                         log.outcome === 'call_again' ? 'Call Again' :
-                         log.outcome === 'rejected' ? 'Rejected' :
-                         log.outcome === 'accepted' ? 'Accepted' :
-                         log.outcome || 'Logged'}
-                      </span>
-                    </div>
-                    <div className="mt-3">
-                      <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{log.notes || 'No notes provided.'}</p>
-                    </div>
+                    )}
                   </div>
-                ))
+                )})
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 text-center px-4">
                   <History className="w-10 h-10 text-slate-300 mb-3" />
