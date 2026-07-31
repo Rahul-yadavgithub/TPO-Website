@@ -45,16 +45,13 @@ export function Sidebar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp');
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true });
-      document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    } catch (err) {
-      console.error(err);
-      document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-      window.location.href = '/login';
-    }
+  const handleLogout = () => {
+    // Redirect immediately to remove delay
+    document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    window.location.href = '/login';
+    
+    // Perform the API logout in the background
+    axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true }).catch(console.error);
   };
 
   const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
@@ -293,7 +290,7 @@ export function Sidebar() {
           </div>
         )}
 
-        <nav className="flex-1 py-4 px-4 space-y-1 overflow-y-auto overflow-x-hidden">
+        <nav className="py-4 px-4 space-y-1 overflow-y-auto overflow-x-hidden mb-auto">
           {navItems.map((item) => {
             if (item.href === '/requests' && !isAdmin) return null;
             if (item.href === '/past-companies' && !isAdmin) return null;
@@ -320,7 +317,7 @@ export function Sidebar() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-200 mt-auto">
+        <div className="p-4 border-t border-slate-200">
           <button
             onClick={handleLogout}
             className={cn(
