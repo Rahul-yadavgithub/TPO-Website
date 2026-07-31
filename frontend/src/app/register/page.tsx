@@ -15,7 +15,6 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
-  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp'); // Default
   const router = useRouter();
 
