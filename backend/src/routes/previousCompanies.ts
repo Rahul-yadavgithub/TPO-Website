@@ -89,19 +89,41 @@ router.get('/search', async (req, res) => {
 
 
     const attachExistsInCurrentYear = async (companies: any[]) => {
-      if (status === 'my_requests' && branchId && companies.length > 0) {
-        const normalizedNames = companies.map(c => c.normalizedName);
+      if (companies.length === 0) return companies;
+      const normalizedNames = companies.map(c => c.normalizedName);
+      let newCompanies = companies.map(c => c.toObject ? c.toObject() : c);
+
+      if (status === 'my_requests' && branchId) {
         const existingCurrentCompanies = await Company.find({
           assignedBranchId: branchId as string,
           normalizedName: { $in: normalizedNames }
         }).select('normalizedName');
         const existingSet = new Set(existingCurrentCompanies.map(c => c.normalizedName));
-        return companies.map(c => ({
-          ...c.toObject(),
+        newCompanies = newCompanies.map(c => ({
+          ...c,
           existsInCurrentYear: existingSet.has(c.normalizedName)
         }));
       }
-      return companies.map(c => c.toObject());
+
+      if (status === 'not_contacted') {
+        const existingCurrentCompanies = await Company.find({
+          normalizedName: { $in: normalizedNames }
+        }).select('normalizedName assignedBranch assignedBranchId _id');
+        
+        const currentMap = new Map();
+        existingCurrentCompanies.forEach(c => currentMap.set(c.normalizedName, c));
+        
+        newCompanies = newCompanies.map(c => {
+          const current = currentMap.get(c.normalizedName);
+          return {
+            ...c,
+            currentCompanyId: current ? current._id.toString() : null,
+            currentAssignedBranch: current ? current.assignedBranch : null,
+            currentAssignedBranchId: current ? current.assignedBranchId : null
+          };
+        });
+      }
+      return newCompanies;
     };
 
     const companies = await PreviousCompany.find(query).limit(10);
@@ -166,7 +188,7 @@ router.get('/list', async (req, res) => {
     // For 'not_contacted' we just need the name. For requested, we need full details.
     let selectFields = '';
     if (status === 'not_contacted') {
-      selectFields = 'companyName academicYear contactStatus';
+      selectFields = 'companyName academicYear contactStatus section normalizedName';
     }
 
     const [companies, total] = await Promise.all([
@@ -176,20 +198,42 @@ router.get('/list', async (req, res) => {
 
     let finalCompanies = companies.map(c => c.toObject());
 
-    // If fetching my_requests and branchId is provided, check existence in Current Year
-    if (status === 'my_requests' && branchId && finalCompanies.length > 0) {
+    // Check existence in Current Year
+    if (finalCompanies.length > 0) {
       const normalizedNames = finalCompanies.map(c => c.normalizedName);
-      const existingCurrentCompanies = await Company.find({
-        assignedBranchId: branchId,
-        normalizedName: { $in: normalizedNames }
-      }).select('normalizedName');
       
-      const existingSet = new Set(existingCurrentCompanies.map(c => c.normalizedName));
-      
-      finalCompanies = finalCompanies.map(c => ({
-        ...c,
-        existsInCurrentYear: existingSet.has(c.normalizedName)
-      }));
+      if (status === 'my_requests' && branchId) {
+        const existingCurrentCompanies = await Company.find({
+          assignedBranchId: branchId,
+          normalizedName: { $in: normalizedNames }
+        }).select('normalizedName');
+        
+        const existingSet = new Set(existingCurrentCompanies.map(c => c.normalizedName));
+        
+        finalCompanies = finalCompanies.map(c => ({
+          ...c,
+          existsInCurrentYear: existingSet.has(c.normalizedName)
+        }));
+      }
+
+      if (status === 'not_contacted') {
+        const existingCurrentCompanies = await Company.find({
+          normalizedName: { $in: normalizedNames }
+        }).select('normalizedName assignedBranch assignedBranchId _id');
+        
+        const currentMap = new Map();
+        existingCurrentCompanies.forEach(c => currentMap.set(c.normalizedName, c));
+        
+        finalCompanies = finalCompanies.map(c => {
+          const current = currentMap.get(c.normalizedName);
+          return {
+            ...c,
+            currentCompanyId: current ? current._id.toString() : null,
+            currentAssignedBranch: current ? current.assignedBranch : null,
+            currentAssignedBranchId: current ? current.assignedBranchId : null
+          };
+        });
+      }
     }
 
     res.status(200).json({

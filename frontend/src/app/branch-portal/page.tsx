@@ -1096,6 +1096,7 @@ export default function BranchPortalPage() {
       {selectedBranchId && activeView === 'previous_requests' && (
         <PreviousContactsView 
           branchId={selectedBranchId} 
+          branchName={branches?.find((b: any) => b._id === selectedBranchId)?.name || ''}
           onBack={() => setActiveView('dashboard')}
         />
       )}

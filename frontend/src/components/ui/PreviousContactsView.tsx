@@ -141,10 +141,11 @@ function extractAllContacts(company: any): ExtractedContact[] {
 
 interface PreviousContactsViewProps {
   branchId: string;
+  branchName: string;
   onBack: () => void;
 }
 
-export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewProps) {
+export function PreviousContactsView({ branchId, branchName, onBack }: PreviousContactsViewProps) {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'available' | 'my_requests' | 'others_requests'>('available');
   const [searchQuery, setSearchQuery] = useState('');
@@ -228,6 +229,28 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
   });
 
   // Mutations
+  const transferContactMutation = useMutation({
+    mutationFn: async ({ companyId, companyName, toBranchName }: { companyId: string, companyName: string, toBranchName: string }) => {
+      setRequestingCompanyId(companyId);
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/transfer-requests`, {
+        companyId, 
+        providedHRDetails: {},
+        fromOwnerType: 'branch',
+        fromOwnerId: toBranchName,
+        toOwnerType: 'branch',
+        toOwnerId: branchName
+      }, { withCredentials: true });
+    },
+    onSuccess: () => {
+      toast.success('Transfer request submitted to the owning branch!');
+      setRequestingCompanyId(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to submit transfer request');
+      setRequestingCompanyId(null);
+    }
+  });
+
   const requestContactMutation = useMutation({
     mutationFn: async ({ companyId, companyName }: { companyId: string, companyName: string }) => {
       setRequestingCompanyId(companyId);
@@ -419,13 +442,46 @@ export function PreviousContactsView({ branchId, onBack }: PreviousContactsViewP
                             <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
                           ) : null}
                         </h4>
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                          <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                            {company.academicYear}
+                          </span>
+                          {company.section && company.section !== 'Uncategorized' && (
+                            <span className="text-[11px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-md">
+                              From: {company.section}
+                            </span>
+                          )}
+                          {company.currentAssignedBranch && company.currentAssignedBranch !== branchName && (
+                            <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-1 rounded-md flex items-center gap-1">
+                              <Building2 className="w-3 h-3" /> Active in: {company.currentAssignedBranch}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <button 
-                        onClick={() => requestContactMutation.mutate({ companyId: company._id, companyName: company.companyName })}
-                        disabled={requestContactMutation.isPending}
-                        className="w-full sm:w-auto px-4 py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                        onClick={() => {
+                          if (company.currentCompanyId && company.currentAssignedBranch && company.currentAssignedBranch !== branchName) {
+                            transferContactMutation.mutate({ 
+                              companyId: company.currentCompanyId, 
+                              companyName: company.companyName, 
+                              toBranchName: company.currentAssignedBranch 
+                            });
+                          } else {
+                            requestContactMutation.mutate({ companyId: company._id, companyName: company.companyName });
+                          }
+                        }}
+                        disabled={requestContactMutation.isPending || transferContactMutation.isPending}
+                        className={`w-full sm:w-auto px-4 py-2 font-semibold rounded-lg disabled:opacity-50 transition-colors flex items-center justify-center gap-2 ${
+                          company.currentCompanyId && company.currentAssignedBranch !== branchName ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-purple-600 text-white hover:bg-purple-700'
+                        }`}
                       >
-                        {requestContactMutation.isPending && requestingCompanyId === company._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Request'}
+                        {(requestContactMutation.isPending || transferContactMutation.isPending) && requestingCompanyId === (company.currentCompanyId || company._id) ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : company.currentCompanyId && company.currentAssignedBranch !== branchName ? (
+                          'Request Transfer'
+                        ) : (
+                          'Request'
+                        )}
                       </button>
                     </div>
                   ))
