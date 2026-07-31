@@ -150,17 +150,17 @@ export default function ChangeContactDetailsButton({ companyId, tpoName, tpoType
             <div className="p-6 space-y-4">
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                 
-                <div className="mb-5 pb-5 border-b border-indigo-100/50">
-                  <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Wand2 className="w-3.5 h-3.5" /> Smart Paste
+                <div className="mb-5 pb-5 border-b border-slate-200">
+                  <label className="block text-xs font-bold text-black uppercase tracking-wider mb-2">
+                    SMART PASTE
                   </label>
                   <textarea 
                     value={smartPasteText}
                     onChange={(e) => setSmartPasteText(e.target.value)}
-                    placeholder="Paste details here to auto-fill..."
-                    className="w-full h-16 p-3 text-sm bg-white border border-indigo-200 text-slate-800 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all resize-none shadow-sm"
+                    placeholder="SMART PASTE"
+                    className="w-full h-16 p-3 text-sm bg-white border border-slate-300 text-black placeholder:text-black placeholder:font-bold rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all resize-none shadow-sm"
                   />
-                  <p className="text-[10px] text-indigo-600 mt-1.5 leading-tight">Paste a block of text containing email, phone, and name. We'll extract them for you.</p>
+                  <p className="text-[10px] text-black font-medium mt-1.5 leading-tight">Paste a block of text containing email, phone, and name. We'll extract them for you.</p>
                 </div>
 
                 <div className="space-y-4 text-sm text-slate-700">

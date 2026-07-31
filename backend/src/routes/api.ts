@@ -1909,6 +1909,7 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
         if (existing.assignedBranch && existing.assignedBranch !== branch.name) {
           conflictCompanies.push({
             ...c,
+            companyId: existing._id,
             conflictBranch: existing.assignedBranch,
             conflictOwner: existing.contactOwner || 'Unknown'
           });

@@ -31,6 +31,7 @@ import authRoutes from './routes/auth';
 import previousCompaniesRoutes from './routes/previousCompanies';
 import adminRoutes from './routes/admin';
 import tpoRoutes from './routes/tpo';
+import transferRequestsRoutes from './routes/transferRequests';
 
 // Connect DB
 connectDB().then(() => {
@@ -47,6 +48,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/previous-companies', previousCompaniesRoutes);
 app.use('/api/tpo', tpoRoutes);
+app.use('/api/transfer-requests', transferRequestsRoutes);
 app.use('/api', apiRoutes);
 
 // Basic route

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, MessageSquare, ShieldCheck, Eye } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, MessageSquare, ShieldCheck, Eye, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -119,6 +119,48 @@ export default function TpoPortalPage() {
     }
   }, []);
 
+  // Mobile Back Navigation Support (PopState)
+  useEffect(() => {
+    if (mobileHRModalCompany) window.history.pushState({ type: 'hr_modal' }, '');
+  }, [mobileHRModalCompany]);
+
+  useEffect(() => {
+    if (historyPanelCompany) window.history.pushState({ type: 'history_modal' }, '');
+  }, [historyPanelCompany]);
+
+  useEffect(() => {
+    if (showBulkModal) window.history.pushState({ type: 'bulk_modal' }, '');
+  }, [showBulkModal]);
+
+  useEffect(() => {
+    if (activeView !== 'dashboard') window.history.pushState({ type: 'view', view: activeView }, '');
+  }, [activeView]);
+
+  useEffect(() => {
+    if (activeCategory) window.history.pushState({ type: 'category', category: activeCategory }, '');
+  }, [activeCategory]);
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (mobileHRModalCompany) {
+        setMobileHRModalCompany(null);
+      } else if (historyPanelCompany) {
+        setHistoryPanelCompany(null);
+      } else if (showBulkModal) {
+        setShowBulkModal(false);
+      } else if (activeView === 'single_contact') {
+        setActiveView(previousView || 'dashboard');
+        setActiveCompanyId(null);
+      } else if (activeCategory) {
+        setActiveCategory(null);
+      } else if (activeView !== 'dashboard') {
+        setActiveView('dashboard');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [mobileHRModalCompany, historyPanelCompany, showBulkModal, activeView, activeCategory, previousView]);
+
   const { data: userProfile, isLoading: userLoading } = useQuery({
     queryKey: ['auth-me'],
     queryFn: async () => {
@@ -175,8 +217,8 @@ export default function TpoPortalPage() {
     enabled: !!selectedTPO
   });
 
-  const { data: pastRequests, isLoading: requestsLoading } = useQuery({
-    queryKey: ['previous-requests', selectedTPO],
+  const { data: previousCompanies } = useQuery({
+    queryKey: ['tpo-previous-companies', selectedTPO],
     queryFn: async () => {
       if (!selectedTPO) return [];
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/requests/${selectedTPO}`);
@@ -306,6 +348,75 @@ export default function TpoPortalPage() {
     onError: () => toast.error('Failed to delete HR contact')
   });
 
+  // Smart Paste Hook
+  const [smartPasteText, setSmartPasteText] = useState('');
+  const [conflictingCompanyInfo, setConflictingCompanyInfo] = useState<any>(null);
+
+  useEffect(() => {
+    if (!smartPasteText.trim()) return;
+
+    const timer = setTimeout(() => {
+      const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/gi;
+      const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?(?:\d{5}[-.\s]?\d{5}|\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{4}[-.\s]?\d{3}[-.\s]?\d{3}|\d{10})/g;
+      const urlRegex = /(https?:\/\/[^\s]+)/gi;
+      const linkedinRegex = /(https?:\/\/(www\.)?linkedin\.com\/in\/[^\s]+)/gi;
+
+      const emails = smartPasteText.match(emailRegex);
+      const phones = smartPasteText.match(phoneRegex);
+      const linkedins = smartPasteText.match(linkedinRegex);
+      const urls = smartPasteText.match(urlRegex);
+
+      setManualForm(prev => {
+        const newData = { ...prev };
+        let extractedCompanyName = '';
+        
+        if (emails && emails.length > 0 && !prev.hrEmail) {
+          const email = emails[0];
+          newData.hrEmail = email;
+          
+          const domainFull = email.split('@')[1];
+          if (domainFull) {
+            const domainPart = domainFull.split('.')[0].toLowerCase();
+            const commonDomains = ['gmail', 'yahoo', 'hotmail', 'outlook', 'icloud', 'aol'];
+            
+            if (!commonDomains.includes(domainPart)) {
+              extractedCompanyName = domainPart.charAt(0).toUpperCase() + domainPart.slice(1);
+              if (!prev.companyName) newData.companyName = extractedCompanyName;
+            }
+          }
+        }
+        
+        if (phones && phones.length > 0 && !prev.hrPhone) newData.hrPhone = phones[0].trim();
+        if (linkedins && linkedins.length > 0 && !prev.linkedinProfile) newData.linkedinProfile = linkedins[0];
+        
+        let cleanText = smartPasteText;
+        if (emails) emails.forEach(e => cleanText = cleanText.replace(e, ''));
+        if (phones) phones.forEach(p => cleanText = cleanText.replace(p, ''));
+        if (urls) urls.forEach(u => cleanText = cleanText.replace(u, ''));
+        
+        if (extractedCompanyName) {
+          const companyNameRegex = new RegExp(extractedCompanyName, 'gi');
+          cleanText = cleanText.replace(companyNameRegex, '');
+        }
+        
+        cleanText = cleanText.replace(/HR|Manager|Talent|Acquisition|Lead|Director|Head|Mr\.|Ms\.|Mrs\./gi, '');
+        cleanText = cleanText.replace(/[^a-zA-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        const words = cleanText.split(' ').filter(w => w.length > 1);
+        if (words.length > 0 && !prev.hrName) {
+          newData.hrName = words.slice(0, 2).join(' ');
+        }
+
+        return newData;
+      });
+
+      toast.success('Smart Paste extracted available information.');
+      setSmartPasteText('');
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [smartPasteText]);
+
   // Duplicate Check Effect
   useEffect(() => {
     if (!manualForm.companyName || manualForm.companyName.trim().length < 2) {
@@ -322,10 +433,22 @@ export default function TpoPortalPage() {
           if (comp.assignedTPO && comp.assignedTPO !== selectedTPO) {
             setIsConflict(true);
             setConflictMessage(`This company is already owned by ${comp.assignedTPO}. You cannot duplicate outreach.`);
+            setConflictingCompanyInfo({
+              companyId: comp._id,
+              companyName: comp.companyName,
+              ownerId: comp.assignedTPO,
+              ownerType: 'tpo'
+            });
             setIsDuplicate(false);
-          } else if (comp.assignedBranch && comp.assignedBranch !== 'Pending Assignment') {
+          } else if (comp.assignedBranch && comp.assignedBranch !== 'Pending Assignment' && comp.assignedBranch !== 'TPO') {
             setIsConflict(true);
             setConflictMessage(`This company is already owned by the ${comp.assignedBranch} branch. You cannot duplicate outreach in the TPO Portal.`);
+            setConflictingCompanyInfo({
+              companyId: comp._id,
+              companyName: comp.companyName,
+              ownerId: comp.assignedBranch,
+              ownerType: 'branch'
+            });
             setIsDuplicate(false);
           } else {
             setIsConflict(false);
@@ -643,8 +766,6 @@ export default function TpoPortalPage() {
                   </button>
                 </div>
               </div>
-
-
             </div>
           ) : (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -669,6 +790,7 @@ export default function TpoPortalPage() {
                   setManualForm({ companyName: '', hrName: '', hrPhone: '', hrEmail: '', linkedinProfile: '' });
                   setIsDuplicate(false);
                   setIsConflict(false);
+                  setConflictingCompanyInfo(null);
                 }}
                 className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
               >
@@ -678,9 +800,11 @@ export default function TpoPortalPage() {
 
             <div className="overflow-y-auto p-6 space-y-6">
               {isConflict && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 text-red-800">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm font-medium">{conflictMessage}</p>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col items-start gap-3">
+                  <div className="flex items-start gap-3 text-red-800">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm font-medium">{conflictMessage}</p>
+                  </div>
                 </div>
               )}
               {isDuplicate && (
@@ -689,6 +813,21 @@ export default function TpoPortalPage() {
                   <p className="text-sm font-medium">This company is already in your database. Updating the form will overwrite the existing HR details and queue it for syncing.</p>
                 </div>
               )}
+
+              {/* Smart Paste Feature */}
+              <div className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
+                  <span className="text-sm font-bold text-slate-900 uppercase tracking-widest">SMART PASTE</span>
+                </div>
+                <textarea 
+                  placeholder="PASTE ANY RAW TEXT HERE (E.G. FROM AN EMAIL SIGNATURE, LINKEDIN POST, OR MESSAGE). THE SYSTEM WILL AUTOMATICALLY EXTRACT AND FILL THE DETAILS BELOW..."
+                  className="w-full bg-white border-0 text-slate-900 text-sm p-4 focus:ring-0 transition-all resize-none placeholder:text-slate-400 placeholder:font-bold font-medium"
+                  rows={3}
+                  value={smartPasteText}
+                  onChange={(e) => setSmartPasteText(e.target.value)}
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Company Name *</label>
                 <div className="relative">
@@ -767,6 +906,8 @@ export default function TpoPortalPage() {
       {selectedTPO && showBulkModal && (
         <BulkUploadModal 
           branchId={selectedTPO}
+          ownerName={selectedTPO}
+          ownerType="tpo"
           onClose={() => setShowBulkModal(false)}
           onSuccess={() => {
             setShowBulkModal(false);
@@ -888,7 +1029,7 @@ export default function TpoPortalPage() {
                         >
                           <Eye className="w-3.5 h-3.5" /> View HR
                         </button>
-                        <span className="bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 shadow-sm text-xs font-bold">{company.hr_contacts?.length || 0 + (company.additionalContacts?.length || 0)} Found</span>
+                        <span className="hidden sm:inline-flex bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 shadow-sm text-xs font-bold">{company.hr_contacts?.length || 0 + (company.additionalContacts?.length || 0)} Found</span>
                       </div>
                     </div>
                     <div className="mb-6">
@@ -1111,12 +1252,12 @@ export default function TpoPortalPage() {
                   {/* Log Action Form */}
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
                     {activeCompanyId === company._id ? (
-                      <div className="space-y-5">
-                        <div className="grid grid-cols-2 gap-5">
+                      <div className="space-y-4 sm:space-y-5">
+                        <div className="grid grid-cols-2 gap-3 sm:gap-5">
                           <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Channel</label>
+                            <label className="block text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Channel</label>
                             <select 
-                              className="w-full bg-white shadow-sm border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 p-3 transition-all" 
+                              className="w-full bg-white shadow-sm border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 py-2 px-2 sm:p-3 transition-all" 
                               value={channel} 
                               onChange={(e) => setChannel(e.target.value)}
                             >
@@ -1126,9 +1267,9 @@ export default function TpoPortalPage() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Outcome</label>
+                            <label className="block text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Outcome</label>
                             <select 
-                              className="w-full bg-white shadow-sm border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 p-3 transition-all" 
+                              className="w-full bg-white shadow-sm border border-slate-200 text-slate-700 text-xs sm:text-sm rounded-lg sm:rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 py-2 px-2 sm:p-3 transition-all" 
                               value={outcome} 
                               onChange={(e) => setOutcome(e.target.value as any)}
                             >
@@ -1616,6 +1757,121 @@ export default function TpoPortalPage() {
             </div>
           </div>
         </>
+      )}
+      {/* Mobile HR Details Modal */}
+      {mobileHRModalCompany && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-slate-900/40 backdrop-blur-sm sm:hidden animate-in fade-in duration-200">
+          <div className="mt-auto bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom duration-300">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                HR Contacts
+              </h2>
+              <button 
+                onClick={() => setMobileHRModalCompany(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-4">
+              <div className="mb-2">
+                <h3 className="font-bold text-slate-800 text-lg">{mobileHRModalCompany.companyName}</h3>
+                <p className="text-sm text-slate-500 font-medium">All associated contact information</p>
+              </div>
+              
+              {[
+                ...(mobileHRModalCompany.hr_contacts || []),
+                ...(mobileHRModalCompany.additionalContacts || []).map((ac: any, idx: number) => ({
+                  _id: ac._id || `addl-hr-${idx}`,
+                  name: ac.hrName || 'Unknown Name',
+                  email: ac.hrEmail,
+                  mobile: ac.hrPhone,
+                  designation: 'Additional HR (From Sheet)',
+                  is_additional: true,
+                  is_verified: ac.isVerified,
+                  is_incorrect: ac.isFlagged
+                }))
+              ].map((hr: any, index: number) => (
+                <div key={hr._id || index} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+                  {hr.is_verified && !hr.is_incorrect && (
+                    <div className="absolute top-3 right-3 text-emerald-600 bg-emerald-50 p-1 rounded-full border border-emerald-100 shadow-sm" title="Verified">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                  )}
+                  {hr.is_incorrect && (
+                    <div className="absolute top-3 right-3 text-red-600 bg-red-50 p-1 rounded-full border border-red-100 shadow-sm" title="Incorrect">
+                      <ShieldAlert className="w-4 h-4" />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 mb-3 pr-8">
+                    <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xl shrink-0 shadow-inner border border-indigo-200">
+                      {(hr.name || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-900 text-base break-words">{hr.name || 'Unknown Name'}</h4>
+                      <p className="text-indigo-600 text-xs font-semibold uppercase tracking-wider">{hr.designation || 'Human Resources'}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-xl p-3 border border-slate-100 space-y-3">
+                    {hr.mobile ? (
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <PhoneCall className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                        <div className="flex flex-col gap-1 min-w-0 w-full">
+                          {hr.mobile.split(',').map((phone: string, i: number) => (
+                            <a key={i} href={`tel:${phone.trim()}`} className="text-sm font-semibold text-slate-700 hover:text-indigo-600 break-words">{phone.trim()}</a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <PhoneCall className="w-4 h-4 text-slate-300 mt-0.5 shrink-0" />
+                        <span className="text-sm font-medium text-slate-400 italic">No phone number</span>
+                      </div>
+                    )}
+                    
+                    <div className="h-px w-full bg-slate-50"></div>
+                    
+                    {hr.email ? (
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <Mail className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
+                        <div className="flex flex-col gap-1 min-w-0 w-full">
+                          {hr.email.split(',').map((em: string, i: number) => (
+                            <a key={i} href={`mailto:${em.trim()}`} className="text-sm font-semibold text-slate-700 hover:text-indigo-600 break-all">{em.trim()}</a>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <Mail className="w-4 h-4 text-slate-300 mt-0.5 shrink-0" />
+                        <span className="text-sm font-medium text-slate-400 italic">No email address</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {(!mobileHRModalCompany.hr_contacts?.length && !mobileHRModalCompany.additionalContacts?.length) && (
+                <div className="py-10 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                    <Users className="w-8 h-8 text-slate-300" />
+                  </div>
+                  <p className="font-bold text-slate-700">No Contacts Found</p>
+                  <p className="text-sm text-slate-500 mt-1">There are no HR contacts listed for this company.</p>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100">
+              <button 
+                onClick={() => setMobileHRModalCompany(null)}
+                className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-sm active:scale-[0.98] transition-transform"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

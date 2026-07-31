@@ -4,13 +4,17 @@ import * as XLSX from 'xlsx';
 import axios from 'axios';
 import { toast } from 'sonner';
 
+import { Send } from 'lucide-react';
+
 interface BulkUploadModalProps {
   branchId: string;
+  ownerName?: string;
+  ownerType?: 'branch' | 'tpo';
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModalProps) {
+export function BulkUploadModal({ branchId, ownerName, ownerType = 'branch', onClose, onSuccess }: BulkUploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [validating, setValidating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -23,6 +27,37 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
     conflictCompanies: any[];
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [requestedTransfers, setRequestedTransfers] = useState<Set<string>>(new Set());
+  const [requestingTransferId, setRequestingTransferId] = useState<string | null>(null);
+
+  const handleRequestTransfer = async (c: any) => {
+    if (!ownerName) {
+      toast.error('Owner name is required for transfer requests.');
+      return;
+    }
+    setRequestingTransferId(c.companyId);
+    try {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/transfer-requests`, {
+        companyId: c.companyId,
+        fromOwnerType: 'branch', // The validation currently checks against branches
+        fromOwnerId: c.conflictBranch,
+        toOwnerType: ownerType,
+        toOwnerId: ownerName,
+        providedHRDetails: {
+          hrName: c.hrName,
+          hrPhone: c.hrPhone,
+          hrEmail: c.hrEmail,
+          linkedinProfile: c.linkedinProfile
+        }
+      });
+      toast.success(`Transfer request for ${c.companyName} sent!`);
+      setRequestedTransfers(prev => new Set(prev).add(c.companyId));
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to send transfer request');
+    } finally {
+      setRequestingTransferId(null);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -143,7 +178,7 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center flex flex-col justify-center">
                   <div className="text-3xl font-black text-emerald-600 mb-1">{validationResult.validCount}</div>
                   <div className="text-xs font-bold text-emerald-800 uppercase tracking-wide">New Companies</div>
@@ -162,26 +197,38 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
               </div>
 
               {validationResult.conflictCount > 0 && (
-                <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
+                <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto overflow-x-auto">
+                  <table className="w-full text-left text-sm whitespace-nowrap min-w-max">
                     <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 shadow-sm z-10">
                       <tr>
                         <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Company Name</th>
                         <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Assigned Branch</th>
-                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">POC TPR</th>
+                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden sm:table-cell">POC TPR</th>
+                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider text-right">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
                       {validationResult.conflictCompanies.map((c, i) => (
                         <tr key={i} className="hover:bg-slate-50">
-                          <td className="px-4 py-2.5 font-medium text-slate-800 truncate max-w-[200px]" title={c.companyName}>{c.companyName}</td>
+                          <td className="px-4 py-2.5 font-medium text-slate-800 truncate max-w-[150px] sm:max-w-[200px]" title={c.companyName}>{c.companyName}</td>
                           <td className="px-4 py-2.5 text-red-600 font-medium">
                             <div className="flex items-center gap-1.5">
                               <AlertCircle className="w-3.5 h-3.5" />
-                              {c.conflictBranch}
+                              <span className="truncate max-w-[80px] sm:max-w-[120px]">{c.conflictBranch}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-2.5 text-slate-600">{c.conflictOwner}</td>
+                          <td className="px-4 py-2.5 text-slate-600 hidden sm:table-cell">{c.conflictOwner}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <button
+                              onClick={() => handleRequestTransfer(c)}
+                              disabled={!ownerName || requestedTransfers.has(c.companyId) || requestingTransferId === c.companyId}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 rounded-md transition-colors whitespace-nowrap"
+                            >
+                              {requestingTransferId === c.companyId ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              <span className="hidden sm:inline">{requestedTransfers.has(c.companyId) ? 'Requested' : 'Request Transfer'}</span>
+                              <span className="sm:hidden">{requestedTransfers.has(c.companyId) ? 'Done' : 'Request'}</span>
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -196,17 +243,17 @@ export function BulkUploadModal({ branchId, onClose, onSuccess }: BulkUploadModa
                 </div>
               )}
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4">
                 <button 
                   onClick={() => { setFile(null); setValidationResult(null); }}
-                  className="w-1/3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-4 px-6 rounded-xl transition-all"
+                  className="w-full sm:w-1/3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-3.5 sm:py-4 px-6 rounded-xl transition-all"
                 >
                   Start Over
                 </button>
                 <button 
                   onClick={handleImport}
                   disabled={importing || validationResult.validCount === 0}
-                  className="w-2/3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+                  className="w-full sm:w-2/3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold py-3.5 sm:py-4 px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                 >
                   {importing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CloudUpload className="w-5 h-5" />}
                   Sync {validationResult.validCount} Companies

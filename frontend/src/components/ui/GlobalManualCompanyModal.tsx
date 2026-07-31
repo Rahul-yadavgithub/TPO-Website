@@ -258,6 +258,10 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
       toast.error('Company Name is required');
       return;
     }
+    if (mode === 'current' && !selectedBranchId) {
+      toast.error('Program and Branch selection are required');
+      return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -272,7 +276,8 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
         }, {} as Record<string, string>);
         payload = { ...payload, extraData, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, targetSection: activeTab };
       } else {
-        payload = { ...payload, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged };
+        const branchObj = branches?.find((b: any) => b._id === selectedBranchId);
+        payload = { ...payload, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, assignedBranch: branchObj ? branchObj.name : undefined };
       }
 
       await axios.post(getEndpoint(), payload, { withCredentials: true });
@@ -309,21 +314,59 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
           
           {/* Smart Auto-Fill Section */}
           <div>
-            <label className="block text-sm font-bold text-slate-900 mb-1.5">
-              Paste the data
+            <label className="block text-sm font-bold text-black mb-1.5">
+              SMART PASTE
             </label>
             <textarea 
               value={smartPasteText}
               onChange={(e) => setSmartPasteText(e.target.value)}
-              placeholder="Paste details here to auto-fill..."
-              className="w-full h-24 p-4 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+              placeholder="SMART PASTE"
+              className="w-full h-24 p-4 text-sm bg-white border border-slate-300 text-black placeholder:text-black placeholder:font-bold rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all resize-none"
             />
           </div>
 
           <hr className="border-slate-100" />
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Removed Program and Branch dropdowns per user request */}
+            {mode === 'current' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-slate-400" /> Program (Course) *
+                  </label>
+                  <select
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition-all"
+                    value={selectedProgram}
+                    onChange={(e) => {
+                      setSelectedProgram(e.target.value);
+                      setSelectedBranchId('');
+                    }}
+                  >
+                    <option value="" disabled>Select Program</option>
+                    <option value="B.Tech">B.Tech</option>
+                    <option value="M.Tech">M.Tech</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-slate-400" /> Branch *
+                  </label>
+                  <select
+                    className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition-all"
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    disabled={!selectedProgram}
+                  >
+                    <option value="" disabled>Select Branch</option>
+                    {branches
+                      ?.filter((b: any) => b.name !== 'Central Admin' && (selectedProgram === 'M.Tech' ? b.name.toLowerCase().includes('m.tech') || b.name.toLowerCase().includes('mtech') : !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech')))
+                      .map((b: any) => (
+                        <option key={b._id} value={b._id}>{b.name}</option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-slate-400" /> Company Name *

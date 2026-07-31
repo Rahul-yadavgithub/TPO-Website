@@ -233,6 +233,70 @@ export class GoogleSheetProvider {
     }
   }
 
+  public async deleteCompanyFromSheet(companyId: string, companyName: string, branchName: string, program: string = 'B.Tech'): Promise<boolean> {
+    await this.initialize();
+    if (!this.sheets) return false;
+
+    try {
+      const settings = await Settings.findOne();
+      if (!settings) return false;
+
+      let sheetId = settings.currentAcademicYearSheetId;
+      if (branchName.startsWith('M.Tech') || program === 'M.Tech') {
+        sheetId = settings.mtechCurrentAcademicYearSheetId;
+      }
+
+      const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId: sheetId });
+      const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === branchName);
+      if (!sheet || sheet.properties?.sheetId === undefined) return false;
+      
+      const sheetPropertiesId = sheet.properties.sheetId;
+      const rows = await this.fetchInboundData(sheetId, branchName);
+      
+      const normalizedTargetName = companyName?.toLowerCase().replace(/[^a-z0-9]/g, '');
+      console.log(`[Sheet Sync] Attempting to delete company: ID=${companyId}, Name=${companyName}, TargetNorm=${normalizedTargetName} from branch=${branchName}`);
+
+      let rowIndex = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const rowCompanyName = rows[i][0]?.trim();
+        const hiddenId = rows[i][7]?.trim();
+        const normalizedRowName = rowCompanyName?.toLowerCase().replace(/[^a-z0-9]/g, '');
+        
+        // Match if the ID strictly matches OR if the normalized name strictly matches
+        // This solves issues where the sheet has no ID, or has a stale ID, but the name is correct.
+        if (hiddenId === companyId.toString() || (normalizedTargetName && normalizedRowName === normalizedTargetName)) {
+          rowIndex = i;
+          console.log(`[Sheet Sync] MATCH FOUND at row ${i} (Sheet Row ${i+1}). rowCompanyName=${rowCompanyName}, hiddenId=${hiddenId}`);
+          break;
+        }
+      }
+
+      if (rowIndex > -1) {
+        console.log(`[Sheet Sync] Executing batchUpdate to delete row index ${rowIndex}`);
+        await this.sheets.spreadsheets.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: {
+            requests: [{
+              deleteDimension: {
+                range: {
+                  sheetId: sheetPropertiesId,
+                  dimension: 'ROWS',
+                  startIndex: rowIndex,
+                  endIndex: rowIndex + 1
+                }
+              }
+            }]
+          }
+        });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Failed to delete company from sheet:', error);
+      return false;
+    }
+  }
+
   public async deletePreviousCompanyFromSheet(company: any, spreadsheetId: string): Promise<boolean> {
     await this.initialize();
     if (!this.sheets) return false;
@@ -240,7 +304,7 @@ export class GoogleSheetProvider {
     try {
       const spreadsheet = await this.sheets.spreadsheets.get({ spreadsheetId });
       const sheet = spreadsheet.data.sheets?.find(s => s.properties?.title === company.section);
-      if (!sheet || !sheet.properties?.sheetId) return false;
+      if (!sheet || sheet.properties?.sheetId === undefined) return false;
       
       const sheetId = sheet.properties.sheetId;
       const rows = await this.fetchInboundData(spreadsheetId, company.section);
@@ -250,8 +314,8 @@ export class GoogleSheetProvider {
         const hiddenId = rows[i][6]?.trim();
         const normalizedName = rows[i][0]?.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
         
-        // We match by ID first, then fallback to normalized name if no ID is present
-        if (hiddenId === company._id.toString() || (!hiddenId && normalizedName === company.normalizedName)) {
+        // We match by ID first, or by normalized name if ID doesn't match
+        if (hiddenId === company._id.toString() || normalizedName === company.normalizedName) {
           rowIndex = i;
           break;
         }
