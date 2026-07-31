@@ -12,6 +12,7 @@ export default function SyncCenterPage() {
   const queryClient = useQueryClient();
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedBulkBranch, setSelectedBulkBranch] = useState<string>('');
+  const [selectedInboundCourse, setSelectedInboundCourse] = useState<string>('All');
   const [selectedInboundBranch, setSelectedInboundBranch] = useState<string>('');
   const [expandedBranches, setExpandedBranches] = useState<string[]>([]);
 
@@ -229,36 +230,44 @@ export default function SyncCenterPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10 w-full lg:w-auto">
-          {settings?.currentAcademicYearSheetId ? (
-            <a
-              href={`https://docs.google.com/spreadsheets/d/${settings.currentAcademicYearSheetId}/edit`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-semibold py-2.5 px-5 rounded-lg transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Open Master Sheet
-            </a>
-          ) : (
-            <span
-              className="flex items-center justify-center gap-2 bg-slate-100 text-slate-400 border border-slate-200 font-semibold py-2.5 px-5 rounded-lg cursor-not-allowed shadow-sm flex-1 sm:flex-none whitespace-nowrap"
-              title="Configure Master Database Sheet ID in Settings"
-            >
-              <ExternalLink className="w-4 h-4" />
-              Open Master Sheet
-            </span>
-          )}
-
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-none w-full sm:w-auto">
+            <select 
+              value={selectedInboundCourse}
+              onChange={(e) => {
+                setSelectedInboundCourse(e.target.value);
+                setSelectedInboundBranch('');
+              }}
+              className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
+            >
+              <option value="All">All Courses</option>
+              <option value="B.Tech">B.Tech</option>
+              <option value="M.Tech">M.Tech</option>
+            </select>
             <select
               value={selectedInboundBranch}
               onChange={(e) => setSelectedInboundBranch(e.target.value)}
               className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
             >
               <option value="">All Branches</option>
-              {branches?.map((b: any) => (
-                <option key={b._id} value={b._id}>{b.name}</option>
-              ))}
+              {selectedInboundCourse === 'M.Tech' ? (
+                ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
+                  const branch = branches?.find((b: any) => b.name === name);
+                  if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
+                  return null;
+                })
+              ) : (
+                branches
+                  ?.filter((b: any) => b.name !== 'Central Admin')
+                  .filter((b: any) => {
+                    if (selectedInboundCourse === 'B.Tech') {
+                      return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
+                    }
+                    return true;
+                  })
+                  .map((b: any) => (
+                    <option key={b._id} value={b._id}>{b.name}</option>
+                  ))
+              )}
             </select>
             <button
               onClick={() => inboundSyncMutation.mutate(selectedInboundBranch)}

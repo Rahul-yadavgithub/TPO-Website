@@ -14,21 +14,14 @@ export default function LoginPage() {
   const [roleCheckLoading, setRoleCheckLoading] = useState(false);
   const [isCommTpr, setIsCommTpr] = useState(false);
   const [portalChoice, setPortalChoice] = useState<'branch' | 'communication'>('branch');
-  const [captchaText, setCaptchaText] = useState('');
-  const [captchaInput, setCaptchaInput] = useState('');
+
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp'); // Default
   const router = useRouter();
 
-  const generateCaptcha = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-    setCaptchaText(result);
-  };
+
 
   useEffect(() => {
-    generateCaptcha();
     setCurrentTime(new Date());
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
 
@@ -68,10 +61,7 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (captchaInput !== captchaText) {
-      setError('Invalid captcha. Please try again.');
-      generateCaptcha(); setCaptchaInput(''); return;
-    }
+
     setLoading(true);
     try {
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
@@ -88,7 +78,6 @@ export default function LoginPage() {
       } else { window.location.href = '/'; }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password.');
-      generateCaptcha(); setCaptchaInput('');
     } finally { setLoading(false); }
   };
 
@@ -241,39 +230,9 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {/* Captcha */}
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Security Verification *</label>
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1 bg-[#eef1f5] border border-slate-300 h-10 flex items-center justify-center relative overflow-hidden select-none">
-                    <div className="absolute inset-0 opacity-30">
-                      <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                        <line x1="0" y1="8" x2="100%" y2="32" stroke="#94a3b8" strokeWidth="1.5" />
-                        <line x1="15%" y1="0" x2="85%" y2="40" stroke="#94a3b8" strokeWidth="1" />
-                        <line x1="0" y1="38" x2="100%" y2="5" stroke="#94a3b8" strokeWidth="1" />
-                      </svg>
-                    </div>
-                    <span className="font-mono text-[18px] font-bold italic tracking-[0.35em] text-slate-700 blur-[0.4px] relative z-10">
-                      {captchaText}
-                    </span>
-                  </div>
-                  <button type="button" onClick={generateCaptcha}
-                    className="px-3 border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-500 transition-colors"
-                    title="Refresh Captcha">
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                </div>
-                <input
-                  type="text" required
-                  className="w-full px-4 py-2.5 border border-slate-300 bg-slate-50 text-slate-800 text-[13px] focus:outline-none focus:border-[#1a3a6e] focus:ring-1 focus:ring-[#1a3a6e] transition-colors placeholder-slate-400"
-                  placeholder="Type the characters shown above"
-                  value={captchaInput} onChange={e => setCaptchaInput(e.target.value)} disabled={loading}
-                />
-              </div>
-
               {/* Submit */}
               <button type="button" onClick={handleLogin as any}
-                disabled={loading || roleCheckLoading || !email || !password || !captchaInput}
+                disabled={loading || roleCheckLoading || !email || !password}
                 className="w-full py-2.5 px-4 bg-[#1a3a6e] hover:bg-[#122d58] text-white font-bold text-[14px] tracking-wide transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Login to Portal'}
               </button>

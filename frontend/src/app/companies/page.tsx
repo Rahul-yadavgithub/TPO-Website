@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useState } from 'react';
-import { Search, Globe, CheckCircle, XCircle, Info, Plus, FileSpreadsheet } from 'lucide-react';
+import { Search, Globe, CheckCircle, XCircle, Info, Plus, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { CompanyDetailsModal } from '@/components/ui/CompanyDetailsModal';
 import { GlobalBulkUploadModal } from '@/components/ui/GlobalBulkUploadModal';
@@ -84,11 +84,11 @@ export default function CompaniesPage() {
   }
 
   if (isAdmin) {
-    return <div className="p-8 max-w-7xl mx-auto"><BranchCompaniesView /></div>;
+    return <div className="p-2 md:p-8 max-w-7xl mx-auto"><BranchCompaniesView /></div>;
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto">
+    <div className="p-2 md:p-8 max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold">Scan Database</h1>
@@ -243,24 +243,29 @@ export default function CompaniesPage() {
         
         {/* Pagination */}
         {!isLoading && data?.pagination && data.pagination.pages > 1 && (
-          <div className="p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
-            <span className="text-sm text-slate-500">
+          <div className="p-3 md:p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
+            <span className="hidden md:inline text-sm text-slate-500">
               Showing page <span className="font-semibold text-slate-900">{data.pagination.page}</span> of <span className="font-semibold text-slate-900">{data.pagination.pages}</span> ({data.pagination.total} total)
+            </span>
+            <span className="md:hidden text-sm font-semibold text-slate-700 ml-1">
+              {data.pagination.page} <span className="text-slate-400">...</span> {data.pagination.pages}
             </span>
             <div className="flex gap-2">
               <button 
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
               >
-                Previous
+                <ChevronLeft className="w-5 h-5 md:hidden" />
+                <span className="hidden md:inline">Previous</span>
               </button>
               <button 
                 onClick={() => setPage(p => p + 1)}
                 disabled={page === data.pagination.pages}
-                className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
               >
-                Next
+                <ChevronRight className="w-5 h-5 md:hidden" />
+                <span className="hidden md:inline">Next</span>
               </button>
             </div>
           </div>

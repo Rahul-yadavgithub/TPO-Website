@@ -2488,6 +2488,36 @@ router.get('/dashboard/summary', async (req, res) => {
   }
 });
 
+router.get('/dashboard/recent-activity', async (req, res) => {
+  try {
+    const branchId = req.query.branchId as string;
+    
+    // Get start of today (local time handling via simple Date comparison)
+    // To ensure we capture anything from 'today' in the server timezone
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const query: any = {
+      contact_date: { $gte: startOfToday }
+    };
+    
+    if (branchId) {
+      query.branch_id = branchId;
+    }
+
+    const logs = await ContactLog.find(query)
+      .populate('company_id', 'companyName assignedBranch')
+      .populate('branch_id', 'name')
+      .sort({ contact_date: -1 })
+      .lean();
+
+    res.json({ success: true, data: logs });
+  } catch (error) {
+    console.error('Recent activity error:', error);
+    res.status(500).json({ error: 'Failed to fetch recent activity' });
+  }
+});
+
 router.get('/dashboard/confirmed-companies', async (req, res) => {
   try {
     const year = req.query.year as string;

@@ -23,6 +23,7 @@ export default function BranchPortalPage() {
   const [activeView, setActiveView] = useState<'dashboard' | 'contact' | 'single_contact' | 'confirmed' | 'not_confirmed' | 'previous_requests' | 'incoming_requests' | 'outgoing_requests'>('dashboard');
   const [previousView, setPreviousView] = useState<'dashboard' | 'contact' | 'confirmed' | 'not_confirmed' | 'previous_requests' | 'incoming_requests' | 'outgoing_requests'>('dashboard');
   const [dashboardTab, setDashboardTab] = useState<'companies' | 'api'>('companies');
+  const [courseFilter, setCourseFilter] = useState<string>('All');
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [lastVisitedCompanyId, setLastVisitedCompanyId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<'not_contacted' | 'call_again' | 'pending' | null>(null);
@@ -639,7 +640,7 @@ export default function BranchPortalPage() {
   });
 
   return (
-    <div className={`p-8 max-w-7xl mx-auto space-y-8 ${returnToUnified ? 'mt-12' : ''}`}>
+    <div className={`p-2 md:p-8 max-w-7xl mx-auto space-y-6 md:space-y-8 ${returnToUnified ? 'mt-12' : ''}`}>
       {returnToUnified && (
         <div className="fixed top-0 left-0 w-full bg-blue-600 shadow-md z-[60] px-4 md:px-6 py-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
           <p className="text-white font-medium text-sm hidden md:flex items-center gap-2">
@@ -665,29 +666,64 @@ export default function BranchPortalPage() {
       </div>
 
       {/* Branch Selector & Sync */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-end justify-between gap-4">
-        <div className="w-full max-w-md">
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Select Your Branch</label>
-          {branchesLoading || userLoading ? (
-            <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading branches...
-            </div>
-          ) : (
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start justify-between gap-4">
+        <div className="w-full max-w-2xl flex flex-col md:flex-row gap-4">
+          <div className="flex-1">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Select Course</label>
             <select 
               className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 disabled:opacity-70 disabled:cursor-not-allowed"
-              value={selectedBranchId}
+              value={courseFilter}
               onChange={(e) => {
-                setSelectedBranchId(e.target.value);
+                setCourseFilter(e.target.value);
+                setSelectedBranchId('');
                 setActiveView('dashboard');
               }}
               disabled={!isAdmin}
             >
-              <option value="">-- Choose Branch --</option>
-              {branches?.map((b: any) => (
-                <option key={b._id} value={b._id}>{b.name}</option>
-              ))}
+              <option value="All">All Courses</option>
+              <option value="B.Tech">B.Tech</option>
+              <option value="M.Tech">M.Tech</option>
             </select>
-          )}
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Select Your Branch</label>
+            {branchesLoading || userLoading ? (
+              <div className="flex items-center gap-2 text-slate-500 text-sm h-[42px]">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading branches...
+              </div>
+            ) : (
+              <select 
+                className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                value={selectedBranchId}
+                onChange={(e) => {
+                  setSelectedBranchId(e.target.value);
+                  setActiveView('dashboard');
+                }}
+                disabled={!isAdmin}
+              >
+                <option value="">-- Choose Branch --</option>
+                {courseFilter === 'M.Tech' ? (
+                  ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
+                    const branch = branches?.find((b: any) => b.name === name);
+                    if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
+                    return null;
+                  })
+                ) : (
+                  branches
+                    ?.filter((b: any) => b.name !== 'Central Admin')
+                    .filter((b: any) => {
+                      if (courseFilter === 'B.Tech') {
+                        return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
+                      }
+                      return true;
+                    })
+                    .map((b: any) => (
+                      <option key={b._id} value={b._id}>{b.name}</option>
+                    ))
+                )}
+              </select>
+            )}
+          </div>
         </div>
         
 

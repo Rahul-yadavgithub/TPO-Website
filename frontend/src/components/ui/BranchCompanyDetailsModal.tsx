@@ -198,13 +198,15 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
               <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
                 <select 
                   value={assignProgram}
-                  onChange={(e) => setAssignProgram(e.target.value)}
+                  onChange={(e) => {
+                    setAssignProgram(e.target.value);
+                    setAssignBranchId('');
+                  }}
                   className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
                 >
                   <option value="" disabled>Select Course...</option>
                   <option value="B.Tech">B.Tech</option>
                   <option value="M.Tech">M.Tech</option>
-                  <option value="Open to all">Open to all</option>
                 </select>
                 <select 
                   value={assignBranchId}
@@ -212,9 +214,25 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                   className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
                 >
                   <option value="" disabled>Select Branch...</option>
-                  {branches?.map((b: any) => (
-                    <option key={b._id} value={b._id}>{b.name}</option>
-                  ))}
+                  {assignProgram === 'M.Tech' ? (
+                    ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
+                      const branch = branches?.find((b: any) => b.name === name);
+                      if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
+                      return null;
+                    })
+                  ) : (
+                    branches
+                      ?.filter((b: any) => b.name !== 'Central Admin')
+                      .filter((b: any) => {
+                        if (assignProgram === 'B.Tech') {
+                          return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
+                        }
+                        return true;
+                      })
+                      .map((b: any) => (
+                        <option key={b._id} value={b._id}>{b.name}</option>
+                      ))
+                  )}
                 </select>
                 <button
                   onClick={() => assignMutation.mutate()}

@@ -441,8 +441,14 @@ export default function RequestsPage() {
                     onChange={e => setTprBranchFilter(e.target.value)}
                   >
                     <option value="All">All Branches</option>
-                    {branchesData?.map((b: any) => (
-                      <option key={b._id} value={b._id}>{b.name}</option>
+                    {tprCourseFilter === 'M.Tech' ? (
+                      ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))
+                    ) : branchesData
+                      ?.filter((b: any) => b.name !== 'Central Admin' && !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech'))
+                      .map((b: any) => (
+                        <option key={b._id} value={b._id}>{b.name}</option>
                     ))}
                   </select>
                   <span className="text-sm font-medium text-slate-500 whitespace-nowrap shrink-0 ml-1">

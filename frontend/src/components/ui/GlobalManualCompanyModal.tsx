@@ -194,11 +194,12 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
             // Wait, we need to know selectedBranchId for 'current' mode. 
             // In this modal, selectedBranchId is chosen by the Admin from a dropdown.
             // If they haven't chosen one, we just warn it exists.
-            const branch = branches?.find((b: any) => b._id === selectedBranchId);
+            const branchObj = branches?.find((b: any) => b._id === selectedBranchId || b.name === selectedBranchId);
+            const selectedBranchName = selectedProgram === 'M.Tech' ? selectedBranchId : (branchObj ? branchObj.name : undefined);
             
-            if (comp.assignedBranch && branch && comp.assignedBranch !== branch.name) {
+            if (comp.assignedBranch && selectedBranchName && comp.assignedBranch !== selectedBranchName) {
               setIsConflict(true);
-              setConflictMessage(`This company is already assigned to the ${comp.assignedBranch} branch. You cannot add it to ${branch.name}.`);
+              setConflictMessage(`This company is already assigned to the ${comp.assignedBranch} branch. You cannot add it to ${selectedBranchName}.`);
               setIsEditing(false);
             } else if (comp.is_verified_by_admin) {
               setIsConflict(true);
@@ -276,8 +277,9 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
         }, {} as Record<string, string>);
         payload = { ...payload, extraData, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, targetSection: activeTab };
       } else {
-        const branchObj = branches?.find((b: any) => b._id === selectedBranchId);
-        payload = { ...payload, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, assignedBranch: branchObj ? branchObj.name : undefined };
+        const branchObj = branches?.find((b: any) => b._id === selectedBranchId || b.name === selectedBranchId);
+        const branchName = selectedProgram === 'M.Tech' ? selectedBranchId : (branchObj ? branchObj.name : undefined);
+        payload = { ...payload, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, assignedBranch: branchName };
       }
 
       await axios.post(getEndpoint(), payload, { withCredentials: true });
@@ -358,11 +360,16 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                     disabled={!selectedProgram}
                   >
                     <option value="" disabled>Select Branch</option>
-                    {branches
-                      ?.filter((b: any) => b.name !== 'Central Admin' && (selectedProgram === 'M.Tech' ? b.name.toLowerCase().includes('m.tech') || b.name.toLowerCase().includes('mtech') : !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech')))
+                    {selectedProgram === 'M.Tech' ? (
+                      ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))
+                    ) : branches
+                      ?.filter((b: any) => b.name !== 'Central Admin' && !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech'))
                       .map((b: any) => (
                         <option key={b._id} value={b._id}>{b.name}</option>
-                      ))}
+                      ))
+                    }
                   </select>
                 </div>
               </div>
@@ -655,8 +662,9 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                             // However, it's better to just leave 'B.Tech - ' if empty.
                             updateFieldValue(idx, `${currentProgram} - ${newBranches.join(', ')}`);
                           };
-                          
-                          const availableBranches = branches?.filter((b: any) => b.name !== 'Central Admin' && b.name !== 'M.Tech CSE').map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE'];
+                          const availableBranches = currentProgram === 'M.Tech'
+                            ? ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE']
+                            : (branches?.filter((b: any) => b.name !== 'Central Admin' && !b.name.includes('M.Tech')).map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE']);
 
                           return (
                             <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg w-full">

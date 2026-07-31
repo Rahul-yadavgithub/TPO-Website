@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft, Search, Building2, CheckCircle2, Save, Users, Calendar, XCircle, ShieldCheck, Phone, Mail } from 'lucide-react';
+import { Loader2, ArrowLeft, Search, Building2, CheckCircle2, Save, Users, Calendar, XCircle, ShieldCheck, Phone, Mail, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ExtractedContact {
@@ -343,9 +343,9 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
+    <div className="bg-white md:rounded-2xl shadow-sm border-y md:border border-slate-200 overflow-hidden min-h-[600px] flex flex-col">
       {/* Header */}
-      <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+      <div className="p-4 md:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
         <div className="flex items-center gap-4">
           <button 
             onClick={onBack}
@@ -361,7 +361,7 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
       </div>
 
       {/* Stat Cards */}
-      <div className="p-6 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 border-b border-slate-100">
+      <div className="p-4 md:p-6 grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 bg-slate-50 border-b border-slate-100">
         <button 
           onClick={() => setActiveTab('available')}
           className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
@@ -400,7 +400,7 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
         </button>
       </div>
 
-      <div className="p-6 flex-1 bg-white">
+      <div className="p-3 md:p-6 flex-1 bg-white">
         {/* Shared Search Bar */}
         <div className="max-w-4xl mx-auto mb-6">
           <div className="relative">
@@ -491,24 +491,31 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
 
             {/* Pagination Controls */}
             {!isSearchActive && availableData?.pagination && availableData.pagination.pages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8 pt-4 border-t border-slate-100">
-                <button 
-                  disabled={availablePage === 1}
-                  onClick={() => setAvailablePage(p => p - 1)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm font-semibold text-slate-600">
-                  Page {availablePage} of {availableData.pagination.pages}
+              <div className="flex items-center justify-between md:justify-center gap-2 mt-6 md:mt-8 pt-4 border-t border-slate-100">
+                <span className="md:hidden text-sm font-semibold text-slate-700 ml-2">
+                  {availablePage} <span className="text-slate-400">...</span> {availableData.pagination.pages}
                 </span>
-                <button 
-                  disabled={availablePage === availableData.pagination.pages}
-                  onClick={() => setAvailablePage(p => p + 1)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
-                >
-                  Next
-                </button>
+                <div className="flex gap-2 mr-2 md:mr-0">
+                  <button 
+                    disabled={availablePage === 1}
+                    onClick={() => setAvailablePage(p => p - 1)}
+                    className="p-2 md:px-4 md:py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <ChevronLeft className="w-5 h-5 md:hidden" />
+                    <span className="hidden md:inline">Previous</span>
+                  </button>
+                  <span className="hidden md:inline text-sm font-semibold text-slate-600 self-center mx-2">
+                    Page {availablePage} of {availableData.pagination.pages}
+                  </span>
+                  <button 
+                    disabled={availablePage === availableData.pagination.pages}
+                    onClick={() => setAvailablePage(p => p + 1)}
+                    className="p-2 md:px-4 md:py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <ChevronRight className="w-5 h-5 md:hidden" />
+                    <span className="hidden md:inline">Next</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -882,24 +889,31 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
 
             {/* Pagination Controls */}
             {!isSearchActive && currentData?.pagination && currentData.pagination.pages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-8 pt-4 border-t border-slate-100">
-                <button 
-                  disabled={currentPage === 1}
-                  onClick={() => setPage(p => p - 1)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
-                >
-                  Previous
-                </button>
-                <span className="text-sm font-semibold text-slate-600">
-                  Page {currentPage} of {currentData.pagination.pages}
+              <div className="flex items-center justify-between md:justify-center gap-2 mt-6 md:mt-8 pt-4 border-t border-slate-100">
+                <span className="md:hidden text-sm font-semibold text-slate-700 ml-2">
+                  {currentPage} <span className="text-slate-400">...</span> {currentData.pagination.pages}
                 </span>
-                <button 
-                  disabled={currentPage === currentData.pagination.pages}
-                  onClick={() => setPage(p => p + 1)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50"
-                >
-                  Next
-                </button>
+                <div className="flex gap-2 mr-2 md:mr-0">
+                  <button 
+                    disabled={currentPage === 1}
+                    onClick={() => setPage(p => p - 1)}
+                    className="p-2 md:px-4 md:py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <ChevronLeft className="w-5 h-5 md:hidden" />
+                    <span className="hidden md:inline">Previous</span>
+                  </button>
+                  <span className="hidden md:inline text-sm font-semibold text-slate-600 self-center mx-2">
+                    Page {currentPage} of {currentData.pagination.pages}
+                  </span>
+                  <button 
+                    disabled={currentPage === currentData.pagination.pages}
+                    onClick={() => setPage(p => p + 1)}
+                    className="p-2 md:px-4 md:py-2 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                  >
+                    <ChevronRight className="w-5 h-5 md:hidden" />
+                    <span className="hidden md:inline">Next</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>

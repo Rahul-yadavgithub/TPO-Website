@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Copy, FileText, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Copy, FileText, Loader2, AlertCircle, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { ResolveDuplicateModal } from './ResolveDuplicateModal';
 
@@ -110,24 +110,29 @@ export function DuplicateCompaniesTable({ searchQuery = '' }: { searchQuery?: st
       
       {/* Pagination */}
       {!isLoading && data?.pagination && data.pagination.pages > 1 && (
-        <div className="p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
-          <span className="text-sm text-slate-500">
+        <div className="p-3 md:p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
+          <span className="hidden md:inline text-sm text-slate-500">
             Showing page <span className="font-semibold text-slate-900">{data.pagination.page}</span> of <span className="font-semibold text-slate-900">{data.pagination.pages}</span> ({data.pagination.total} total)
+          </span>
+          <span className="md:hidden text-sm font-semibold text-slate-700 ml-1">
+            {data.pagination.page} <span className="text-slate-400">...</span> {data.pagination.pages}
           </span>
           <div className="flex gap-2">
             <button 
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
             >
-              Previous
+              <ChevronLeft className="w-5 h-5 md:hidden" />
+              <span className="hidden md:inline">Previous</span>
             </button>
             <button 
               onClick={() => setPage(p => p + 1)}
               disabled={page === data.pagination.pages}
-              className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
             >
-              Next
+              <ChevronRight className="w-5 h-5 md:hidden" />
+              <span className="hidden md:inline">Next</span>
             </button>
           </div>
         </div>

@@ -205,10 +205,16 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
                       className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50"
                     >
                       <option value="">-- Select Branch --</option>
-                      {branches
-                        ?.map((b: any) => (
+                      {selectedProgram === 'M.Tech' ? (
+                        ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))
+                      ) : branches
+                        ?.filter((b: any) => b.name !== 'Central Admin' && !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech'))
+                        .map((b: any) => (
                           <option key={b._id} value={b._id}>{b.name}</option>
-                        ))}
+                        ))
+                      }
                     </select>
                   </div>
                 </div>

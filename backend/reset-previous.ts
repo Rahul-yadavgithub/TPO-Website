@@ -12,7 +12,7 @@ const PreviousCompanyContactRequestSchema = new mongoose.Schema({
   requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
   adminNotes: { type: String }
-}, { timestamps: true });
+}, { timestamps: true, collection: 'PreviousCompanyContactRequest' });
 
 const PreviousCompanyContactRequest = mongoose.models.PreviousCompanyContactRequest || mongoose.model('PreviousCompanyContactRequest', PreviousCompanyContactRequestSchema);
 
@@ -23,7 +23,7 @@ const PreviousCompanySchema = new mongoose.Schema({
   contactedByBranchName: String,
   contactedByTprName: String,
   contactedByTprEmail: String,
-}, { timestamps: true, strict: false });
+}, { timestamps: true, strict: false, collection: 'PreviousCompany' });
 
 const PreviousCompany = mongoose.models.PreviousCompany || mongoose.model('PreviousCompany', PreviousCompanySchema);
 

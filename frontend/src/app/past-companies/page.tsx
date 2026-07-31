@@ -4,7 +4,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2 } from 'lucide-react';
+import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { PastCompanyDetailsModal } from '@/components/ui/PastCompanyDetailsModal';
 import { DuplicateCompaniesTable } from '@/components/ui/DuplicateCompaniesTable';
 
@@ -30,6 +31,111 @@ interface PastCompany {
   section: string;
   additionalContacts?: AdditionalContact[];
   is_verified_by_admin?: boolean;
+  extraData?: any;
+}
+
+function extractAllContacts(company: any) {
+  const contacts = [];
+  
+  if (company.hrName || company.hrEmail || company.hrPhone) {
+    contacts.push({
+      id: 'primary',
+      name: company.hrName || '',
+      email: company.hrEmail || '',
+      phone: company.hrPhone || '',
+      isVerified: company.primary_contact_verified || false,
+    });
+  }
+  
+  if (company.additionalContacts && Array.isArray(company.additionalContacts)) {
+    company.additionalContacts.forEach((ac: any, idx: number) => {
+      contacts.push({
+        id: `additional-${idx}`,
+        name: ac.hrName || '',
+        email: ac.hrEmail || '',
+        phone: ac.hrPhone || '',
+        isVerified: ac.isVerified || false,
+      });
+    });
+  }
+  
+  if (company.extraData) {
+    const keys = Object.keys(company.extraData);
+    const nameRegex = /^OTHER HR NAME\s*(\d*)$/i;
+    
+    keys.forEach(key => {
+      const match = key.match(nameRegex);
+      if (match) {
+        const idxStr = match[1] || '';
+        const name = company.extraData[key];
+        let phone = '';
+        let email = '';
+        
+        const possiblePhoneKeys = [
+          `OTHER HR MOBILE ${idxStr}`.trim(),
+          `OTHER HR PHONE ${idxStr}`.trim(),
+          `OTHER HR NUMBER ${idxStr}`.trim(),
+          `OTHER HR CONTACT ${idxStr}`.trim()
+        ];
+        
+        const possibleEmailKeys = [
+          `OTHER HR EMAIL ${idxStr}`.trim(),
+          `OTHER HR MAIL ${idxStr}`.trim()
+        ];
+        
+        const possibleVerifiedKeys = [
+          `OTHER HR VERIFIED ${idxStr}`.trim()
+        ];
+        
+        for (const pk of possiblePhoneKeys) {
+          const actualPk = keys.find(k => k.toLowerCase() === pk.toLowerCase());
+          if (actualPk) {
+            phone = company.extraData[actualPk];
+            break;
+          }
+        }
+        
+        for (const ek of possibleEmailKeys) {
+          const actualEk = keys.find(k => k.toLowerCase() === ek.toLowerCase());
+          if (actualEk) {
+            email = company.extraData[actualEk];
+            break;
+          }
+        }
+        
+        let isVerified = false;
+        for (const vk of possibleVerifiedKeys) {
+          const actualVk = keys.find(k => k.toLowerCase() === vk.toLowerCase());
+          if (actualVk) {
+            isVerified = String(company.extraData[actualVk]).toLowerCase() === 'true';
+            break;
+          }
+        }
+        
+        if (name || phone || email) {
+          contacts.push({
+            id: `extra-${idxStr || '0'}`,
+            name: String(name || ''),
+            email: String(email || ''),
+            phone: String(phone || ''),
+            isVerified: isVerified,
+          });
+        }
+      }
+    });
+  }
+  
+  const uniqueContacts = [];
+  const seen = new Set();
+  for (const c of contacts) {
+    const key = `${c.name?.trim().toLowerCase()}|${c.email?.trim().toLowerCase()}|${c.phone?.trim().toLowerCase()}`;
+    if (!seen.has(key) && (c.name || c.email || c.phone)) {
+      seen.add(key);
+      uniqueContacts.push(c);
+    }
+  }
+  
+  return uniqueContacts;
 }
 
 export default function PastCompaniesPage() {
@@ -49,6 +155,7 @@ export default function PastCompaniesPage() {
     branch: 'All'
   });
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -109,6 +216,102 @@ export default function PastCompaniesPage() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      const params: Record<string, string | number> = { page: 1, limit: 10000, q: search };
+      if (activeFilters.section !== 'All') params.section = activeFilters.section;
+      if (activeFilters.verified !== 'All') params.verified = activeFilters.verified === 'Verified' ? 'true' : 'false';
+      if (activeFilters.branch !== 'All') params.branch = activeFilters.branch;
+
+      toast.info('Fetching data for export...');
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/all`, { params, withCredentials: true });
+      const companies = res.data.data;
+
+      if (!companies || companies.length === 0) {
+        toast.error('No companies found to export.');
+        setIsExporting(false);
+        return;
+      }
+
+      toast.info('Processing data...');
+
+      // Extract all unique extraData keys (excluding the OTHER HR ones that we extract)
+      const allExtraKeys = new Set<string>();
+      companies.forEach((company: any) => {
+        if (company.extraData) {
+          Object.keys(company.extraData).forEach(key => {
+            const upperKey = key.toUpperCase();
+            if (!upperKey.includes('OTHER HR')) {
+              allExtraKeys.add(key);
+            }
+          });
+        }
+      });
+      const dynamicColumns = Array.from(allExtraKeys);
+
+      const rows: any[] = [];
+
+      companies.forEach((company: any) => {
+        const allContacts = extractAllContacts(company);
+        const verifiedContacts = allContacts.filter(c => c.isVerified);
+
+        const baseExtraData: Record<string, any> = {};
+        dynamicColumns.forEach(col => {
+          baseExtraData[col] = company.extraData ? (company.extraData[col] || '') : '';
+        });
+
+        if (verifiedContacts.length > 0) {
+          // First verified HR gets the extra data
+          rows.push({
+            'Company Name': company.companyName,
+            'HR Name': verifiedContacts[0].name,
+            'Phone Number': verifiedContacts[0].phone,
+            'Email': verifiedContacts[0].email,
+            ...baseExtraData
+          });
+
+          // Subsequent verified HRs get empty extra data
+          for (let i = 1; i < verifiedContacts.length; i++) {
+            const emptyExtraData: Record<string, any> = {};
+            dynamicColumns.forEach(col => {
+              emptyExtraData[col] = '';
+            });
+            
+            rows.push({
+              'Company Name': company.companyName,
+              'HR Name': verifiedContacts[i].name,
+              'Phone Number': verifiedContacts[i].phone,
+              'Email': verifiedContacts[i].email,
+              ...emptyExtraData
+            });
+          }
+        } else {
+          // No verified HRs, just print the company with blank HR fields and full extra data
+          rows.push({
+            'Company Name': company.companyName,
+            'HR Name': '',
+            'Phone Number': '',
+            'Email': '',
+            ...baseExtraData
+          });
+        }
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Companies');
+      XLSX.writeFile(workbook, 'Past_Companies_Export.xlsx');
+      
+      toast.success('Export completed successfully!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   if (isUserLoading) {
     return <div className="p-8 text-center text-slate-500">Loading...</div>;
   }
@@ -117,7 +320,7 @@ export default function PastCompaniesPage() {
   
   if (!isAdmin) {
     return (
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-2 md:p-8 max-w-7xl mx-auto space-y-6">
         <div className="bg-red-50 p-6 rounded-2xl border border-red-200 shadow-sm text-center">
           <ShieldCheck className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-red-900 mb-2">Access Denied</h2>
@@ -128,7 +331,7 @@ export default function PastCompaniesPage() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-2 md:p-8 max-w-7xl mx-auto space-y-6">
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -143,12 +346,21 @@ export default function PastCompaniesPage() {
           
           <div className="flex gap-4 w-full md:w-auto">
             {activeTab === 'master' && (
-              <button
-                onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-                className={`flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto border ${isFilterPanelOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-              >
-                <Filter className="w-4 h-4" /> Filters
-              </button>
+              <>
+                <button
+                  onClick={handleExport}
+                  disabled={isExporting}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  {isExporting ? <span className="animate-pulse">Exporting...</span> : <><Download className="w-4 h-4" /> Export</>}
+                </button>
+                <button
+                  onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+                  className={`flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto border ${isFilterPanelOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                >
+                  <Filter className="w-4 h-4" /> Filters
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -363,24 +575,29 @@ export default function PastCompaniesPage() {
         
         {/* Pagination */}
         {!isLoading && data?.pagination && data.pagination.pages > 1 && (
-          <div className="p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
-            <span className="text-sm text-slate-500">
+          <div className="p-3 md:p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
+            <span className="hidden md:inline text-sm text-slate-500">
               Showing page <span className="font-semibold text-slate-900">{data.pagination.page}</span> of <span className="font-semibold text-slate-900">{data.pagination.pages}</span> ({data.pagination.total} total)
+            </span>
+            <span className="md:hidden text-sm font-semibold text-slate-700 ml-1">
+              {data.pagination.page} <span className="text-slate-400">...</span> {data.pagination.pages}
             </span>
             <div className="flex gap-2">
               <button 
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
               >
-                Previous
+                <ChevronLeft className="w-5 h-5 md:hidden" />
+                <span className="hidden md:inline">Previous</span>
               </button>
               <button 
                 onClick={() => setPage(p => p + 1)}
                 disabled={page === data.pagination.pages}
-                className="px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
               >
-                Next
+                <ChevronRight className="w-5 h-5 md:hidden" />
+                <span className="hidden md:inline">Next</span>
               </button>
             </div>
           </div>

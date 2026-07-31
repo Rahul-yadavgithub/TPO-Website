@@ -12,21 +12,14 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [captchaText, setCaptchaText] = useState('');
-  const [captchaInput, setCaptchaInput] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [logoUrl, setLogoUrl] = useState<string>('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp'); // Default
   const router = useRouter();
 
-  const generateCaptcha = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-    let r = '';
-    for (let i = 0; i < 6; i++) r += chars.charAt(Math.floor(Math.random() * chars.length));
-    setCaptchaText(r);
-  };
-
   useEffect(() => {
-    generateCaptcha();
     setCurrentTime(new Date());
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
     
@@ -43,14 +36,14 @@ export default function RegisterPage() {
   }, []);
 
   const btechBranches = ['MNC', 'CSE', 'EE', 'EP', 'ECE', 'MSE', 'ME', 'CH', 'CE'];
-  const mtechBranches = ['CSE', 'ECE', 'MNC', 'EE', 'CE'];
+  const mtechBranches = ['CSE', 'MSC', 'ECE', 'EE', 'CE'];
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); setSuccess('');
-    if (captchaInput !== captchaText) {
-      setError('Invalid captcha. Please try again.');
-      generateCaptcha(); setCaptchaInput(''); return;
+    if (formData.password !== confirmPassword) {
+      setError('Passwords do not match. Please try again.');
+      return;
     }
     setLoading(true);
     try {
@@ -60,7 +53,6 @@ export default function RegisterPage() {
       setTimeout(() => router.push('/login'), 3500);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed. Please check your details.');
-      generateCaptcha(); setCaptchaInput('');
     } finally { setLoading(false); }
   };
 
@@ -235,31 +227,25 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Captcha */}
+              {/* Confirm Password */}
               <div>
-                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Security Verification *</label>
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1 bg-[#eef1f5] border border-slate-300 h-10 flex items-center justify-center relative overflow-hidden select-none">
-                    <div className="absolute inset-0 opacity-30">
-                      <svg className="w-full h-full"><line x1="0" y1="8" x2="100%" y2="32" stroke="#94a3b8" strokeWidth="1.5" /><line x1="15%" y1="0" x2="85%" y2="40" stroke="#94a3b8" strokeWidth="1" /></svg>
-                    </div>
-                    <span className="font-mono text-[18px] font-bold italic tracking-[0.35em] text-slate-700 blur-[0.4px] relative z-10">{captchaText}</span>
-                  </div>
-                  <button type="button" onClick={generateCaptcha}
-                    className="px-3 border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-500" title="Refresh">
-                    <RefreshCw className="w-4 h-4" />
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">Confirm Password *</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input type={showConfirmPassword ? 'text' : 'password'} required minLength={8}
+                    className="w-full pl-9 pr-10 py-2.5 border border-slate-300 bg-slate-50 text-slate-800 text-[13px] focus:outline-none focus:border-[#1a3a6e] focus:ring-1 focus:ring-[#1a3a6e] placeholder-slate-400"
+                    placeholder="Re-enter password"
+                    value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={loading || !!success} />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <input type="text" required
-                  className="w-full px-4 py-2.5 border border-slate-300 bg-slate-50 text-slate-800 text-[13px] focus:outline-none focus:border-[#1a3a6e] focus:ring-1 focus:ring-[#1a3a6e] placeholder-slate-400"
-                  placeholder="Type the characters shown above"
-                  value={captchaInput} onChange={e => setCaptchaInput(e.target.value)}
-                  disabled={loading || !!success} />
               </div>
 
               {/* Submit */}
               <button type="button" onClick={handleRegister as any}
-                disabled={loading || !!success || !captchaInput || !formData.email || !formData.password || !formData.name || !formData.rollNumber || !formData.branchName}
+                disabled={loading || !!success || !confirmPassword || !formData.email || !formData.password || !formData.name || !formData.rollNumber || !formData.branchName}
                 className="w-full py-2.5 bg-[#1a3a6e] hover:bg-[#122d58] text-white font-bold text-[14px] tracking-wide transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-1">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Submit Registration Request'}
               </button>

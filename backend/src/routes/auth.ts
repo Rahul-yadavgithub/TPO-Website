@@ -228,7 +228,7 @@ router.post('/forgot-password', async (req, res) => {
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const resetLink = `${baseUrl}/reset-password?id=${user._id}&token=${token}`;
 
-    await sendRecoveryEmail(user.email, resetLink);
+    await sendRecoveryEmail(user.email, user.name, resetLink);
 
     res.status(200).json({ success: true, message: 'If the email exists, a reset link has been sent.' });
   } catch (error) {

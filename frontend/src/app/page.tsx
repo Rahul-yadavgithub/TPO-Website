@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   ArrowRight, X, Search, ChevronLeft, ChevronRight,
   Mail, Phone, AlertTriangle, Users, Briefcase,
-  Building2, RefreshCw, Loader2, CheckCircle, Clock, ShieldCheck
+  Building2, RefreshCw, Loader2, CheckCircle, Clock, ShieldCheck, Activity, Bell
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -163,6 +163,201 @@ function CompanyCard({ company }: { company: CompanyEntry }) {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Quick Overview Card ───────────────────────────────────────────────────────
+function ActionCard({
+  icon: Icon, title, value, subtitle, onClick, colorClass, bgClass, iconColor, loading
+}: {
+  icon: any; title: string; value: number | string; subtitle: string; onClick: () => void;
+  colorClass: string; bgClass: string; iconColor: string; loading?: boolean;
+}) {
+  return (
+    <div 
+      onClick={onClick}
+      className={`${bgClass} border border-slate-200 rounded-2xl p-5 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group flex items-center justify-between`}
+    >
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <Icon className={`w-4 h-4 ${iconColor}`} />
+          <h3 className="text-sm font-bold text-slate-700">{title}</h3>
+        </div>
+        <div className="flex items-end gap-2">
+          <span className={`text-3xl font-black ${colorClass} leading-none`}>
+            {loading ? <Loader2 className="w-6 h-6 animate-spin my-1" /> : <AnimatedCounter target={Number(value) || 0} />}
+          </span>
+          <span className="text-xs text-slate-500 font-medium mb-1">{subtitle}</span>
+        </div>
+      </div>
+      <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+        <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-slate-700 transition-colors" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Activity Log Card ────────────────────────────────────────────────────────
+function ActivityLogCard({ log }: { log: any }) {
+  const companyName = log.company_id?.companyName || 'Unknown Company';
+  const branchName = log.branch_id?.name || log.company_id?.assignedBranch || 'Unknown Branch';
+  const tprName = log.created_by || 'TPR';
+  const timeStr = new Date(log.contact_date || log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dateStr = new Date(log.contact_date || log.createdAt).toLocaleDateString();
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition-all duration-150 relative overflow-hidden">
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-600"></div>
+      <div className="flex justify-between items-start mb-2 pl-2">
+        <h3 className="font-bold text-slate-900 text-sm truncate pr-2">{companyName}</h3>
+        <span className="text-[10px] font-semibold text-slate-500 shrink-0 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+          <Clock className="w-3 h-3" /> {timeStr}
+        </span>
+      </div>
+      <div className="pl-2 space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-500">Outcome:</span>
+          <span className="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{log.outcome || 'Logged Call'}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-500">Logged By:</span>
+          <span className="font-medium text-slate-900 flex items-center gap-1">
+            <Users className="w-3 h-3 text-slate-400" /> {tprName}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-slate-500">Branch:</span>
+          <span className="font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">{branchName}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Activity Slide-Over Panel ────────────────────────────────────────────────
+function ActivitySlideOverPanel({
+  open, onClose, branchId, isAdmin, branches
+}: { open: boolean; onClose: () => void; branchId?: string; isAdmin?: boolean; branches?: any[]; }) {
+  const [courseFilter, setCourseFilter] = useState('All');
+  const [branchFilter, setBranchFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('All');
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['recent-activity', branchId],
+    queryFn: async () => {
+      const params: any = {};
+      if (branchId) params.branchId = branchId;
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/recent-activity`, { params });
+      return res.data.data;
+    },
+    enabled: open,
+    refetchInterval: open ? 15000 : false, // Poll every 15s when open
+  });
+
+  const logs = data || [];
+
+  const filtered = logs.filter((log: any) => {
+    const matchStatus = statusFilter === 'All' || log.outcome === statusFilter;
+    const branchName = log.branch_id?.name || log.company_id?.assignedBranch || '';
+    
+    let matchCourse = true;
+    if (courseFilter === 'M.Tech') {
+      matchCourse = branchName.includes('M.Tech');
+    } else if (courseFilter === 'B.Tech') {
+      matchCourse = !branchName.includes('M.Tech');
+    }
+    
+    const matchBranch = branchFilter === 'All' || log.branch_id?._id === branchFilter;
+    
+    return matchStatus && matchCourse && matchBranch;
+  });
+
+  const outcomeOptions = [
+    'Call Again (Reschedule)',
+    'Brochure + JNF Sent',
+    'Want to talk to TPO',
+    'Rejected / Not Interested',
+    'Accepted / Confirmed',
+    'Custom (Type your own)'
+  ];
+
+  return (
+    <>
+      <div
+        className={`fixed inset-0 z-40 bg-black transition-opacity duration-250 ${open ? 'opacity-40 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={onClose}
+      />
+      <div className={`fixed top-0 right-0 h-full z-50 w-full sm:w-[400px] bg-slate-50 shadow-2xl flex flex-col transition-transform duration-250 ease-out ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-indigo-600" /> Today's Activity
+            </h2>
+            <span className="text-xs text-slate-500 mt-0.5 block">Live feed of TPR contact logs</span>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+            <X className="w-5 h-5 text-slate-500" />
+          </button>
+        </div>
+
+        <div className="p-4 bg-white border-b border-slate-200 shrink-0 space-y-3 z-10 shadow-sm">
+          {isAdmin && (
+            <div className="flex gap-2">
+              <select 
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={courseFilter}
+                onChange={e => { setCourseFilter(e.target.value); setBranchFilter('All'); }}
+              >
+                <option value="All">All Courses</option>
+                <option value="B.Tech">B.Tech</option>
+                <option value="M.Tech">M.Tech</option>
+              </select>
+              <select 
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+                value={branchFilter}
+                onChange={e => setBranchFilter(e.target.value)}
+              >
+                <option value="All">All Branches</option>
+                {courseFilter === 'M.Tech' ? (
+                  ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))
+                ) : (
+                  branches?.filter((b: any) => b.name !== 'Central Admin' && !b.name.includes('M.Tech')).map(b => (
+                    <option key={b._id} value={b._id}>{b.name}</option>
+                  ))
+                )}
+              </select>
+            </div>
+          )}
+          <select 
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg text-xs px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="All">All Outcomes</option>
+            {outcomeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 relative">
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center p-8 mt-10">
+              <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
+              <p className="text-slate-500 text-sm">Fetching live activity...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16">
+              <Activity className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+              <p className="font-medium text-slate-500">No activity yet today</p>
+              <p className="text-sm text-slate-400 mt-1">Try adjusting your filters</p>
+            </div>
+          ) : (
+            filtered.map((log: any) => <ActivityLogCard key={log._id} log={log} />)
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -434,6 +629,32 @@ export default function Dashboard() {
     enabled: isAdmin
   });
 
+  const { data: requestsData, isLoading: isLoadingRequests } = useQuery({
+    queryKey: ['admin-requests'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/admin/requests`, { withCredentials: true });
+      return res.data.data;
+    },
+    enabled: isAdmin,
+    refetchInterval: 60000,
+  });
+
+  const { data: activityData, isLoading: isLoadingActivity } = useQuery({
+    queryKey: ['recent-activity', branchId],
+    queryFn: async () => {
+      const params = branchId ? { branchId } : {};
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/recent-activity`, { params });
+      return res.data.data;
+    },
+    enabled: !!userProfile,
+    refetchInterval: 60000,
+  });
+
+  const totalPendingRequests = (requestsData?.tprs?.length || 0) + (requestsData?.contacts?.length || 0);
+  const totalActivityToday = activityData?.length || 0;
+  
+  const [activityPanelOpen, setActivityPanelOpen] = useState(false);
+
 
 
   const pendingCount = summary?.pending_review_count || 0;
@@ -452,6 +673,34 @@ export default function Dashboard() {
             <RefreshCw className={`w-5 h-5 ${isFetching ? 'animate-spin text-blue-500' : ''}`} />
           </button>
         </div>
+      </div>
+
+      {/* Quick Overview Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 xl:gap-6 mb-8">
+        {isAdmin && (
+          <ActionCard
+            icon={Bell}
+            title="Action Required"
+            value={totalPendingRequests}
+            subtitle="Pending Requests"
+            onClick={() => window.location.href = '/requests'}
+            colorClass="text-amber-600"
+            bgClass="bg-amber-50"
+            iconColor="text-amber-600"
+            loading={isLoadingRequests}
+          />
+        )}
+        <ActionCard
+          icon={Activity}
+          title="Live Tracking"
+          value={totalActivityToday}
+          subtitle="Companies Contacted Today"
+          onClick={() => setActivityPanelOpen(true)}
+          colorClass="text-indigo-600"
+          bgClass="bg-indigo-50"
+          iconColor="text-indigo-600"
+          loading={isLoadingActivity}
+        />
       </div>
 
 
@@ -500,6 +749,14 @@ export default function Dashboard() {
           </>
         )}
       </div>
+      
+      <ActivitySlideOverPanel
+        open={activityPanelOpen}
+        onClose={() => setActivityPanelOpen(false)}
+        branchId={branchId}
+        isAdmin={isAdmin}
+        branches={branchesData}
+      />
 
       {/* Footer */}
       <div className="text-right text-xs text-slate-400">

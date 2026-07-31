@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Search, CheckCircle2, Info, Loader2, Building2, Plus, AlertCircle, Filter, X, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Search, CheckCircle2, Info, Loader2, Building2, Plus, AlertCircle, Filter, X, ShieldCheck, ArrowRight, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 import { BranchCompanyDetailsModal } from '@/components/ui/BranchCompanyDetailsModal';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 
@@ -25,6 +27,7 @@ export function BranchCompaniesView() {
   });
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch all branches for the filter
@@ -49,9 +52,107 @@ export function BranchCompaniesView() {
     }
   });
 
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      const params: any = { page: 1, limit: 10000, search };
+      if (activeFilters.branch) params.branch = activeFilters.branch;
+      if (activeFilters.program) params.program = activeFilters.program;
+      if (activeFilters.is_verified !== '') params.is_verified = activeFilters.is_verified;
+      if (activeFilters.call_today) params.call_today = 'true';
+
+      toast.info('Fetching data for export...');
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/branch-overview`, { params, withCredentials: true });
+      const companies = res.data.data;
+
+      if (!companies || companies.length === 0) {
+        toast.error('No companies found to export.');
+        setIsExporting(false);
+        return;
+      }
+
+      toast.info('Processing data...');
+
+      // Get dynamic columns for current companies
+      // We will extract fields like industry, website, category, confidenceScore, etc.
+      const skipKeys = ['_id', '__v', 'companyName', 'normalizedName', 'hr_contacts', 'source', 'updatedAt', 'createdAt'];
+      const allExtraKeys = new Set<string>();
+      companies.forEach((company: any) => {
+        Object.keys(company).forEach(key => {
+          if (!skipKeys.includes(key) && typeof company[key] !== 'object') {
+            allExtraKeys.add(key);
+          }
+        });
+      });
+      const dynamicColumns = Array.from(allExtraKeys);
+
+      const rows: any[] = [];
+
+      companies.forEach((company: any) => {
+        // Current companies have hr_contacts array
+        const allContacts = company.hr_contacts || [];
+        // Consider verified if not marked as incorrect
+        const verifiedContacts = allContacts.filter((c: any) => !c.is_incorrect);
+
+        const baseExtraData: Record<string, any> = {};
+        dynamicColumns.forEach(col => {
+          baseExtraData[col] = company[col] !== undefined && company[col] !== null ? company[col] : '';
+        });
+
+        if (verifiedContacts.length > 0) {
+          // First verified HR gets the extra data
+          rows.push({
+            'Company Name': company.companyName,
+            'HR Name': verifiedContacts[0].name || '',
+            'Phone Number': verifiedContacts[0].mobile || '',
+            'Email': verifiedContacts[0].email || '',
+            ...baseExtraData
+          });
+
+          // Subsequent verified HRs get empty extra data
+          for (let i = 1; i < verifiedContacts.length; i++) {
+            const emptyExtraData: Record<string, any> = {};
+            dynamicColumns.forEach(col => {
+              emptyExtraData[col] = '';
+            });
+            
+            rows.push({
+              'Company Name': company.companyName,
+              'HR Name': verifiedContacts[i].name || '',
+              'Phone Number': verifiedContacts[i].mobile || '',
+              'Email': verifiedContacts[i].email || '',
+              ...emptyExtraData
+            });
+          }
+        } else {
+          // No verified HRs, just print the company with blank HR fields and full extra data
+          rows.push({
+            'Company Name': company.companyName,
+            'HR Name': '',
+            'Phone Number': '',
+            'Email': '',
+            ...baseExtraData
+          });
+        }
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Companies');
+      XLSX.writeFile(workbook, 'Companies_Export.xlsx');
+      
+      toast.success('Export completed successfully!');
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4">
+    <div className="space-y-4 md:space-y-6">
+      <div className="bg-white p-4 md:p-6 md:rounded-2xl border-y md:border border-slate-200 shadow-sm flex flex-col gap-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -64,6 +165,13 @@ export function BranchCompaniesView() {
           </div>
           
           <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
+            <button
+              onClick={handleExport}
+              disabled={isExporting}
+              className="flex flex-1 md:flex-none items-center justify-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 bg-green-600 text-white text-xs md:text-sm font-semibold rounded-xl hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {isExporting ? <span className="animate-pulse">Exporting...</span> : <><Download className="w-3 h-3 md:w-4 md:h-4 shrink-0" /> <span className="hidden sm:inline">Export</span><span className="sm:hidden">Export</span></>}
+            </button>
             <button
               onClick={() => setShowAddModal(true)}
               className="flex flex-1 md:flex-none items-center justify-center gap-1.5 md:gap-2 px-3 md:px-4 py-2.5 bg-blue-600 text-white text-xs md:text-sm font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
@@ -108,7 +216,7 @@ export function BranchCompaniesView() {
                 <select 
                   className="w-full bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2.5 shadow-sm"
                   value={tempFilters.program}
-                  onChange={(e) => setTempFilters({ ...tempFilters, program: e.target.value })}
+                  onChange={(e) => setTempFilters({ ...tempFilters, program: e.target.value, branch: '' })}
                 >
                   <option value="">All Courses</option>
                   <option value="B.Tech">B.Tech</option>
@@ -126,7 +234,15 @@ export function BranchCompaniesView() {
                   onChange={(e) => setTempFilters({ ...tempFilters, branch: e.target.value })}
                 >
                   <option value="">All Branches</option>
-                  {branches?.map((b: any) => (
+                  {tempFilters.program === 'M.Tech' ? (
+                    ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))
+                  ) : branches?.filter((b: any) => {
+                    if (b.name === 'Central Admin') return false;
+                    if (tempFilters.program === 'B.Tech') return !b.name.includes('M.Tech');
+                    return true;
+                  }).map((b: any) => (
                     <option key={b._id} value={b.name}>{b.name}</option>
                   ))}
                 </select>
@@ -164,7 +280,7 @@ export function BranchCompaniesView() {
 
             </div>
 
-            <div className="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-slate-200">
+            <div className="flex items-center justify-end gap-2 md:gap-3 mt-6 pt-5 border-t border-slate-200">
               <button
                 onClick={() => {
                   const reset = { program: '', branch: '', is_verified: '', call_today: false };
@@ -173,9 +289,10 @@ export function BranchCompaniesView() {
                   setPage(1);
                   setIsFilterPanelOpen(false);
                 }}
-                className="px-5 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+                className="flex-1 md:flex-none px-4 md:px-5 py-2.5 md:py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-xl md:rounded-lg hover:bg-slate-50 transition-colors shadow-sm text-center"
               >
-                Clear Filters
+                <span className="hidden md:inline">Clear Filters</span>
+                <span className="md:hidden">Clear</span>
               </button>
               <button
                 onClick={() => {
@@ -183,16 +300,17 @@ export function BranchCompaniesView() {
                   setPage(1);
                   setIsFilterPanelOpen(false);
                 }}
-                className="px-6 py-2 text-sm font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                className="flex-1 md:flex-none px-4 md:px-6 py-2.5 md:py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl md:rounded-lg hover:bg-indigo-700 transition-colors shadow-sm text-center"
               >
-                Apply Filters & Proceed
+                <span className="hidden md:inline">Apply Filters & Proceed</span>
+                <span className="md:hidden">Apply</span>
               </button>
             </div>
           </div>
         )}
       </div>
 
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white border-y md:border border-slate-200 md:rounded-2xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left whitespace-nowrap lg:whitespace-normal">
             <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
@@ -324,24 +442,29 @@ export function BranchCompaniesView() {
         
         {/* Pagination */}
         {!isLoading && data?.pagination && data.pagination.pages > 1 && (
-          <div className="p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
-            <span className="text-sm text-slate-500">
+          <div className="p-3 md:p-4 flex items-center justify-between border-t border-slate-200 bg-slate-50">
+            <span className="hidden md:inline text-sm text-slate-500">
               Showing page <span className="font-semibold text-slate-900">{data.pagination.page}</span> of <span className="font-semibold text-slate-900">{data.pagination.pages}</span> ({data.pagination.total} total)
+            </span>
+            <span className="md:hidden text-sm font-semibold text-slate-700 ml-1">
+              {data.pagination.page} <span className="text-slate-400">...</span> {data.pagination.pages}
             </span>
             <div className="flex gap-2">
               <button 
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
               >
-                Previous
+                <ChevronLeft className="w-5 h-5 md:hidden" />
+                <span className="hidden md:inline">Previous</span>
               </button>
               <button 
                 onClick={() => setPage(p => p + 1)}
                 disabled={page === data.pagination.pages}
-                className="px-4 py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                className="p-2 md:px-4 md:py-2 text-sm font-bold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center"
               >
-                Next
+                <ChevronRight className="w-5 h-5 md:hidden" />
+                <span className="hidden md:inline">Next</span>
               </button>
             </div>
           </div>
