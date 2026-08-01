@@ -82,8 +82,8 @@ export function DuplicateCompaniesTable({ searchQuery = '' }: { searchQuery?: st
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-0.5">
-                      <span className="font-medium text-slate-900">{dup.originalCompanyId.hrName || 'N/A'}</span>
-                      <span className="text-xs text-slate-500">{dup.originalCompanyId.section}</span>
+                      <span className="font-medium text-slate-900">{dup.originalCompanyId?.hrName || 'N/A'}</span>
+                      <span className="text-xs text-slate-500">{dup.originalCompanyId?.section || 'Unknown Section'}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 border-l border-amber-50 bg-amber-50/10">

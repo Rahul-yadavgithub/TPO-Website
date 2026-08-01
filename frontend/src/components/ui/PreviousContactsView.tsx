@@ -222,7 +222,8 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
     queryKey: ['previous-search', searchQuery, activeTab, branchId],
     queryFn: async () => {
       if (!searchQuery || searchQuery.length < 2) return [];
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/search?q=${searchQuery}&status=${activeTab}&branchId=${branchId}`, { withCredentials: true });
+      const apiStatus = activeTab === 'available' ? 'not_contacted' : activeTab;
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/search?q=${searchQuery}&status=${apiStatus}&branchId=${branchId}`, { withCredentials: true });
       return res.data.data;
     },
     enabled: searchQuery.length >= 2

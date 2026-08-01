@@ -84,6 +84,22 @@ export const hrValidationController = {
       let historyItem = null;
 
       if (existingContact && (existingContact.name || existingContact.email || existingContact.mobile || existingContact.designation)) {
+        const isDifferent = (
+          (existingContact.name || '').trim() !== (name || '').trim() ||
+          (existingContact.email || '').trim() !== (email || '').trim() ||
+          (existingContact.mobile || '').trim() !== (mobile || '').trim() ||
+          (existingContact.designation || '').trim() !== (designation || '').trim() ||
+          (existingContact.linkedin_url || '').trim() !== (linkedin_url || '').trim()
+        );
+
+        if (!isDifferent) {
+          return res.status(200).json({
+            success: true,
+            message: 'No changes detected. Contact is already up to date.',
+            contact: existingContact
+          });
+        }
+
         historyItem = {
           name: existingContact.name,
           email: existingContact.email,
@@ -161,8 +177,18 @@ export const hrValidationController = {
         return res.status(404).json({ success: false, message: 'No pending update found' });
       }
 
+      const pendingData = existingContact.pending_update;
+
+      const isDifferent = (
+        (existingContact.name || '').trim() !== (pendingData.name || '').trim() ||
+        (existingContact.email || '').trim() !== (pendingData.email || '').trim() ||
+        (existingContact.mobile || '').trim() !== (pendingData.mobile || '').trim() ||
+        (existingContact.designation || '').trim() !== (pendingData.designation || '').trim() ||
+        (existingContact.linkedin_url || '').trim() !== (pendingData.linkedin_url || '').trim()
+      );
+
       let historyItem = null;
-      if (existingContact.name || existingContact.email || existingContact.mobile || existingContact.designation) {
+      if (isDifferent && (existingContact.name || existingContact.email || existingContact.mobile || existingContact.designation)) {
         historyItem = {
           name: existingContact.name,
           email: existingContact.email,
@@ -172,8 +198,6 @@ export const hrValidationController = {
           replaced_at: new Date()
         };
       }
-
-      const pendingData = existingContact.pending_update;
 
       const updateData: any = {
         name: pendingData.name,

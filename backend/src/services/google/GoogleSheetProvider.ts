@@ -190,7 +190,7 @@ export class GoogleSheetProvider {
       if (valuesToAppend.length > 0) {
         await this.sheets!.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `'${branchName}'!A:H`,
+          range: `'${branchName}'!A:A`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: valuesToAppend },
         });
@@ -201,6 +201,10 @@ export class GoogleSheetProvider {
       let sheetId = settings.currentAcademicYearSheetId;
       if (branchName.startsWith('M.Tech')) {
         sheetId = settings.mtechCurrentAcademicYearSheetId;
+      }
+
+      if (!sheetId) {
+        throw new Error('Google Sheet ID is not configured in Settings. Please configure it in the Admin Dashboard.');
       }
 
       // Ensure branch tab exists
@@ -218,7 +222,7 @@ export class GoogleSheetProvider {
         
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `'${branchName}'!A1:H1`,
+          range: `'${branchName}'!A1`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON']] },
         });
@@ -390,7 +394,7 @@ export class GoogleSheetProvider {
         const title = req.addSheet.properties.title;
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `'${title}'!A1:I1`,
+          range: `'${title}'!A1`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [['Company Name', 'HR Name', 'HR Phone', 'HR Email', 'Academic Year', 'Notes', 'Database ID', 'Extra Data JSON', 'Additional HRs JSON']] },
         });
@@ -461,7 +465,7 @@ export class GoogleSheetProvider {
       if (valuesToAppend.length > 0) {
         await this.sheets.spreadsheets.values.append({
           spreadsheetId: sheetId,
-          range: `'${section}'!A:I`,
+          range: `'${section}'!A:A`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: valuesToAppend },
         });

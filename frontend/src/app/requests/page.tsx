@@ -52,10 +52,28 @@ export default function RequestsPage() {
   const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [selectedCompanyDetails, setSelectedCompanyDetails] = useState<any>(null);
 
-  // Role change modal state
   const [roleChangeModalOpen, setRoleChangeModalOpen] = useState(false);
   const [roleChangeAction, setRoleChangeAction] = useState<'upgrade' | 'revoke' | null>(null);
   const [selectedTprForRole, setSelectedTprForRole] = useState<any>(null);
+
+  // Delete TPR modal state
+  const [deleteTprModalOpen, setDeleteTprModalOpen] = useState(false);
+  const [selectedTprForDelete, setSelectedTprForDelete] = useState<any>(null);
+
+  const openDeleteTprModal = (tpr: any) => {
+    setSelectedTprForDelete(tpr);
+    setDeleteTprModalOpen(true);
+  };
+
+  const closeDeleteTprModal = () => {
+    setDeleteTprModalOpen(false);
+    setSelectedTprForDelete(null);
+  };
+
+  const handleConfirmDeleteTpr = () => {
+    if (!selectedTprForDelete) return;
+    deleteTprMutation.mutate(selectedTprForDelete._id);
+  };
 
   const openRoleChangeModal = (action: 'upgrade' | 'revoke', tpr: any) => {
     setRoleChangeAction(action);
@@ -206,6 +224,18 @@ export default function RequestsPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-all-tprs'] });
     },
     onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to revoke admin access')
+  });
+
+  const deleteTprMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/admin/tprs/${id}`, { withCredentials: true });
+    },
+    onSuccess: () => {
+      toast.success('User deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['admin-all-tprs'] });
+      closeDeleteTprModal();
+    },
+    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete user')
   });
 
   const openRejectModal = (type: 'tpr' | 'contact', id: string) => {
@@ -480,24 +510,35 @@ export default function RequestsPage() {
                       </div>
                       <p className="text-sm text-slate-500 mt-1">{tpr.email} • {tpr.branchId?.name} {tpr.course && `(${tpr.course})`}</p>
                     </div>
-                    {tpr.role !== 'admin' && (
-                      <button 
-                        onClick={() => openRoleChangeModal('upgrade', tpr)}
-                        disabled={upgradeTprMutation.isPending}
-                        className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors shrink-0 flex items-center justify-center gap-2"
-                      >
-                        {upgradeTprMutation.isPending && upgradeTprMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upgrade to Admin'}
-                      </button>
-                    )}
-                    {tpr.role === 'admin' && (
-                      <button 
-                        onClick={() => openRoleChangeModal('revoke', tpr)}
-                        disabled={revokeAdminMutation.isPending}
-                        className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-red-200 transition-colors shrink-0 flex items-center justify-center gap-2"
-                      >
-                        {revokeAdminMutation.isPending && revokeAdminMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Revoke Admin'}
-                      </button>
-                    )}
+                    <div className="flex flex-col sm:flex-row gap-2 mt-4 sm:mt-0 w-full sm:w-auto shrink-0">
+                      {tpr.role !== 'admin' && (
+                        <button 
+                          onClick={() => openRoleChangeModal('upgrade', tpr)}
+                          disabled={upgradeTprMutation.isPending}
+                          className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-indigo-200 transition-colors flex items-center justify-center gap-2"
+                        >
+                          {upgradeTprMutation.isPending && upgradeTprMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Upgrade to Admin'}
+                        </button>
+                      )}
+                      {tpr.role === 'admin' && tpr.email !== 'tpo@nith.ac.in' && (
+                        <button 
+                          onClick={() => openRoleChangeModal('revoke', tpr)}
+                          disabled={revokeAdminMutation.isPending}
+                          className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-amber-50 hover:text-amber-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-amber-200 transition-colors flex items-center justify-center gap-2"
+                        >
+                          {revokeAdminMutation.isPending && revokeAdminMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Revoke Admin'}
+                        </button>
+                      )}
+                      {tpr.email !== 'tpo@nith.ac.in' && (
+                        <button 
+                          onClick={() => openDeleteTprModal(tpr)}
+                          disabled={deleteTprMutation.isPending}
+                          className="w-full sm:w-auto px-4 py-2 bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 text-sm font-bold rounded-lg shadow-sm border border-slate-200 hover:border-red-200 transition-colors flex items-center justify-center gap-2"
+                        >
+                          {deleteTprMutation.isPending && deleteTprMutation.variables === tpr._id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete TPR'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
                 
@@ -742,6 +783,48 @@ export default function RequestsPage() {
               >
                 {(upgradeTprMutation.isPending || revokeAdminMutation.isPending) && <Loader2 className="w-4 h-4 animate-spin" />}
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete TPR Modal */}
+      {deleteTprModalOpen && selectedTprForDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden relative animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-red-600" />
+                Delete User
+              </h3>
+              <button onClick={closeDeleteTprModal} className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-slate-600">
+                Are you sure you want to completely delete <strong>{selectedTprForDelete.name}</strong> ({selectedTprForDelete.email}) from the platform?
+                <br /><br />
+                <span className="text-red-600 font-medium">This action cannot be undone and they will lose all access.</span>
+              </p>
+            </div>
+            <div className="p-6 pt-0 flex gap-3">
+              <button
+                type="button"
+                onClick={closeDeleteTprModal}
+                className="flex-1 py-2.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTpr}
+                disabled={deleteTprMutation.isPending}
+                className="flex-1 py-2.5 font-semibold text-white bg-red-600 hover:bg-red-700 disabled:bg-slate-300 rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {deleteTprMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                Yes, Delete
               </button>
             </div>
           </div>

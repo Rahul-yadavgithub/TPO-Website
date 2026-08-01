@@ -105,9 +105,9 @@ export function BulkUploadModal({ branchId, ownerName, ownerType = 'branch', onC
 
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/branch/${branchId}/bulk-validate-companies`, { companies });
       setValidationResult(res.data);
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to validate the file. Please check the format.');
+    } catch (error: any) {
+      console.error('Validation failed:', error.response?.data || error.message);
+      toast.error(error.response?.data?.error || 'Failed to validate the file. Please check the format.');
     } finally {
       setValidating(false);
     }
@@ -122,9 +122,9 @@ export function BulkUploadModal({ branchId, ownerName, ownerType = 'branch', onC
       });
       toast.success(`Successfully queued ${validationResult.validCompanies.length} companies for sync!`);
       onSuccess();
-    } catch (error) {
-      console.error(error);
-      toast.error('Failed to import companies.');
+    } catch (error: any) {
+      console.error('Import failed:', error.response?.data || error.message);
+      toast.error(error.response?.data?.error || 'Failed to import companies.');
     } finally {
       setImporting(false);
     }

@@ -13,14 +13,35 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(express.json());
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(cookieParser());
 const frontendUrl = process.env.FRONTEND_URL 
   ? (process.env.FRONTEND_URL.startsWith('http') ? process.env.FRONTEND_URL : `https://${process.env.FRONTEND_URL}`)
   : '*';
 
+const externalPlatformUrl = process.env.EXTERNAL_PLATFORM_URL || '';
+
 app.use(cors({
-  origin: frontendUrl,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like server-to-server webhooks or mobile apps)
+    if (!origin) return callback(null, true);
+    
+    // Allow frontend URL
+    if (frontendUrl === '*' || origin === frontendUrl) {
+      return callback(null, true);
+    }
+    
+    // Allow External Platform URL (for webhook testing tools that use browsers)
+    if (externalPlatformUrl && origin === externalPlatformUrl) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
 app.use(helmet());
@@ -32,6 +53,7 @@ import previousCompaniesRoutes from './routes/previousCompanies';
 import adminRoutes from './routes/admin';
 import tpoRoutes from './routes/tpo';
 import transferRequestsRoutes from './routes/transferRequests';
+import webhookRoutes from './routes/webhooks';
 
 // Connect DB
 connectDB().then(() => {
@@ -49,6 +71,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/previous-companies', previousCompaniesRoutes);
 app.use('/api/tpo', tpoRoutes);
 app.use('/api/transfer-requests', transferRequestsRoutes);
+app.use('/api/webhooks', webhookRoutes);
 app.use('/api', apiRoutes);
 
 // Basic route

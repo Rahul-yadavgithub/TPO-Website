@@ -6,8 +6,8 @@ export const connectDB = async () => {
       // Connection pool: allow up to 50 concurrent connections
       maxPoolSize: 50,
       minPoolSize: 10,
-      // Fail fast if Atlas is unreachable rather than hanging
-      serverSelectionTimeoutMS: 5000,
+      // Fail fast if Atlas is unreachable rather than hanging (increased to 30s as 5s is too short for some networks)
+      serverSelectionTimeoutMS: 30000,
       // Close idle connections after 45s to save resources
       socketTimeoutMS: 45000,
       // Compress data over the wire (reduces latency on slower connections)

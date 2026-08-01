@@ -126,7 +126,7 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
       });
       setValidationResult(res.data);
     } catch (error: any) {
-      console.error(error);
+      console.error('Validation failed:', error.response?.data || error.message);
       toast.error(error.response?.data?.error || 'Failed to validate the file. Please check the format.');
     } finally {
       setValidating(false);
@@ -150,7 +150,7 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
       toast.success(`Successfully processed ${companiesToImport.length} companies!`);
       onSuccess();
     } catch (error: any) {
-      console.error(error);
+      console.error('Import failed:', error.response?.data || error.message);
       toast.error(error.response?.data?.error || 'Failed to import companies.');
     } finally {
       setImporting(false);

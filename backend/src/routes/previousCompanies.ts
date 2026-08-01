@@ -4,62 +4,24 @@ import PreviousCompanyContactRequest from '../models/PreviousCompanyContactReque
 import { DuplicatePreviousCompany } from '../models/DuplicatePreviousCompany';
 import HrContact from '../models/HrContact';
 import Branch from '../models/Branch';
-import { protect, AuthRequest } from '../middleware/auth';
+import { protect, authorizeRoles, AuthRequest } from '../middleware/auth';
 import mongoose from 'mongoose';
 import Settings from '../models/Settings';
 import Company from '../models/Company';
 import { googleSheetService } from '../services/google/GoogleSheetProvider';
 import axios from 'axios';
+import { previousCompanyController } from '../controllers/previousCompanyController';
 
 const router = express.Router();
 router.use(protect);
 
 // @route   GET /api/previous-companies/sections
 // @desc    Get all available sections (sheet tabs)
-router.get('/sections', async (req, res) => {
-  try {
-    const settings = await Settings.findOne();
-    let sections: string[] = [];
-    if (settings && settings.pastAcademicYearSheetId) {
-      sections = await googleSheetService.getPreviousCompanySections(settings.pastAcademicYearSheetId);
-    } else {
-      sections = await PreviousCompany.distinct('section');
-    }
-    res.json({ success: true, data: sections });
-  } catch (error) {
-    console.error('Sections fetch error:', error);
-    try {
-       const sections = await PreviousCompany.distinct('section');
-       res.json({ success: true, data: sections });
-    } catch (e) {
-       res.status(500).json({ success: false, message: 'Server Error' });
-    }
-  }
-});
+router.get('/sections', previousCompanyController.getSections);
 
 // @route   GET /api/previous-companies/status-counts
 // @desc    Get counts of available vs requested companies
-router.get('/status-counts', async (req, res) => {
-  try {
-    const branchId = req.query.branchId as string;
-    const availableCount = await PreviousCompany.countDocuments({ contactStatus: 'not_contacted' });
-    
-    let myCount = 0;
-    let othersCount = 0;
-    
-    if (branchId) {
-      myCount = await PreviousCompany.countDocuments({ contactStatus: { $in: ['requested', 'contacted'] }, contactedByBranchId: branchId });
-      othersCount = await PreviousCompany.countDocuments({ contactStatus: { $in: ['requested', 'contacted'] }, contactedByBranchId: { $ne: branchId } });
-    } else {
-      othersCount = await PreviousCompany.countDocuments({ contactStatus: { $in: ['requested', 'contacted'] } });
-    }
-    
-    res.status(200).json({ success: true, data: { availableCount, myCount, othersCount } });
-  } catch (error) {
-    console.error('Status counts error:', error);
-    res.status(500).json({ success: false, message: 'Server Error' });
-  }
-});
+router.get('/status-counts', previousCompanyController.getStatusCounts);
 
 // @route   GET /api/previous-companies/search
 // @desc    Search previous year companies by name
@@ -294,10 +256,7 @@ router.get('/all-tpo', async (req, res) => {
 
 // @route   GET /api/previous-companies/all
 // @desc    Get paginated list of all previous companies (Admin view)
-router.get('/all', async (req: any, res) => {
-  if (req.user?.role !== 'admin' && req.user?.role !== 'communication_tpr') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.get('/all', authorizeRoles('admin', 'communication_tpr'), async (req: any, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -471,10 +430,7 @@ router.get('/check-name', async (req, res) => {
 
 // @route   POST /api/previous-companies/manual
 // @desc    Admin only: Add a manual previous company
-router.post('/manual', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/manual', authorizeRoles('admin'), async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -751,10 +707,7 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
 
 // @route   POST /api/previous-companies/bulk-validate
 // @desc    Admin only: Validate bulk previous company upload and aggregate duplicates
-router.post('/bulk-validate', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/bulk-validate', authorizeRoles('admin'), async (req: any, res) => {
   try {
     const { companies } = req.body;
     if (!Array.isArray(companies)) return res.status(400).json({ error: 'Companies array is required' });
@@ -807,10 +760,7 @@ router.post('/bulk-validate', async (req: any, res) => {
 
 // @route   POST /api/previous-companies/bulk-import
 // @desc    Admin only: Import validated previous companies
-router.post('/bulk-import', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/bulk-import', authorizeRoles('admin'), async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -904,10 +854,7 @@ router.post('/bulk-import', async (req: any, res) => {
 
 // @route   POST /api/previous-companies/sync-sheet
 // @desc    Admin only: Sync all previous companies to Google Sheet
-router.post('/sync-sheet', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/sync-sheet', authorizeRoles('admin'), async (req: any, res) => {
   try {
     const settings = await Settings.findOne();
     if (!settings || !settings.pastAcademicYearSheetId) {
@@ -951,10 +898,7 @@ router.post('/sync-sheet', async (req: any, res) => {
 
 // @route   GET /api/previous-companies/duplicates
 // @desc    Admin only: Get paginated list of pending duplicates
-router.get('/duplicates', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.get('/duplicates', authorizeRoles('admin'), async (req: any, res) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
@@ -991,10 +935,7 @@ router.get('/duplicates', async (req: any, res) => {
 
 // @route   POST /api/previous-companies/duplicates/:id/resolve
 // @desc    Admin only: Resolve a duplicate (replace_primary, add_extra, or discard)
-router.post('/duplicates/:id/resolve', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.post('/duplicates/:id/resolve', authorizeRoles('admin'), async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -1083,10 +1024,7 @@ router.post('/duplicates/:id/resolve', async (req: any, res) => {
 
 // @route   PUT /api/previous-companies/:id
 // @desc    Admin only: Update a previous company details and sync with Google Sheets
-router.put('/:id', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.put('/:id', authorizeRoles('admin'), async (req: any, res) => {
 
   try {
     const company = await PreviousCompany.findById(req.params.id);
@@ -1152,10 +1090,7 @@ router.put('/:id', async (req: any, res) => {
 
 // @route   DELETE /api/previous-companies/:id
 // @desc    Admin only: Delete a previous company completely from DB and Google Sheets
-router.delete('/:id', async (req: any, res) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
+router.delete('/:id', authorizeRoles('admin'), async (req: any, res) => {
 
   try {
     const company = await PreviousCompany.findById(req.params.id);

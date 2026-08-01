@@ -18,6 +18,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   const queryClient = useQueryClient();
   const router = useRouter();
   const [showInteractionPanel, setShowInteractionPanel] = useState(false);
+  const [isAssignOpen, setIsAssignOpen] = useState(!!pendingDuplicateData);
   const [isEditingPlacement, setIsEditingPlacement] = useState(false);
   const [editDriveType, setEditDriveType] = useState('');
   const [editAcademicYear, setEditAcademicYear] = useState('');
@@ -49,6 +50,16 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`, { withCredentials: true });
       return res.data;
     }
+  });
+
+  const { data: externalInsights, isLoading: loadingInsights } = useQuery({
+    queryKey: ['external-insights', company?._id],
+    queryFn: async () => {
+      if (!company?._id) return null;
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company._id}/external-insights`, { withCredentials: true });
+      return res.data?.data;
+    },
+    enabled: isOpen && !!company?._id
   });
 
   const [assignBranchId, setAssignBranchId] = useState('');
@@ -134,6 +145,11 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
     }))
   ];
   const contactLogs = company.contact_logs || [];
+  
+  const latestLog = contactLogs.length > 0 ? contactLogs.reduce((latest: any, current: any) => {
+    return new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest;
+  }, contactLogs[0]) : null;
+  const callingStatus = latestLog?.outcome;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -147,6 +163,24 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
               {company.is_verified_by_admin && (
                 <span title="Verified by Admin" className="flex">
                   <CheckCircle2 className="w-5 h-5 text-green-500" />
+                </span>
+              )}
+              {callingStatus && (
+                <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider
+                  ${callingStatus === 'call_again' ? 'bg-amber-100 text-amber-800' : 
+                    callingStatus === 'accepted' ? 'bg-green-100 text-green-800' :
+                    callingStatus === 'rejected' ? 'bg-red-100 text-red-800' : 
+                    callingStatus === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
+                    callingStatus === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
+                    'bg-slate-100 text-slate-800'}`}
+                >
+                  <PhoneCall className="w-3 h-3" />
+                  {callingStatus === 'brochure_jnf' ? 'Brochure + JNF' :
+                   callingStatus === 'tpo_talk' ? 'TPO Talk' :
+                   callingStatus === 'call_again' ? 'Call Again' :
+                   callingStatus === 'rejected' ? 'Rejected' :
+                   callingStatus === 'accepted' ? 'Accepted' :
+                   callingStatus}
                 </span>
               )}
               {pendingDuplicateData && (
@@ -165,21 +199,37 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           
-          {/* Assignment & Routing Section (Always shown for Admins to assign TPOs or Branches) */}
-          <div className={`p-4 rounded-xl border ${pendingDuplicateData ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} space-y-4`}>
-            <div>
-              <h3 className={`text-sm font-bold flex items-center gap-2 ${pendingDuplicateData ? 'text-amber-800' : 'text-indigo-800'}`}>
-                {pendingDuplicateData ? <ShieldAlert className="w-4 h-4" /> : <GitMerge className="w-4 h-4" />}
-                {pendingDuplicateData ? 'Resolve Duplicate & Assign' : 'Assignment & Routing'}
-              </h3>
-              <p className={`text-xs mt-1 ${pendingDuplicateData ? 'text-amber-700' : 'text-indigo-600'}`}>
-                {pendingDuplicateData 
-                  ? 'This company already exists. Select a branch or TPO and click Override to update its HR details with your new AI extraction and assign it.'
-                  : 'Assign this company to a Branch TPR or a TPO (Faculty/Staff). A company can be assigned to both simultaneously for shared outreach.'}
-              </p>
+          {/* Assignment & Routing Section (Fold-in/Fold-out) */}
+          <div className={`p-4 rounded-xl border transition-all duration-300 ${pendingDuplicateData ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} ${isAssignOpen ? 'space-y-4' : ''}`}>
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <h3 className={`text-sm font-bold flex items-center gap-2 ${pendingDuplicateData ? 'text-amber-800' : 'text-indigo-800'}`}>
+                  {pendingDuplicateData ? <ShieldAlert className="w-4 h-4" /> : <GitMerge className="w-4 h-4" />}
+                  {pendingDuplicateData ? 'Resolve Duplicate & Assign' : 'Assignment & Routing'}
+                </h3>
+                {isAssignOpen && (
+                  <p className={`text-xs mt-1 transition-opacity duration-300 ${pendingDuplicateData ? 'text-amber-700' : 'text-indigo-600'}`}>
+                    {pendingDuplicateData 
+                      ? 'This company already exists. Select a branch or TPO and click Override to update its HR details with your new AI extraction and assign it.'
+                      : 'Assign this company to a Branch TPR or a TPO (Faculty/Staff). A company can be assigned to both simultaneously for shared outreach.'}
+                  </p>
+                )}
+              </div>
+              <button 
+                onClick={() => setIsAssignOpen(!isAssignOpen)}
+                className={`shrink-0 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-2 ${
+                  isAssignOpen 
+                    ? 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300' 
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-600'
+                }`}
+              >
+                {isAssignOpen ? 'Close' : 'Assign'}
+              </button>
             </div>
             
-            <div className="flex gap-2 bg-white/50 p-1 rounded-lg border border-slate-200 mb-1 w-fit">
+            {isAssignOpen && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4 pt-2">
+                <div className="flex gap-2 bg-white/50 p-1 rounded-lg border border-slate-200 mb-1 w-fit">
               <button
                 onClick={() => setAssignMode('branch')}
                 className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'branch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
@@ -285,6 +335,8 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                 </button>
               </div>
             )}
+              </div>
+            )}
           </div>
 
           {/* Top Info Grid */}
@@ -388,6 +440,76 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
               </div>
             </div>
           </div>
+
+          {/* Platform Insights */}
+          {(loadingInsights || externalInsights?.currentYear || externalInsights?.pastYear) && (
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm">
+              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <GitMerge className="w-5 h-5 text-indigo-600" /> Platform Insights
+              </h3>
+              {loadingInsights ? (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500 font-medium">External Drive Status:</span>
+                    <span className="font-bold text-slate-900 bg-indigo-50 px-2 py-0.5 rounded text-indigo-700">{externalInsights?.driveStatus || 'Unknown'}</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                    {/* Current Year (Dynamic) */}
+                    {(externalInsights?.currentYear || externalInsights?.rawExternalData) && (
+                      <div className="bg-white border border-indigo-200 p-3 rounded-lg shadow-sm">
+                        <h4 className="text-[10px] font-bold text-indigo-600 uppercase mb-2 tracking-wider">Current Year (Platform)</h4>
+                        <div className="space-y-1 text-sm">
+                          {externalInsights.currentYear && (
+                            <>
+                              {externalInsights.currentYear.ctc && <p className="flex justify-between"><span className="text-slate-500">CTC:</span> <span className="font-semibold text-slate-800">{externalInsights.currentYear.ctc}</span></p>}
+                              {externalInsights.currentYear.eligibleBranches?.length > 0 && <p className="flex justify-between"><span className="text-slate-500">Branches:</span> <span className="font-semibold text-slate-800 text-right">{externalInsights.currentYear.eligibleBranches.join(', ')}</span></p>}
+                            </>
+                          )}
+                          {externalInsights.rawExternalData && Object.entries(externalInsights.rawExternalData).map(([key, value]) => {
+                            // Format key (e.g., 'drive_type' -> 'Drive Type', 'onCampus' -> 'On Campus')
+                            const formattedKey = key
+                              .replace(/([A-Z])/g, ' $1') // insert a space before all caps
+                              .replace(/_/g, ' ') // replace underscores with spaces
+                              .replace(/^./, str => str.toUpperCase()) // capitalize the first letter
+                              .trim();
+                            
+                            // Format value
+                            let formattedValue = String(value);
+                            if (Array.isArray(value)) formattedValue = value.join(', ');
+                            else if (typeof value === 'boolean') formattedValue = value ? 'Yes' : 'No';
+                            else if (typeof value === 'object' && value !== null) formattedValue = JSON.stringify(value);
+
+                            return (
+                              <p key={key} className="flex justify-between gap-4">
+                                <span className="text-slate-500 shrink-0">{formattedKey}:</span> 
+                                <span className="font-semibold text-slate-800 text-right break-words">{formattedValue}</span>
+                              </p>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Past Year */}
+                    {externalInsights?.pastYear && (
+                      <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm opacity-90">
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-wider">Past Year (Local DB)</h4>
+                        <div className="space-y-1 text-sm">
+                          <p className="flex justify-between"><span className="text-slate-500">CTC:</span> <span className="font-semibold text-slate-800">{externalInsights.pastYear.ctc || 'N/A'}</span></p>
+                          <p className="flex justify-between gap-4"><span className="text-slate-500 shrink-0">Branches:</span> <span className="font-semibold text-slate-800 text-right">{externalInsights.pastYear.eligibleBranches?.join(', ') || 'N/A'}</span></p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* HR Contacts */}
           <div>

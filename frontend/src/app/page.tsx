@@ -202,8 +202,17 @@ function ActivityLogCard({ log }: { log: any }) {
   const companyName = log.company_id?.companyName || 'Unknown Company';
   const branchName = log.branch_id?.name || log.company_id?.assignedBranch || 'Unknown Branch';
   const tprName = log.created_by || 'TPR';
-  const timeStr = new Date(log.contact_date || log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const timeStr = new Date(log.contact_date || log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = new Date(log.contact_date || log.createdAt).toLocaleDateString();
+
+  const outcomeMap: Record<string, string> = {
+    'call_again': 'Call Again (Reschedule)',
+    'brochure_jnf': 'Brochure + JNF Sent',
+    'tpo_talk': 'Want to talk to TPO',
+    'rejected': 'Rejected / Not Interested',
+    'accepted': 'Accepted / Confirmed'
+  };
+  const displayOutcome = outcomeMap[log.outcome] || log.outcome || 'Logged Call';
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition-all duration-150 relative overflow-hidden">
@@ -217,7 +226,7 @@ function ActivityLogCard({ log }: { log: any }) {
       <div className="pl-2 space-y-1.5">
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-500">Outcome:</span>
-          <span className="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{log.outcome || 'Logged Call'}</span>
+          <span className="font-bold text-slate-700 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{displayOutcome}</span>
         </div>
         <div className="flex items-center justify-between text-xs">
           <span className="text-slate-500">Logged By:</span>
@@ -257,7 +266,17 @@ function ActivitySlideOverPanel({
   const logs = data || [];
 
   const filtered = logs.filter((log: any) => {
-    const matchStatus = statusFilter === 'All' || log.outcome === statusFilter;
+    const isStandard = ['call_again', 'brochure_jnf', 'tpo_talk', 'rejected', 'accepted'].includes(log.outcome);
+    let matchStatus = false;
+    
+    if (statusFilter === 'All') {
+      matchStatus = true;
+    } else if (statusFilter === 'custom') {
+      matchStatus = !isStandard; // If it's custom, it's not a standard predefined outcome
+    } else {
+      matchStatus = log.outcome === statusFilter;
+    }
+
     const branchName = log.branch_id?.name || log.company_id?.assignedBranch || '';
     
     let matchCourse = true;
@@ -273,12 +292,12 @@ function ActivitySlideOverPanel({
   });
 
   const outcomeOptions = [
-    'Call Again (Reschedule)',
-    'Brochure + JNF Sent',
-    'Want to talk to TPO',
-    'Rejected / Not Interested',
-    'Accepted / Confirmed',
-    'Custom (Type your own)'
+    { label: 'Call Again (Reschedule)', value: 'call_again' },
+    { label: 'Brochure + JNF Sent', value: 'brochure_jnf' },
+    { label: 'Want to talk to TPO', value: 'tpo_talk' },
+    { label: 'Rejected / Not Interested', value: 'rejected' },
+    { label: 'Accepted / Confirmed', value: 'accepted' },
+    { label: 'Custom (Type your own)', value: 'custom' }
   ];
 
   return (
@@ -336,7 +355,7 @@ function ActivitySlideOverPanel({
             onChange={e => setStatusFilter(e.target.value)}
           >
             <option value="All">All Outcomes</option>
-            {outcomeOptions.map(o => <option key={o} value={o}>{o}</option>)}
+            {outcomeOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
 

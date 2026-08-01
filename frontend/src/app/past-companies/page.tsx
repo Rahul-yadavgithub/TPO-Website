@@ -143,6 +143,7 @@ export default function PastCompaniesPage() {
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<PastCompany | null>(null);
   const [activeTab, setActiveTab] = useState<'master' | 'duplicates'>('master');
+  const [deleteConfirmCompany, setDeleteConfirmCompany] = useState<{id: string, name: string} | null>(null);
   
   const [tempFilters, setTempFilters] = useState({
     section: 'All',
@@ -199,11 +200,15 @@ export default function PastCompaniesPage() {
     enabled: activeTab === 'master' && (userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr')
   });
 
-  const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    if (!window.confirm(`Are you sure you want to completely delete "${companyName}" from the database AND Google Sheets? This cannot be undone.`)) return;
+  const confirmDelete = (companyId: string, companyName: string) => {
+    setDeleteConfirmCompany({ id: companyId, name: companyName });
+  };
+
+  const executeDelete = async () => {
+    if (!deleteConfirmCompany) return;
     
     try {
-      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/${companyId}`, { withCredentials: true });
+      await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/${deleteConfirmCompany.id}`, { withCredentials: true });
       toast.success('Company deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['past-companies'] });
     } catch (error) {
@@ -213,6 +218,8 @@ export default function PastCompaniesPage() {
       } else {
         toast.error('Failed to delete company');
       }
+    } finally {
+      setDeleteConfirmCompany(null);
     }
   };
 
@@ -254,40 +261,43 @@ export default function PastCompaniesPage() {
 
       companies.forEach((company: any) => {
         const allContacts = extractAllContacts(company);
-        const verifiedContacts = allContacts.filter(c => c.isVerified);
+        
+        // If filter is 'Verified', export only verified contacts.
+        // Otherwise, export all extracted contacts.
+        const contactsToExport = activeFilters.verified === 'Verified' ? allContacts.filter(c => c.isVerified) : allContacts;
 
         const baseExtraData: Record<string, any> = {};
         dynamicColumns.forEach(col => {
           baseExtraData[col] = company.extraData ? (company.extraData[col] || '') : '';
         });
 
-        if (verifiedContacts.length > 0) {
-          // First verified HR gets the extra data
+        if (contactsToExport.length > 0) {
+          // First contact gets the company name and full extra data
           rows.push({
             'Company Name': company.companyName,
-            'HR Name': verifiedContacts[0].name,
-            'Phone Number': verifiedContacts[0].phone,
-            'Email': verifiedContacts[0].email,
+            'HR Name': contactsToExport[0].name,
+            'Phone Number': contactsToExport[0].phone,
+            'Email': contactsToExport[0].email,
             ...baseExtraData
           });
 
-          // Subsequent verified HRs get empty extra data
-          for (let i = 1; i < verifiedContacts.length; i++) {
+          // Subsequent contacts get empty extra data and empty company name (for clean grouping)
+          for (let i = 1; i < contactsToExport.length; i++) {
             const emptyExtraData: Record<string, any> = {};
             dynamicColumns.forEach(col => {
               emptyExtraData[col] = '';
             });
             
             rows.push({
-              'Company Name': company.companyName,
-              'HR Name': verifiedContacts[i].name,
-              'Phone Number': verifiedContacts[i].phone,
-              'Email': verifiedContacts[i].email,
+              'Company Name': '', // Leave blank to visually group under the first row
+              'HR Name': contactsToExport[i].name,
+              'Phone Number': contactsToExport[i].phone,
+              'Email': contactsToExport[i].email,
               ...emptyExtraData
             });
           }
         } else {
-          // No verified HRs, just print the company with blank HR fields and full extra data
+          // No contacts found based on filters, just print the company with blank HR fields and full extra data
           rows.push({
             'Company Name': company.companyName,
             'HR Name': '',
@@ -299,6 +309,20 @@ export default function PastCompaniesPage() {
       });
 
       const worksheet = XLSX.utils.json_to_sheet(rows);
+      
+      // Auto-size columns to be wider for better visibility
+      const wscols = [
+        { wch: 35 }, // Company Name (wider)
+        { wch: 25 }, // HR Name
+        { wch: 20 }, // Phone Number
+        { wch: 35 }, // Email
+      ];
+      // Add widths for dynamic extraData columns
+      dynamicColumns.forEach(() => {
+        wscols.push({ wch: 25 });
+      });
+      worksheet['!cols'] = wscols;
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Companies');
       XLSX.writeFile(workbook, 'Past_Companies_Export.xlsx');
@@ -558,7 +582,7 @@ export default function PastCompaniesPage() {
                           Details
                         </button>
                         <button 
-                          onClick={() => handleDeleteCompany(company._id, company.companyName)}
+                          onClick={() => confirmDelete(company._id, company.companyName)}
                           className="inline-flex items-center gap-2 px-2 py-1.5 text-sm font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 hover:text-red-700 transition-colors"
                           title="Delete from DB & Google Sheet"
                         >
@@ -612,6 +636,40 @@ export default function PastCompaniesPage() {
         onClose={() => setSelectedCompany(null)}
         company={selectedCompany}
       />
+
+      {deleteConfirmCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-4 mb-4 text-red-600">
+              <div className="p-3 bg-red-100 rounded-full">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900">Confirm Deletion</h3>
+            </div>
+            
+            <p className="text-slate-600 mb-6 leading-relaxed">
+              Are you sure you want to completely delete <span className="font-bold text-slate-900">"{deleteConfirmCompany.name}"</span> from the database AND Google Sheets? 
+              <br /><br />
+              <span className="text-red-600 font-medium">This action cannot be undone.</span>
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmCompany(null)}
+                className="px-4 py-2 font-semibold text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeDelete}
+                className="px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

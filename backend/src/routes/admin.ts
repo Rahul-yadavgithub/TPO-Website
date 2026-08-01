@@ -3,23 +3,13 @@ import User from '../models/User';
 import Company from '../models/Company';
 import PreviousCompanyContactRequest from '../models/PreviousCompanyContactRequest';
 import PreviousCompany from '../models/PreviousCompany';
-import { protect, AuthRequest } from '../middleware/auth';
+import { protect, AuthRequest, authorizeRoles } from '../middleware/auth';
 
 const router = express.Router();
 
 // Apply auth middleware to all admin routes
 router.use(protect);
-
-// Check if user is admin middleware
-const adminOnly = (req: AuthRequest, res: express.Response, next: express.NextFunction) => {
-  if (req.user && (req.user.role === 'admin' || req.user.role === 'communication_tpr')) {
-    next();
-  } else {
-    res.status(403).json({ success: false, message: 'Not authorized as an admin' });
-  }
-};
-
-router.use(adminOnly);
+router.use(authorizeRoles('admin', 'communication_tpr'));
 
 // @route   GET /api/admin/requests
 // @desc    Get all pending TPR registrations and contact requests
@@ -285,6 +275,28 @@ router.post('/revoke-admin/:id', async (req, res) => {
     await user.save();
 
     res.status(200).json({ success: true, message: 'Admin access revoked successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   DELETE /api/admin/tprs/:id
+// @desc    Completely delete a TPR from the platform
+router.delete('/tprs/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (user.email === 'tpo@nith.ac.in') {
+      return res.status(403).json({ success: false, message: 'Cannot delete main admin' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error' });

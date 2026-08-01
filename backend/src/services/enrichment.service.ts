@@ -155,27 +155,81 @@ export const EnrichmentService = {
       }
 
       if (saveAsPending) {
-        await HrContact.findOneAndUpdate(
-          { company_id: companyId },
-          {
-            pending_update: {
-              name: bestContact.name,
-              email: bestContact.email,
-              mobile: bestContact.phone,
-              designation: bestContact.job_title,
-              linkedin_url: bestContact.linkedin_url,
-              replaced_at: new Date()
+        const existingContact = await HrContact.findOne({ company_id: companyId });
+        
+        let isDifferent = true;
+        if (existingContact) {
+          isDifferent = (
+            (existingContact.name || '').trim() !== (bestContact.name || '').trim() ||
+            (existingContact.email || '').trim() !== (bestContact.email || '').trim() ||
+            (existingContact.mobile || '').trim() !== (bestContact.phone || '').trim() ||
+            (existingContact.designation || '').trim() !== (bestContact.job_title || '').trim() ||
+            (existingContact.linkedin_url || '').trim() !== (bestContact.linkedin_url || '').trim()
+          );
+        }
+
+        if (existingContact && !isDifferent) {
+          await HrContact.findOneAndUpdate(
+            { company_id: companyId },
+            {
+              last_checked_at: new Date(),
+              last_check_status: 'no_changes'
+            }
+          );
+        } else {
+          await HrContact.findOneAndUpdate(
+            { company_id: companyId },
+            {
+              pending_update: {
+                name: bestContact.name,
+                email: bestContact.email,
+                mobile: bestContact.phone,
+                designation: bestContact.job_title,
+                linkedin_url: bestContact.linkedin_url,
+                replaced_at: new Date()
+              },
+              last_checked_at: new Date(),
+              last_check_status: 'update_found'
             },
-            last_checked_at: new Date(),
-            last_check_status: 'update_found'
-          },
-          { upsert: true, new: true }
-        );
+            { upsert: true, new: true }
+          );
+        }
       } else {
-        // Save to Database directly
-        await HrContact.findOneAndUpdate(
-          { company_id: companyId },
-          {
+        const existingContact = await HrContact.findOne({ company_id: companyId });
+        let isDifferent = true;
+        if (existingContact) {
+          isDifferent = (
+            (existingContact.name || '').trim() !== (bestContact.name || '').trim() ||
+            (existingContact.email || '').trim() !== (bestContact.email || '').trim() ||
+            (existingContact.mobile || '').trim() !== (bestContact.phone || '').trim() ||
+            (existingContact.designation || '').trim() !== (bestContact.job_title || '').trim() ||
+            (existingContact.linkedin_url || '').trim() !== (bestContact.linkedin_url || '').trim()
+          );
+        }
+
+        if (existingContact && !isDifferent) {
+          await HrContact.findOneAndUpdate(
+            { company_id: companyId },
+            {
+              last_checked_at: new Date(),
+              last_check_status: 'no_changes'
+            }
+          );
+        } else {
+          // Add history item if there's existing data
+          let historyItem = null;
+          if (existingContact && (existingContact.name || existingContact.email || existingContact.mobile || existingContact.designation)) {
+            historyItem = {
+              name: existingContact.name,
+              email: existingContact.email,
+              mobile: existingContact.mobile,
+              designation: existingContact.designation,
+              linkedin_url: existingContact.linkedin_url,
+              replaced_at: new Date()
+            };
+          }
+
+          const updateData: any = {
             name: bestContact.name,
             email: bestContact.email,
             mobile: bestContact.phone,
@@ -185,9 +239,18 @@ export const EnrichmentService = {
             auto_updated_at: new Date(),
             last_checked_at: new Date(),
             last_check_status: 'update_found'
-          },
-          { upsert: true, new: true }
-        );
+          };
+
+          if (historyItem) {
+            updateData.$push = { history: historyItem };
+          }
+
+          await HrContact.findOneAndUpdate(
+            { company_id: companyId },
+            updateData,
+            { upsert: true, new: true }
+          );
+        }
       }
 
       return true;

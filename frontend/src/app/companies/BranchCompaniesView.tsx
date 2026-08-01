@@ -73,59 +73,92 @@ export function BranchCompaniesView() {
 
       toast.info('Processing data...');
 
-      // Get dynamic columns for current companies
-      // We will extract fields like industry, website, category, confidenceScore, etc.
-      const skipKeys = ['_id', '__v', 'companyName', 'normalizedName', 'hr_contacts', 'source', 'updatedAt', 'createdAt'];
+      // Define allowed keys to prevent internal database fields from leaking into export
+      const allowedExtraKeys = [
+        'assignedBranch', 'program', 'website', 'category', 'description', 'foundedYear', 'teamSize', 'fundingStage',
+        'hiringType', 'fresherHiring', 'internshipAvailable', 'salaryBand', 'stipendBand', 'placementScore', 
+        'placementPriority', 'confidenceScore', 'drive_type', 'role', 'package', 'expected_month', 
+        'expected_year', 'academic_year'
+      ];
+
+      // Map DB keys to clean human-readable headers
+      const keyMap: Record<string, string> = {
+        'assignedBranch': 'Assigned Branch',
+        'program': 'Program',
+        'website': 'Website',
+        'category': 'Category',
+        'description': 'Description',
+        'foundedYear': 'Founded Year',
+        'teamSize': 'Team Size',
+        'fundingStage': 'Funding Stage',
+        'hiringType': 'Hiring Type',
+        'fresherHiring': 'Fresher Hiring',
+        'internshipAvailable': 'Internship Available',
+        'salaryBand': 'Salary Band',
+        'stipendBand': 'Stipend Band',
+        'placementScore': 'Placement Score',
+        'placementPriority': 'Placement Priority',
+        'confidenceScore': 'Confidence Score',
+        'drive_type': 'Drive Type',
+        'role': 'Role',
+        'package': 'Package',
+        'expected_month': 'Expected Month',
+        'expected_year': 'Expected Year',
+        'academic_year': 'Academic Year'
+      };
+
       const allExtraKeys = new Set<string>();
       companies.forEach((company: any) => {
         Object.keys(company).forEach(key => {
-          if (!skipKeys.includes(key) && typeof company[key] !== 'object') {
+          if (allowedExtraKeys.includes(key) && company[key] !== undefined && company[key] !== null && company[key] !== '') {
             allExtraKeys.add(key);
           }
         });
       });
-      const dynamicColumns = Array.from(allExtraKeys);
+      
+      // Preserve order based on allowedExtraKeys
+      const dynamicColumns = allowedExtraKeys.filter(key => allExtraKeys.has(key));
 
       const rows: any[] = [];
 
       companies.forEach((company: any) => {
         // Current companies have hr_contacts array
         const allContacts = company.hr_contacts || [];
-        // Consider verified if not marked as incorrect
-        const verifiedContacts = allContacts.filter((c: any) => !c.is_incorrect);
+        // Export all valid contacts (not marked incorrect)
+        const contactsToExport = allContacts.filter((c: any) => !c.is_incorrect);
 
         const baseExtraData: Record<string, any> = {};
         dynamicColumns.forEach(col => {
-          baseExtraData[col] = company[col] !== undefined && company[col] !== null ? company[col] : '';
+          baseExtraData[keyMap[col] || col] = company[col] !== undefined && company[col] !== null ? company[col] : '';
         });
 
-        if (verifiedContacts.length > 0) {
-          // First verified HR gets the extra data
+        if (contactsToExport.length > 0) {
+          // First contact gets the company name and full extra data
           rows.push({
             'Company Name': company.companyName,
-            'HR Name': verifiedContacts[0].name || '',
-            'Phone Number': verifiedContacts[0].mobile || '',
-            'Email': verifiedContacts[0].email || '',
+            'HR Name': contactsToExport[0].name || '',
+            'Phone Number': contactsToExport[0].mobile || '',
+            'Email': contactsToExport[0].email || '',
             ...baseExtraData
           });
 
-          // Subsequent verified HRs get empty extra data
-          for (let i = 1; i < verifiedContacts.length; i++) {
+          // Subsequent contacts get empty extra data and empty company name (for clean grouping)
+          for (let i = 1; i < contactsToExport.length; i++) {
             const emptyExtraData: Record<string, any> = {};
             dynamicColumns.forEach(col => {
-              emptyExtraData[col] = '';
+              emptyExtraData[keyMap[col] || col] = '';
             });
             
             rows.push({
-              'Company Name': company.companyName,
-              'HR Name': verifiedContacts[i].name || '',
-              'Phone Number': verifiedContacts[i].mobile || '',
-              'Email': verifiedContacts[i].email || '',
+              'Company Name': '', // Leave blank to visually group under the first row
+              'HR Name': contactsToExport[i].name || '',
+              'Phone Number': contactsToExport[i].mobile || '',
+              'Email': contactsToExport[i].email || '',
               ...emptyExtraData
             });
           }
         } else {
-          // No verified HRs, just print the company with blank HR fields and full extra data
+          // No valid HRs, just print the company with blank HR fields and full extra data
           rows.push({
             'Company Name': company.companyName,
             'HR Name': '',
@@ -137,6 +170,20 @@ export function BranchCompaniesView() {
       });
 
       const worksheet = XLSX.utils.json_to_sheet(rows);
+      
+      // Auto-size columns to be wider for better visibility
+      const wscols = [
+        { wch: 35 }, // Company Name (wider)
+        { wch: 25 }, // HR Name
+        { wch: 20 }, // Phone Number
+        { wch: 35 }, // Email
+      ];
+      // Add widths for dynamic extraData columns
+      dynamicColumns.forEach(() => {
+        wscols.push({ wch: 25 });
+      });
+      worksheet['!cols'] = wscols;
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Companies');
       XLSX.writeFile(workbook, 'Companies_Export.xlsx');
