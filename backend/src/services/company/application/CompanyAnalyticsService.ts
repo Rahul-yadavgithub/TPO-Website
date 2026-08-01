@@ -22,7 +22,7 @@ export class CompanyAnalyticsService {
     if (params.is_verified) {
       query.is_verified_by_admin = params.is_verified === 'true';
     }
-    if (params.call_today === 'true') {
+    if (params.contact_outcome === 'call_today') {
       const endOfToday = new Date();
       endOfToday.setHours(23, 59, 59, 999);
       query.confirmation_status = { $ne: 'confirmed' };
@@ -34,6 +34,14 @@ export class CompanyAnalyticsService {
           nextFollowupDate: { $lte: endOfToday } 
         }
       ];
+    } else if (params.contact_outcome === 'custom') {
+      if (params.custom_outcome) {
+        query.contact_outcome = { $regex: params.custom_outcome, $options: 'i' };
+      } else {
+        query.contact_outcome = { $nin: ['call_again', 'brochure_jnf', 'tpo_talk', 'rejected', 'accepted', null, ''] };
+      }
+    } else if (params.contact_outcome) {
+      query.contact_outcome = params.contact_outcome;
     }
 
     const [data, total] = await Promise.all([

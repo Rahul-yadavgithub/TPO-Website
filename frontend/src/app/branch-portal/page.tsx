@@ -639,6 +639,10 @@ export default function BranchPortalPage() {
       queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedBranchId] });
       queryClient.invalidateQueries({ queryKey: ['confirmed', selectedBranchId] });
       
+      // Instantly update dashboard and live tracking
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
+      
       setOutcome('');
       setCustomOutcome('');
       setChannel('Phone');

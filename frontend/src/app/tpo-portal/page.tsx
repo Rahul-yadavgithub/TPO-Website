@@ -52,6 +52,7 @@ export default function TpoPortalPage() {
   
   // Mobile HR Details State
   const [mobileHRModalCompany, setMobileHRModalCompany] = useState<any>(null);
+  const [recentConversationModalCompany, setRecentConversationModalCompany] = useState<any>(null);
   
   // Placement Details Edit State
   const [editingPlacementCompanyId, setEditingPlacementCompanyId] = useState<string | null>(null);
@@ -535,6 +536,10 @@ export default function TpoPortalPage() {
       queryClient.invalidateQueries({ queryKey: ['not-confirmed', selectedTPO] });
       queryClient.invalidateQueries({ queryKey: ['confirmed', selectedTPO] });
       
+      // Instantly update dashboard and live tracking
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
+      
       setOutcome('');
       setCustomOutcome('');
       setChannel('Phone');
@@ -970,9 +975,11 @@ export default function TpoPortalPage() {
               if (!listSearchQuery.trim()) return list;
               return list.filter((c: any) => c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()));
             })()?.map((company: any) => (
-              <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col md:flex-row">
-                {/* Company Info & HR */}
-                <div className="p-6 md:w-1/3 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50">
+              <div key={company._id} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                {/* Top Section: Company Info & HR Contacts */}
+                <div className="flex flex-col lg:flex-row border-b border-slate-200 bg-slate-50">
+                  {/* Left Column: Company Info & Quick Actions */}
+                  <div className="p-4 sm:p-6 lg:w-1/3 border-b lg:border-b-0 lg:border-r border-slate-200">
                   <div className="flex flex-col gap-1 mb-4">
                     <div className="flex items-center gap-2">
                       <h3 className="text-xl font-bold text-slate-900">{company.companyName}</h3>
@@ -1006,22 +1013,18 @@ export default function TpoPortalPage() {
                       </button>
                     )}
                     <button 
-                      onClick={() => {
-                        if (activeView !== 'single_contact') {
-                          setPreviousView(activeView);
-                          setActiveView('single_contact');
-                        }
-                        setActiveCompanyId(company._id);
-                      }}
+                      onClick={() => setRecentConversationModalCompany(company)}
                       className="w-full bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-sm"
                     >
                       <MessageSquare className="w-4 h-4" /> Your Recent Conversation
                     </button>
                   </div>
 
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">HR Contacts</h4>
+                  </div>
+                  {/* Right Column: HR Contacts Array */}
+                  <div className="p-4 sm:p-6 lg:w-2/3">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center justify-between">
+                      <span>HR Contacts</span>
                       <div className="flex items-center gap-2">
                         <button 
                           onClick={() => setMobileHRModalCompany(company)}
@@ -1031,10 +1034,10 @@ export default function TpoPortalPage() {
                         </button>
                         <span className="hidden sm:inline-flex bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-600 shadow-sm text-xs font-bold">{company.hr_contacts?.length || 0 + (company.additionalContacts?.length || 0)} Found</span>
                       </div>
-                    </div>
-                    <div className="mb-6">
+                    </h4>
+                    <div className="mb-5">
                       {(company.hr_contacts?.length > 0 || company.additionalContacts?.length > 0) ? (
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {[
                             ...(company.hr_contacts || []),
                             ...(company.additionalContacts || []).map((ac: any, idx: number) => ({
@@ -1150,46 +1153,46 @@ export default function TpoPortalPage() {
                                       </div>
                                     )}
                                   </div>
+                                </div>
 
-                                  {/* Verification Toggle & Delete */}
-                                  <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                                    <label className="flex items-center gap-2 cursor-pointer group/toggle">
-                                      <div className="relative">
-                                        <input 
-                                          type="checkbox" 
-                                          className="sr-only" 
-                                          checked={hr.is_verified}
-                                          onChange={(e) => verifyHrContactMutation.mutate({ 
-                                            companyId: company._id, 
-                                            contactId: hr._id, 
-                                            isVerified: e.target.checked, 
-                                            isAdditional: hr.is_additional || false 
-                                          })}
-                                        />
-                                        <div className={`block w-10 h-6 rounded-full transition-colors ${hr.is_verified ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-                                        <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${hr.is_verified ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                                      </div>
-                                      <span className={`text-xs font-bold ${hr.is_verified ? 'text-emerald-700' : 'text-slate-500'}`}>
-                                        {hr.is_verified ? 'Verified' : 'Verify Contact'}
-                                      </span>
-                                    </label>
-                                    
-                                    <button 
-                                      onClick={() => {
-                                        if (confirm('Are you sure you want to delete this contact?')) {
-                                          deleteHrContactMutation.mutate({
-                                            companyId: company._id,
-                                            contactId: hr._id,
-                                            isAdditional: hr.is_additional || false
-                                          });
-                                        }
-                                      }}
-                                      className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
-                                      title="Delete Contact"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </div>
+                                {/* Verification Toggle & Delete */}
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                                  <label className="flex items-center gap-2 cursor-pointer group/toggle">
+                                    <div className="relative">
+                                      <input 
+                                        type="checkbox" 
+                                        className="sr-only" 
+                                        checked={hr.is_verified}
+                                        onChange={(e) => verifyHrContactMutation.mutate({ 
+                                          companyId: company._id, 
+                                          contactId: hr._id, 
+                                          isVerified: e.target.checked, 
+                                          isAdditional: hr.is_additional || false 
+                                        })}
+                                      />
+                                      <div className={`block w-8 h-4 rounded-full transition-colors ${hr.is_verified ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
+                                      <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${hr.is_verified ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                    </div>
+                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${hr.is_verified ? 'text-emerald-700' : 'text-slate-500'}`}>
+                                      Verify
+                                    </span>
+                                  </label>
+                                  
+                                  <button 
+                                    onClick={() => {
+                                      if (confirm('Are you sure you want to delete this contact?')) {
+                                        deleteHrContactMutation.mutate({
+                                          companyId: company._id,
+                                          contactId: hr._id,
+                                          isAdditional: hr.is_additional || false
+                                        });
+                                      }
+                                    }}
+                                    className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
+                                    title="Delete Contact"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
                                 </div>
                               </div>
 
@@ -1238,7 +1241,6 @@ export default function TpoPortalPage() {
                         <ChangeContactDetailsButton 
                           companyId={company._id} 
                           tpoName={selectedTPO} tpoType={tpoCategory}
-                          
                           currentHr={company.hr_contacts?.[0]} 
                           is_verified_by_admin={company.is_verified_by_admin}
                         />
@@ -1247,10 +1249,10 @@ export default function TpoPortalPage() {
                   </div>
                 </div>
 
-                {/* Timeline & Actions */}
-                <div className="p-6 md:w-2/3 flex flex-col">
+                {/* Bottom Section: Interaction Form */}
+                <div className="p-4 sm:p-6 bg-white flex flex-col">
                   {/* Log Action Form */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-sm mb-6">
                     {activeCompanyId === company._id ? (
                       <div className="space-y-4 sm:space-y-5">
                         <div className="grid grid-cols-2 gap-3 sm:gap-5">
@@ -1869,6 +1871,90 @@ export default function TpoPortalPage() {
               >
                 Close Details
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Conversation Modal */}
+      {recentConversationModalCompany && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-indigo-50/30">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-indigo-600" />
+                Recent Conversation
+              </h2>
+              <button 
+                onClick={() => setRecentConversationModalCompany(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 bg-white hover:bg-slate-50 rounded-full shadow-sm border border-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="overflow-y-auto p-5 sm:p-6 bg-slate-50/50">
+              {recentConversationModalCompany.contact_logs && recentConversationModalCompany.contact_logs.length > 0 ? (
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-indigo-100 shadow-sm">
+                    <h3 className="font-bold text-slate-800 truncate">{recentConversationModalCompany.companyName}</h3>
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100 shrink-0">
+                      {new Date(recentConversationModalCompany.contact_logs[0].contact_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  
+                  <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm space-y-5">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
+                          <PhoneCall className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Channel</span>
+                          <span className="text-sm font-bold text-slate-800">{recentConversationModalCompany.contact_logs[0].channel}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center shrink-0 border border-purple-100">
+                          <CheckCircle2 className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                          <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Outcome</span>
+                          <span className="text-sm font-bold text-slate-800">{recentConversationModalCompany.contact_logs[0].outcome ? recentConversationModalCompany.contact_logs[0].outcome.replace('_', ' ') : 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {recentConversationModalCompany.contact_logs[0].notes && (
+                      <div className="pt-4 border-t border-slate-100">
+                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Interaction Notes</span>
+                        <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">{recentConversationModalCompany.contact_logs[0].notes}</p>
+                      </div>
+                    )}
+                    
+                    <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                        <Users className="w-3.5 h-3.5 text-slate-400" />
+                        Logged by: <span className="text-slate-700">{recentConversationModalCompany.contact_logs[0].created_by || 'Unknown'}</span>
+                      </div>
+                      {recentConversationModalCompany.contact_logs[0].next_contact_date && (
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                          Follow-up: {new Date(recentConversationModalCompany.contact_logs[0].next_contact_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-10 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                    <MessageSquare className="w-8 h-8 text-slate-300" />
+                  </div>
+                  <h3 className="font-bold text-slate-700 mb-1">No Past Conversations</h3>
+                  <p className="text-sm text-slate-500 max-w-[250px] mx-auto">There are no interaction logs recorded for this company yet.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

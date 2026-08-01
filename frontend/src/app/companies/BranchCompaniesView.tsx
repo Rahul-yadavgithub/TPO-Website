@@ -17,13 +17,15 @@ export function BranchCompaniesView() {
     program: '',
     branch: '',
     is_verified: '',
-    call_today: false
+    contact_outcome: '',
+    custom_outcome: ''
   });
   const [activeFilters, setActiveFilters] = useState({
     program: '',
     branch: '',
     is_verified: '',
-    call_today: false
+    contact_outcome: '',
+    custom_outcome: ''
   });
   const [selectedCompany, setSelectedCompany] = useState<any>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,7 +48,8 @@ export function BranchCompaniesView() {
       if (activeFilters.branch) params.branch = activeFilters.branch;
       if (activeFilters.program) params.program = activeFilters.program;
       if (activeFilters.is_verified !== '') params.is_verified = activeFilters.is_verified;
-      if (activeFilters.call_today) params.call_today = 'true';
+      if (activeFilters.contact_outcome) params.contact_outcome = activeFilters.contact_outcome;
+      if (activeFilters.custom_outcome) params.custom_outcome = activeFilters.custom_outcome;
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/branch-overview`, { params, withCredentials: true });
       return res.data;
     }
@@ -59,7 +62,8 @@ export function BranchCompaniesView() {
       if (activeFilters.branch) params.branch = activeFilters.branch;
       if (activeFilters.program) params.program = activeFilters.program;
       if (activeFilters.is_verified !== '') params.is_verified = activeFilters.is_verified;
-      if (activeFilters.call_today) params.call_today = 'true';
+      if (activeFilters.contact_outcome) params.contact_outcome = activeFilters.contact_outcome;
+      if (activeFilters.custom_outcome) params.custom_outcome = activeFilters.custom_outcome;
 
       toast.info('Fetching data for export...');
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/branch-overview`, { params, withCredentials: true });
@@ -309,20 +313,34 @@ export function BranchCompaniesView() {
                 </select>
               </div>
 
-              {/* Call Today / Contacted */}
-              <div className="flex flex-col justify-end">
-                <label className="flex items-center gap-3 p-2.5 bg-white border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors shadow-sm group">
-                  <div className="relative flex items-center justify-center w-5 h-5 rounded border border-slate-300 group-hover:border-indigo-500 transition-colors">
-                    <input 
-                      type="checkbox" 
-                      className="opacity-0 absolute inset-0 cursor-pointer"
-                      checked={tempFilters.call_today}
-                      onChange={(e) => setTempFilters({ ...tempFilters, call_today: e.target.checked })}
+              {/* Interaction Status */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Interaction Status</label>
+                <div className="flex flex-col gap-2">
+                  <select 
+                    className="w-full bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2.5 shadow-sm"
+                    value={tempFilters.contact_outcome}
+                    onChange={(e) => setTempFilters({ ...tempFilters, contact_outcome: e.target.value, custom_outcome: '' })}
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="call_today">Call Today / Action Required</option>
+                    <option value="call_again">Call Again (Reschedule)</option>
+                    <option value="brochure_jnf">Brochure + JNF Sent</option>
+                    <option value="tpo_talk">Want to talk to TPO</option>
+                    <option value="rejected">Rejected / Not Interested</option>
+                    <option value="accepted">Accepted / Confirmed</option>
+                    <option value="custom">Custom (Type your own)</option>
+                  </select>
+                  {tempFilters.contact_outcome === 'custom' && (
+                    <input
+                      type="text"
+                      className="w-full bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2.5 shadow-sm"
+                      placeholder="Type custom status..."
+                      value={tempFilters.custom_outcome}
+                      onChange={(e) => setTempFilters({ ...tempFilters, custom_outcome: e.target.value })}
                     />
-                    {tempFilters.call_today && <CheckCircle2 className="w-4 h-4 text-indigo-600 absolute pointer-events-none" />}
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 select-none">Call Today / Action Required</span>
-                </label>
+                  )}
+                </div>
               </div>
 
             </div>
@@ -330,7 +348,7 @@ export function BranchCompaniesView() {
             <div className="flex items-center justify-end gap-2 md:gap-3 mt-6 pt-5 border-t border-slate-200">
               <button
                 onClick={() => {
-                  const reset = { program: '', branch: '', is_verified: '', call_today: false };
+                  const reset = { program: '', branch: '', is_verified: '', contact_outcome: '', custom_outcome: '' };
                   setTempFilters(reset);
                   setActiveFilters(reset);
                   setPage(1);

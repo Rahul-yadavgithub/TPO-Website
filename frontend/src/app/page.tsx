@@ -218,7 +218,14 @@ function ActivityLogCard({ log }: { log: any }) {
     <div className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition-all duration-150 relative overflow-hidden">
       <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-600"></div>
       <div className="flex justify-between items-start mb-2 pl-2">
-        <h3 className="font-bold text-slate-900 text-sm truncate pr-2">{companyName}</h3>
+        <div className="flex items-center gap-2 min-w-0 pr-2">
+          <h3 className="font-bold text-slate-900 text-sm truncate">{companyName}</h3>
+          {log.outcome === 'accepted' && (
+            <span className="shrink-0 bg-green-100 text-green-700 text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+              <CheckCircle className="w-2.5 h-2.5" /> Confirmed
+            </span>
+          )}
+        </div>
         <span className="text-[10px] font-semibold text-slate-500 shrink-0 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
           <Clock className="w-3 h-3" /> {timeStr}
         </span>
