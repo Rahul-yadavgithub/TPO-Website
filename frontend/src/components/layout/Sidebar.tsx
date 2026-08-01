@@ -54,7 +54,7 @@ export function Sidebar() {
     axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true }).catch(console.error);
   };
 
-  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password';
+  const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].some(p => pathname === p || pathname.startsWith(`${p}/`));
 
   const { data: userProfile } = useQuery({
     queryKey: ['auth-me'],

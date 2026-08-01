@@ -8,6 +8,10 @@ import React, { useEffect, useState } from 'react';
 
 const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
 
+const isPublicPath = (path: string) => {
+  return publicRoutes.some(r => path === r || path.startsWith(`${r}/`));
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
@@ -16,7 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
-  const isPublicRoute = publicRoutes.includes(pathname);
+  const isPublicRoute = isPublicPath(pathname);
   const [isServiceDown, setIsServiceDown] = useState(false);
 
   const { isLoading, isError, isSuccess, error } = useQuery({

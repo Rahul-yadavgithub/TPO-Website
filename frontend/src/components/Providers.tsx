@@ -33,7 +33,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       (response) => response,
       async (error) => {
         if (error.response?.status === 401) {
-          const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password' || pathname === '/reset-password';
+          const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].some(p => pathname === p || pathname.startsWith(`${p}/`));
           
           if (!isAuthPage && !isRedirecting) {
             isRedirecting = true;
