@@ -755,10 +755,10 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                                 </div>
                               </div>
                             )}
-                              <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-4 pt-4 border-t border-slate-100 gap-4">
                                   {!selectedContactIsVerified && !selectedContactIsFlagged && (
-                                    <div className="flex items-center">
-                                      <label className="flex items-center gap-2 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors">
+                                    <div className="flex flex-col sm:flex-row gap-2">
+                                      <label className="flex items-center gap-2 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-3 py-2 sm:py-1.5 rounded-lg border border-emerald-200 transition-colors w-full sm:w-auto">
                                         <input 
                                           type="checkbox"
                                           checked={manualVerifyToggle}
@@ -766,12 +766,12 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                                             setManualVerifyToggle(e.target.checked);
                                             if (e.target.checked) setManualFlagToggle(false);
                                           }}
-                                          className="w-4 h-4 text-emerald-600 border-emerald-300 rounded focus:ring-emerald-500 cursor-pointer"
+                                          className="w-4 h-4 text-emerald-600 border-emerald-300 rounded focus:ring-emerald-500 cursor-pointer flex-shrink-0"
                                         />
                                         <span className="text-xs font-bold text-emerald-800">Mark contact as verified</span>
                                       </label>
                                       
-                                      <label className="flex items-center gap-2 cursor-pointer bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg border border-red-200 transition-colors ml-2">
+                                      <label className="flex items-center gap-2 cursor-pointer bg-red-50 hover:bg-red-100 px-3 py-2 sm:py-1.5 rounded-lg border border-red-200 transition-colors w-full sm:w-auto">
                                         <input 
                                           type="checkbox"
                                           checked={manualFlagToggle}
@@ -779,16 +779,16 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                                             setManualFlagToggle(e.target.checked);
                                             if (e.target.checked) setManualVerifyToggle(false);
                                           }}
-                                          className="w-4 h-4 text-red-600 border-red-300 rounded focus:ring-red-500 cursor-pointer"
+                                          className="w-4 h-4 text-red-600 border-red-300 rounded focus:ring-red-500 cursor-pointer flex-shrink-0"
                                         />
                                         <span className="text-xs font-bold text-red-800">Mark contact as incorrect</span>
                                       </label>
                                     </div>
                                   )}
-                                  <div className="flex gap-2 ml-auto">
+                                  <div className="flex flex-col-reverse sm:flex-row gap-2 sm:ml-auto w-full sm:w-auto mt-2 sm:mt-0">
                                   <button 
                                     onClick={() => setEditingCompanyId(null)}
-                                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                    className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200 sm:border-transparent text-center"
                                   >
                                     Cancel
                                   </button>
@@ -796,7 +796,7 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                                     <button 
                                       onClick={() => updateStatusMutation.mutate({ companyId: company._id, contactId: selectedContactId || '', isVerified: manualVerifyToggle, isFlagged: manualFlagToggle })}
                                       disabled={updateStatusMutation.isPending}
-                                      className="px-4 py-2 text-sm font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition-colors flex items-center gap-2"
+                                      className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-lg transition-colors flex items-center justify-center gap-2"
                                     >
                                       {updateStatusMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                                       Save Status Only
@@ -805,13 +805,13 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                                     <button 
                                       onClick={() => updateContactMutation.mutate({ companyId: company._id, isVerified: selectedContactIsVerified, isFlagged: selectedContactIsFlagged })}
                                       disabled={updateContactMutation.isPending}
-                                      className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-2"
+                                      className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
                                     >
                                       {updateContactMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                       {company.existsInCurrentYear ? 'Replace & Sync' : 'Save & Sync'}
                                     </button>
                                   )}
-                              </div>
+                                  </div>
                               </div>
                             </div>
                           );

@@ -225,7 +225,8 @@ router.post('/forgot-password', async (req, res) => {
     const secret = jwtSecret + user.password;
     const token = jwt.sign({ id: user._id, email: user.email }, secret, { expiresIn: '1h' });
 
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const clientOrigin = req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : null);
+    const baseUrl = process.env.FRONTEND_URL || clientOrigin || 'http://localhost:3000';
     const resetLink = `${baseUrl}/reset-password?id=${user._id}&token=${token}`;
 
     await sendRecoveryEmail(user.email, user.name, resetLink);

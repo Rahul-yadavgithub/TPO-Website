@@ -65,22 +65,34 @@ export default function BranchPortalPage() {
     if (typeof window !== 'undefined') {
       try {
         const savedState = sessionStorage.getItem('branchPortalState');
+        const params = new URLSearchParams(window.location.search);
+        const isCleanNav = params.toString() === '';
+
         if (savedState) {
           const parsed = JSON.parse(savedState);
           if (parsed.selectedBranchId !== undefined) setSelectedBranchId(parsed.selectedBranchId);
-          if (parsed.activeView !== undefined) setActiveView(parsed.activeView);
-          if (parsed.previousView !== undefined) setPreviousView(parsed.previousView);
           if (parsed.dashboardTab !== undefined) setDashboardTab(parsed.dashboardTab);
-          if (parsed.activeCompanyId !== undefined) setActiveCompanyId(parsed.activeCompanyId);
-          if (parsed.lastVisitedCompanyId !== undefined) setLastVisitedCompanyId(parsed.lastVisitedCompanyId);
           if (parsed.activeCategory !== undefined) setActiveCategory(parsed.activeCategory);
           if (parsed.listSearchQuery !== undefined) setListSearchQuery(parsed.listSearchQuery);
+          
           if (parsed.outcome !== undefined) setOutcome(parsed.outcome);
           if (parsed.customOutcome !== undefined) setCustomOutcome(parsed.customOutcome);
           if (parsed.channel !== undefined) setChannel(parsed.channel);
           if (parsed.notes !== undefined) setNotes(parsed.notes);
           if (parsed.nextContactDate !== undefined) setNextContactDate(parsed.nextContactDate);
-          if (parsed.returnToUnified !== undefined) setReturnToUnified(parsed.returnToUnified);
+
+          // If navigating from sidebar (clean URL) but previous state was deep-link, reset to dashboard
+          if (isCleanNav && parsed.returnToUnified) {
+            setActiveView('dashboard');
+            setReturnToUnified(false);
+            setActiveCompanyId(null);
+          } else {
+            if (parsed.activeView !== undefined) setActiveView(parsed.activeView);
+            if (parsed.previousView !== undefined) setPreviousView(parsed.previousView);
+            if (parsed.activeCompanyId !== undefined) setActiveCompanyId(parsed.activeCompanyId);
+            if (parsed.lastVisitedCompanyId !== undefined) setLastVisitedCompanyId(parsed.lastVisitedCompanyId);
+            if (parsed.returnToUnified !== undefined) setReturnToUnified(parsed.returnToUnified);
+          }
         }
       } catch (e) {
         console.error("Failed to restore branch portal state", e);

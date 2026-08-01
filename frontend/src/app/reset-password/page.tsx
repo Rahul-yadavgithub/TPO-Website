@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, AlertCircle, ShieldCheck, CheckCircle2, Eye, EyeOff, ShieldAlert, KeyRound, Lock } from 'lucide-react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 
 function ResetPasswordContent() {
   const [newPassword, setNewPassword] = useState('');
@@ -142,23 +143,47 @@ function ResetPasswordContent() {
 
             <div className="px-7 py-6">
               {success ? (
-                <div className="space-y-5">
-                  <div className="flex flex-col items-center text-center py-4 gap-3">
-                    <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
-                      <CheckCircle2 className="w-7 h-7 text-green-600" />
-                    </div>
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.4 }}
+                  className="space-y-6"
+                >
+                  <div className="flex flex-col items-center text-center py-6 gap-4">
+                    <motion.div 
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
+                      className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center relative shadow-inner"
+                    >
+                      <motion.div 
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ duration: 0.6, delay: 0.4, repeat: Infinity, repeatType: "reverse" }}
+                        className="absolute inset-0 bg-green-200 rounded-full opacity-30"
+                      />
+                      <CheckCircle2 className="w-10 h-10 text-green-600 relative z-10" />
+                    </motion.div>
                     <div>
-                      <h3 className="font-bold text-slate-800 text-base">Password Updated</h3>
-                      <p className="text-slate-500 text-[13px] mt-1 leading-relaxed">
-                        Your password has been successfully reset. Redirecting you to login...
+                      <h3 className="font-extrabold text-[#1a3a6e] text-2xl tracking-tight">Password Updated!</h3>
+                      <p className="text-slate-500 text-[13px] mt-2 leading-relaxed max-w-xs mx-auto">
+                        Your secure password has been successfully reset. We are redirecting you to the login portal...
                       </p>
                     </div>
                   </div>
                   <button onClick={() => window.location.href = '/login'}
-                    className="w-full py-2.5 bg-[#1a3a6e] hover:bg-[#122d58] text-white font-bold text-[14px] tracking-wide transition-colors flex items-center justify-center gap-2 mt-1">
+                    className="w-full py-3.5 bg-[#1a3a6e] hover:bg-[#122d58] text-white font-bold text-[15px] tracking-wide transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 mt-1 rounded-lg group">
                     Proceed to Login
+                    <motion.span 
+                      initial={{ x: -2 }} 
+                      animate={{ x: 2 }} 
+                      transition={{ repeat: Infinity, duration: 0.8, repeatType: "reverse" }}
+                      className="inline-block"
+                    >
+                      →
+                    </motion.span>
                   </button>
-                </div>
+                </motion.div>
               ) : (
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   
