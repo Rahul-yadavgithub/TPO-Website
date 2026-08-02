@@ -29,7 +29,7 @@ export default function LoginPage() {
     axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { withCredentials: true })
       .then(res => {
         if (res.data?.success) {
-          router.push('/');
+          window.location.href = '/';
         }
       })
       .catch(() => { /* not logged in, remain on page */ });

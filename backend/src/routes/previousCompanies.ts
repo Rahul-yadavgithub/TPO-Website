@@ -949,10 +949,10 @@ router.post('/duplicates/:id/resolve', authorizeRoles('admin'), async (req: any,
     }
 
     const company = await PreviousCompany.findById(duplicate.originalCompanyId).session(session);
-    if (!company) {
+    if (!company && action !== 'discard') {
       await session.abortTransaction();
       session.endSession();
-      return res.status(404).json({ error: 'Original company not found' });
+      return res.status(404).json({ error: 'Original master company was deleted. You can only discard this duplicate.' });
     }
 
     if (action === 'replace_primary') {
@@ -983,18 +983,24 @@ router.post('/duplicates/:id/resolve', authorizeRoles('admin'), async (req: any,
     duplicate.status = 'resolved';
     await duplicate.save({ session });
 
-    // Check if there are any other pending duplicates for this company
-    const remainingPendingCount = await DuplicatePreviousCompany.countDocuments({
-      originalCompanyId: company._id,
-      status: 'pending'
-    }).session(session);
-
-    const shouldSync = (action === 'replace_primary' || action === 'add_extra') && remainingPendingCount === 0;
-
+    if (company) {
+      // Check if there are any other pending duplicates for this company
+      const remainingPendingCount = await DuplicatePreviousCompany.countDocuments({
+        originalCompanyId: company._id,
+        status: 'pending'
+      }).session(session);
+      
+      if (remainingPendingCount === 0) {
+        company.hasPendingDuplicates = false;
+        await company.save({ session });
+      }
+    } 
+    
     await session.commitTransaction();
     session.endSession();
 
     // Auto-sync to Google Sheet if changed and no remaining pending duplicates
+    const shouldSync = company && (action === 'replace_primary' || action === 'add_extra');
     if (shouldSync) {
       try {
         const settings = await Settings.findOne();

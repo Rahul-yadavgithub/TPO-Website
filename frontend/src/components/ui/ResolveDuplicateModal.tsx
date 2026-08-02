@@ -54,7 +54,11 @@ export function ResolveDuplicateModal({ isOpen, onClose, duplicate, onSuccess }:
             <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
             <div className="text-sm">
               <p className="font-bold mb-1">Duplicate Intercepted</p>
-              <p>A new import or manual entry tried to add <strong>{duplicate.companyName}</strong>, but it already exists in the master list. Compare the details below and decide how to merge them.</p>
+              {original ? (
+                <p>A new import or manual entry tried to add <strong>{duplicate.companyName}</strong>, but it already exists in the master list. Compare the details below and decide how to merge them.</p>
+              ) : (
+                <p>A new import or manual entry tried to add <strong>{duplicate.companyName}</strong>, but the original master company it matched with was <strong>deleted</strong>. You can only discard this duplicate.</p>
+              )}
             </div>
           </div>
 
@@ -71,26 +75,36 @@ export function ResolveDuplicateModal({ isOpen, onClose, duplicate, onSuccess }:
                 <h3 className="font-bold text-slate-900 text-sm uppercase tracking-wider">Current Master</h3>
               </div>
               <div className="p-5 space-y-4 flex-1">
-                <div>
-                  <label className="text-xs text-slate-500 uppercase">HR Name</label>
-                  <p className="font-medium text-slate-900 mt-0.5">{original.hrName || <span className="text-slate-400 italic">None</span>}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 uppercase">Phone</label>
-                  <p className="text-slate-900 mt-0.5">{original.hrPhone || <span className="text-slate-400 italic">None</span>}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 uppercase">Email</label>
-                  <p className="text-slate-900 mt-0.5">{original.hrEmail || <span className="text-slate-400 italic">None</span>}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 uppercase">Source Section</label>
-                  <p className="text-slate-900 mt-0.5">{original.section}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-slate-500 uppercase">Academic Year</label>
-                  <p className="text-slate-900 mt-0.5">{original.academicYear}</p>
-                </div>
+                {original ? (
+                  <>
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase">HR Name</label>
+                      <p className="font-medium text-slate-900 mt-0.5">{original.hrName || <span className="text-slate-400 italic">None</span>}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase">Phone</label>
+                      <p className="text-slate-900 mt-0.5">{original.hrPhone || <span className="text-slate-400 italic">None</span>}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase">Email</label>
+                      <p className="text-slate-900 mt-0.5">{original.hrEmail || <span className="text-slate-400 italic">None</span>}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase">Source Section</label>
+                      <p className="text-slate-900 mt-0.5">{original.section}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 uppercase">Academic Year</label>
+                      <p className="text-slate-900 mt-0.5">{original.academicYear}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
+                    <Trash2 className="w-10 h-10 mb-2 opacity-50" />
+                    <p className="font-medium text-slate-600">Master Deleted</p>
+                    <p className="text-sm mt-1">This master company no longer exists.</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -139,7 +153,8 @@ export function ResolveDuplicateModal({ isOpen, onClose, duplicate, onSuccess }:
               
               <button 
                 onClick={() => handleResolve('add_extra')}
-                disabled={!!submittingAction}
+                disabled={!!submittingAction || !original}
+                title={!original ? 'Master company deleted' : ''}
                 className="flex-[1.5] px-4 py-3 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
               >
                 {submittingAction === 'add_extra' ? <Loader2 className="w-5 h-5 animate-spin" /> : <UserPlus className="w-5 h-5" />}
@@ -148,7 +163,8 @@ export function ResolveDuplicateModal({ isOpen, onClose, duplicate, onSuccess }:
 
               <button 
                 onClick={() => handleResolve('replace_primary')}
-                disabled={!!submittingAction}
+                disabled={!!submittingAction || !original}
+                title={!original ? 'Master company deleted' : ''}
                 className="flex-1 px-4 py-3 bg-blue-600 border border-transparent text-white hover:bg-blue-700 font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
               >
                 {submittingAction === 'replace_primary' ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
