@@ -49,7 +49,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // 6. Avoid redirect loops
-    if (window.location.pathname !== '/login') {
+    const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
+    const isPublic = publicRoutes.some(r => window.location.pathname === r || window.location.pathname.startsWith(`${r}/`));
+    if (!isPublic) {
       router.replace('/login');
     }
   }, [queryClient, router]);
