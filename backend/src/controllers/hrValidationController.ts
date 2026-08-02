@@ -69,7 +69,7 @@ export const hrValidationController = {
   commitHrContact: async (req: Request, res: Response) => {
     try {
       const { company_id } = req.params;
-      const { name, email, mobile, designation, linkedin_url } = req.body;
+      const { name, email, mobile, designation, linkedin_url, target_id } = req.body;
 
       const company = await Company.findById(company_id);
       if (!company) {
@@ -78,6 +78,67 @@ export const hrValidationController = {
 
       if (company.is_verified_by_admin) {
         return res.status(403).json({ success: false, message: 'This company is verified by Admin and cannot be edited.' });
+      }
+
+      if (target_id === 'new_contact') {
+        if (!company.additionalContacts) {
+          company.additionalContacts = [];
+        }
+        company.additionalContacts.push({
+          hrName: name || '',
+          hrEmail: email || '',
+          hrPhone: mobile || '',
+          sourceSheet: 'Added Manually',
+          academicYear: new Date().getFullYear().toString(),
+          isVerified: false,
+          isFlagged: false
+        });
+        company.syncStatus = 'pending';
+        await company.save();
+        return res.status(200).json({
+          success: true,
+          message: 'New additional HR contact added successfully',
+          contact: company.additionalContacts[company.additionalContacts.length - 1]
+        });
+      }
+
+      if (target_id && target_id.startsWith('additional-')) {
+        const indexMatch = target_id.match(/additional-(\d+)/);
+        if (indexMatch && company.additionalContacts) {
+          const index = parseInt(indexMatch[1], 10);
+          if (company.additionalContacts[index]) {
+            const oldContact = company.additionalContacts[index];
+            const isDifferent = (
+              (oldContact.hrName || '').trim() !== (name || '').trim() ||
+              (oldContact.hrEmail || '').trim() !== (email || '').trim() ||
+              (oldContact.hrPhone || '').trim() !== (mobile || '').trim()
+            );
+
+            if (isDifferent && (oldContact.hrName || oldContact.hrEmail || oldContact.hrPhone)) {
+              if (!oldContact.history) {
+                oldContact.history = [];
+              }
+              oldContact.history.push({
+                name: oldContact.hrName,
+                email: oldContact.hrEmail,
+                mobile: oldContact.hrPhone,
+                designation: 'Additional HR (From Sheet)',
+                replaced_at: new Date()
+              });
+            }
+
+            company.additionalContacts[index].hrName = name || '';
+            company.additionalContacts[index].hrEmail = email || '';
+            company.additionalContacts[index].hrPhone = mobile || '';
+            company.syncStatus = 'pending';
+            await company.save();
+            return res.status(200).json({
+              success: true,
+              message: 'Additional HR Contact updated successfully',
+              contact: company.additionalContacts[index]
+            });
+          }
+        }
       }
 
       const existingContact = await HrContact.findOne({ company_id });

@@ -3,7 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Providers } from "@/components/Providers";
-import { AuthProvider } from "@/components/providers/AuthProvider";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Toaster } from 'sonner';
 
 const inter = Inter({ subsets: ["latin"] });
@@ -28,10 +29,12 @@ export default function RootLayout({
         <Providers>
           <AuthProvider>
             <Toaster position="top-right" richColors />
-            <Sidebar />
-            <main className="flex-1 min-w-0 overflow-y-auto max-md:pt-16">
-              {children}
-            </main>
+            <ProtectedRoute>
+              <Sidebar />
+              <main className="flex-1 min-w-0 overflow-y-auto max-md:pt-16">
+                {children}
+              </main>
+            </ProtectedRoute>
           </AuthProvider>
         </Providers>
       </body>

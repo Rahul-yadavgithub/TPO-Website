@@ -13,6 +13,7 @@ import ValidateContactButton from './ValidateContactButton';
 import ChangeContactDetailsButton from './ChangeContactDetailsButton';
 import { BulkUploadModal } from '@/components/ui/BulkUploadModal';
 import { PreviousContactsView } from '@/components/ui/PreviousContactsView';
+import { useAuth } from '@/contexts/AuthContext';
 import { TransferRequestsIncomingView } from '@/components/ui/TransferRequestsIncomingView';
 import { TransferRequestsOutgoingView } from '@/components/ui/TransferRequestsOutgoingView';
 import { SlideOverPanel } from '@/components/ui/SlideOverPanel';
@@ -42,7 +43,9 @@ export default function BranchPortalPage() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showPreviousCompanyModal, setShowPreviousCompanyModal] = useState(false);
   const [historyPanelCompany, setHistoryPanelCompany] = useState<any>(null);
+  const [previousContactsPanelHR, setPreviousContactsPanelHR] = useState<any>(null);
   const [showVerificationAlert, setShowVerificationAlert] = useState(false);
+  const [deleteContactConfirm, setDeleteContactConfirm] = useState<{companyId: string, contactId: string, isAdditional: boolean} | null>(null);
   
   // Form State
   const [outcome, setOutcome] = useState<string>('');
@@ -141,6 +144,10 @@ export default function BranchPortalPage() {
   }, [historyPanelCompany]);
 
   useEffect(() => {
+    if (previousContactsPanelHR) window.history.pushState({ type: 'previous_hr_modal' }, '');
+  }, [previousContactsPanelHR]);
+
+  useEffect(() => {
     if (showBulkModal) window.history.pushState({ type: 'bulk_modal' }, '');
   }, [showBulkModal]);
 
@@ -158,6 +165,8 @@ export default function BranchPortalPage() {
         setMobileHRModalCompany(null);
       } else if (historyPanelCompany) {
         setHistoryPanelCompany(null);
+      } else if (previousContactsPanelHR) {
+        setPreviousContactsPanelHR(null);
       } else if (showBulkModal) {
         setShowBulkModal(false);
       } else if (activeView === 'single_contact') {
@@ -171,15 +180,10 @@ export default function BranchPortalPage() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [mobileHRModalCompany, historyPanelCompany, showBulkModal, activeView, activeCategory, previousView]);
+  }, [mobileHRModalCompany, historyPanelCompany, previousContactsPanelHR, showBulkModal, activeView, activeCategory, previousView]);
 
-  const { data: userProfile, isLoading: userLoading } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
-      return res.data.data;
-    }
-  });
+  const { user: userProfile, status } = useAuth();
+  const userLoading = status === 'checking';
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['dashboard-summary', selectedBranchId],
@@ -1402,7 +1406,8 @@ export default function BranchPortalPage() {
                               is_additional: true,
                               is_verified: ac.isVerified,
                               is_incorrect: ac.isFlagged,
-                              incorrect_marked_by: ac.incorrect_marked_by
+                              incorrect_marked_by: ac.incorrect_marked_by,
+                              history: ac.history || []
                             }))
                           ].map((hr: any) => (
                             <div key={hr._id} className="space-y-3">
@@ -1580,13 +1585,11 @@ export default function BranchPortalPage() {
                                   
                                   <button 
                                     onClick={() => {
-                                      if (confirm('Are you sure you want to delete this contact?')) {
-                                        deleteHrContactMutation.mutate({
-                                          companyId: company._id,
-                                          contactId: hr.is_additional ? hr.email : hr._id,
-                                          isAdditional: hr.is_additional || false
-                                        });
-                                      }
+                                      setDeleteContactConfirm({
+                                        companyId: company._id,
+                                        contactId: hr.is_additional ? hr.email : hr._id,
+                                        isAdditional: hr.is_additional || false
+                                      });
                                     }}
                                     className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-md hover:bg-red-50"
                                     title="Delete Contact"
@@ -1598,28 +1601,13 @@ export default function BranchPortalPage() {
 
                               {/* History Section */}
                               {hr.history && hr.history.length > 0 && (
-                                <div className="mt-4">
-                                  <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
-                                    <Clock className="w-3 h-3" /> Previous Contacts
-                                  </h5>
-                                  <div className="space-y-2">
-                                    {hr.history.slice().reverse().map((hist: any, index: number) => (
-                                      <div key={index} className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-xs relative">
-                                        <div className="absolute top-2 right-2 text-slate-400 italic" title="Date Replaced">
-                                          {new Date(hist.replaced_at).toLocaleDateString()}
-                                        </div>
-                                        <p className="font-bold text-slate-700">{hist.name || 'Unknown Name'}</p>
-                                        <p className="text-slate-500 mb-1">{hist.designation || 'HR'}</p>
-                                        {(hist.mobile || hist.email || hist.linkedin_url) && (
-                                          <div className="mt-1 space-y-0.5 text-slate-500">
-                                            {hist.mobile && <p>📱 {hist.mobile}</p>}
-                                            {hist.email && <p>📧 {hist.email}</p>}
-                                            {hist.linkedin_url && <a href={hist.linkedin_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">🔗 LinkedIn</a>}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                                  <button
+                                    onClick={() => setPreviousContactsPanelHR(hr)}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-colors shadow-sm"
+                                  >
+                                    <Clock className="w-3.5 h-3.5" /> Previous Contacts ({hr.history.length})
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -1652,6 +1640,7 @@ export default function BranchPortalPage() {
                           additionalContacts={company.additionalContacts}
                           pendingContact={company.hr_contacts?.[0]?.pending_update}
                           is_verified_by_admin={company.is_verified_by_admin}
+                          emailDeliveryStatus={company.emailDeliveryStatus}
                         />
                       </div>
                     </div>
@@ -2230,6 +2219,63 @@ export default function BranchPortalPage() {
           </div>
         </>
       )}
+      {/* Slide-over Previous Contacts HR Panel */}
+      {previousContactsPanelHR && (
+        <>
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] transition-opacity"
+            onClick={() => setPreviousContactsPanelHR(null)}
+          />
+          <div className="fixed inset-y-0 right-0 z-[70] w-full md:w-[480px] bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-white">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">{previousContactsPanelHR.name || 'Unknown Name'}</h2>
+                <p className="text-sm text-slate-500 mt-1">Previous Contacts History</p>
+              </div>
+              <button 
+                onClick={() => setPreviousContactsPanelHR(null)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-500" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+              {previousContactsPanelHR.history && previousContactsPanelHR.history.length > 0 ? (
+                <div className="space-y-4">
+                  {previousContactsPanelHR.history.slice().reverse().map((hist: any, index: number) => (
+                    <div key={index} className="bg-white rounded-xl p-5 border border-slate-200 shadow-sm relative">
+                      <div className="absolute top-4 right-4 text-xs font-semibold text-slate-400 bg-slate-100 px-2 py-1 rounded" title="Date Replaced">
+                        {new Date(hist.replaced_at).toLocaleDateString()}
+                      </div>
+                      <p className="font-bold text-slate-800 text-lg mb-1">{hist.name || 'Unknown Name'}</p>
+                      <p className="text-slate-500 text-sm mb-3">{hist.designation || 'HR'}</p>
+                      {(hist.mobile || hist.email || hist.linkedin_url) && (
+                        <div className="space-y-1.5 text-sm text-slate-600 border-t border-slate-100 pt-3">
+                          {hist.mobile && <p className="flex items-center gap-2"><PhoneCall className="w-4 h-4 text-slate-400" /> {hist.mobile}</p>}
+                          {hist.email && <p className="flex items-center gap-2"><Mail className="w-4 h-4 text-slate-400" /> {hist.email}</p>}
+                          {hist.linkedin_url && (
+                            <p className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-slate-400" />
+                              <a href={hist.linkedin_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">LinkedIn Profile</a>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <Clock className="w-12 h-12 text-slate-300 mb-4" />
+                  <p className="text-lg font-bold text-slate-700">No History Yet</p>
+                  <p className="text-sm text-slate-500 mt-1">There are no previous contact records for this HR.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
       {/* Mobile HR Details Modal */}
       {mobileHRModalCompany && (
         <div className="fixed inset-0 z-[100] flex flex-col bg-slate-900/40 backdrop-blur-sm sm:hidden animate-in fade-in duration-200">
@@ -2262,7 +2308,9 @@ export default function BranchPortalPage() {
                   designation: 'Additional HR (From Sheet)',
                   is_additional: true,
                   is_verified: ac.isVerified,
-                  is_incorrect: ac.isFlagged
+                  is_incorrect: ac.isFlagged,
+                  incorrect_marked_by: ac.incorrect_marked_by,
+                  history: ac.history || []
                 }))
               ].map((hr: any, index: number) => (
                 <div key={hr._id || index} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm relative overflow-hidden">
@@ -2369,6 +2417,37 @@ export default function BranchPortalPage() {
         </div>
       )}
 
+      {deleteContactConfirm && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full shadow-2xl overflow-hidden border border-slate-200 text-center">
+            <div className="p-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Delete Contact</h3>
+              <p className="text-sm text-slate-500 mb-6">Are you sure you want to delete this contact? This action cannot be undone.</p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteContactConfirm(null)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    deleteHrContactMutation.mutate(deleteContactConfirm);
+                    setDeleteContactConfirm(null);
+                  }}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 shadow-sm transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

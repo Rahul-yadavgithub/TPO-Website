@@ -79,6 +79,13 @@ export interface ICompany extends Document {
     isVerified?: boolean;
     isFlagged?: boolean;
     incorrect_marked_by?: mongoose.Types.ObjectId;
+    history?: Array<{
+      name?: string;
+      email?: string;
+      mobile?: string;
+      designation?: string;
+      replaced_at?: Date;
+    }>;
   }>;
 
   createdAt: Date;
@@ -196,7 +203,14 @@ const CompanySchema: Schema = new Schema(
       academicYear: { type: String },
       isVerified: { type: Boolean, default: false },
       isFlagged: { type: Boolean, default: false },
-      incorrect_marked_by: { type: Schema.Types.ObjectId, ref: 'Branch' }
+      incorrect_marked_by: { type: Schema.Types.ObjectId, ref: 'Branch' },
+      history: [{
+        name: String,
+        email: String,
+        mobile: String,
+        designation: String,
+        replaced_at: Date
+      }]
     }],
 
     // Review & Confirmation

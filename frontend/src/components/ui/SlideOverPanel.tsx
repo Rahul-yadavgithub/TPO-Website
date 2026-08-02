@@ -237,7 +237,7 @@ export function SlideOverPanel({
               <p className="text-sm text-slate-400 mt-1">Try adjusting your filters</p>
             </div>
           ) : (
-            filtered.map(c => <CompanyCard key={c._id} company={c} showEmailTracker={endpoint === 'brochure-jnf-requests'} />)
+            filtered.map(c => <CompanyCard key={c._id} company={c} showEmailTracker={endpoint === 'brochure-jnf-requests' && isAdmin} />)
           )}
         </div>
 

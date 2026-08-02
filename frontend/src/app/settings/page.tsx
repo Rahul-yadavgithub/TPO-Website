@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { GlobalBulkUploadModal } from '@/components/ui/GlobalBulkUploadModal';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 import { Plus, FileSpreadsheet } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Settings {
   currentAcademicYearSheetId: string;
@@ -66,13 +67,7 @@ export default function SettingsPage() {
     }
   };
 
-  const { data: userProfile } = useQuery({
-    queryKey: ['auth-me-settings'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
-      return res.data.data;
-    }
-  });
+  const { user: userProfile } = useAuth();
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
   const branchName = userProfile?.branchId?.name || '';

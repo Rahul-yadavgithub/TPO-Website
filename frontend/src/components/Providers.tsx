@@ -26,31 +26,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    let isRedirecting = false;
-
-    const interceptor = axios.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        if (error.response?.status === 401) {
-          const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].some(p => pathname === p || pathname.startsWith(`${p}/`));
-          
-          if (!isAuthPage && !isRedirecting) {
-            isRedirecting = true;
-            // We do not make an API call to logout here because if the server is down,
-            // it will cause a hang or infinite loop. We just wipe the token and redirect.
-            document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-            window.location.href = '/login';
-          }
-        }
-        return Promise.reject(error);
-      }
-    );
-
-    return () => {
-      axios.interceptors.response.eject(interceptor);
-    };
-  }, [pathname]);
+  // The Axios 401 interceptor has been moved to AuthContext to centrally handle logout.
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -9,6 +9,7 @@ import { CompanyDetailsModal } from '@/components/ui/CompanyDetailsModal';
 import { GlobalBulkUploadModal } from '@/components/ui/GlobalBulkUploadModal';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 import { BranchCompaniesView } from './BranchCompaniesView';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Company {
   _id: string;
@@ -48,13 +49,8 @@ export default function CompaniesPage() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: userProfile, isLoading: isUserLoading } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
-      return res.data.data;
-    }
-  });
+  const { user: userProfile, status } = useAuth();
+  const isUserLoading = status === 'checking';
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
 

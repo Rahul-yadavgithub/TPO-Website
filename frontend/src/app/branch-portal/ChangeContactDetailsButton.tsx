@@ -14,6 +14,7 @@ interface ChangeContactDetailsButtonProps {
   additionalContacts?: any[];
   pendingContact?: any;
   is_verified_by_admin?: boolean;
+  emailDeliveryStatus?: string;
 }
 
 export default function ChangeContactDetailsButton({ 
@@ -23,10 +24,12 @@ export default function ChangeContactDetailsButton({
   currentHr, 
   additionalContacts = [], 
   pendingContact,
-  is_verified_by_admin 
+  is_verified_by_admin,
+  emailDeliveryStatus
 }: ChangeContactDetailsButtonProps) {
   const queryClient = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [targetContactId, setTargetContactId] = useState('primary');
   
   const [formData, setFormData] = useState({
     name: currentHr?.name || '',
@@ -42,9 +45,11 @@ export default function ChangeContactDetailsButton({
     ...(pendingContact ? [{ id: 'pending', label: pendingContact.name || 'Unknown Name', data: pendingContact }] : [])
   ];
 
-  const handleAutofillSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleContactSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedId = e.target.value;
     if (!selectedId) return;
+    
+    setTargetContactId(selectedId);
     
     const selected = allAvailableContacts.find(c => c.id === selectedId);
     if (selected && selected.data) {
@@ -116,7 +121,8 @@ export default function ChangeContactDetailsButton({
         email: formData.email,
         mobile: formData.mobile,
         designation: formData.designation,
-        linkedin_url: formData.linkedin_url
+        linkedin_url: formData.linkedin_url,
+        target_id: targetContactId
       };
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/companies/${companyId}/hr-contacts/commit`, payload);
       return res.data;
@@ -163,7 +169,17 @@ export default function ChangeContactDetailsButton({
     <>
       <div className="relative w-full group">
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setTargetContactId('primary');
+            setFormData({
+              name: currentHr?.name || '',
+              email: currentHr?.email || '',
+              mobile: currentHr?.mobile || '',
+              designation: currentHr?.designation || '',
+              linkedin_url: currentHr?.linkedin_url || ''
+            });
+            setShowModal(true);
+          }}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all shadow-sm bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:shadow-md hover:-translate-y-0.5"
         >
           <Edit2 className="w-4 h-4" />
@@ -173,23 +189,34 @@ export default function ChangeContactDetailsButton({
 
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-200">
-            <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-xl font-bold text-slate-900">Edit HR Contact</h3>
-              <p className="text-sm text-slate-500 mt-1">Update details manually and sync.</p>
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200">
+            <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Edit HR Contact</h3>
+                <p className="text-sm text-slate-500 mt-1">Update details manually and sync.</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setTargetContactId('new_contact');
+                  setFormData({ name: '', email: '', mobile: '', designation: '', linkedin_url: '' });
+                }}
+                className="px-3 py-1.5 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                + Add New Contact
+              </button>
             </div>
             
             <div className="p-6 space-y-4">
               <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
                 
-                {allAvailableContacts.length > 0 && (
+                {(allAvailableContacts.length > 0 && targetContactId !== 'new_contact') && (
                   <div className="mb-5 pb-5 border-b border-indigo-100/50">
-                    <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2">Autofill from known contacts</label>
+                    <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2">Select HR Contact to Edit</label>
                     <select 
-                      onChange={handleAutofillSelect}
+                      value={targetContactId}
+                      onChange={handleContactSelect}
                       className="w-full text-sm font-medium border border-indigo-200 text-indigo-800 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white shadow-sm"
                     >
-                      <option value="">-- Select a contact to autofill form --</option>
                       {allAvailableContacts.map(c => (
                         <option key={c.id} value={c.id}>{c.label}</option>
                       ))}
@@ -212,12 +239,18 @@ export default function ChangeContactDetailsButton({
 
                 <div className="space-y-4 text-sm text-slate-700">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Name</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Name</span>
+                      {(emailDeliveryStatus === 'sent' && targetContactId === 'primary') && (
+                        <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">Locked</span>
+                      )}
+                    </label>
                     <input 
                       type="text" 
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      disabled={emailDeliveryStatus === 'sent' && targetContactId === 'primary'}
+                      className={`w-full text-sm border border-slate-200 rounded-lg px-3 py-2 transition-all ${emailDeliveryStatus === 'sent' && targetContactId === 'primary' ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'}`}
                     />
                   </div>
                   <div>
@@ -230,21 +263,33 @@ export default function ChangeContactDetailsButton({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Email</span>
+                      {(emailDeliveryStatus === 'sent' && targetContactId === 'primary') && (
+                        <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">Locked</span>
+                      )}
+                    </label>
                     <input 
                       type="email" 
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      disabled={emailDeliveryStatus === 'sent' && targetContactId === 'primary'}
+                      className={`w-full text-sm border border-slate-200 rounded-lg px-3 py-2 transition-all ${emailDeliveryStatus === 'sent' && targetContactId === 'primary' ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'}`}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Phone</span>
+                      {(emailDeliveryStatus === 'sent' && targetContactId === 'primary') && (
+                        <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">Locked (Brochure Sent)</span>
+                      )}
+                    </label>
                     <input 
                       type="text" 
                       value={formData.mobile}
                       onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-white"
+                      disabled={emailDeliveryStatus === 'sent' && targetContactId === 'primary'}
+                      className={`w-full text-sm border border-slate-200 rounded-lg px-3 py-2 transition-all ${emailDeliveryStatus === 'sent' && targetContactId === 'primary' ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500'}`}
                     />
                   </div>
                   <div>
@@ -274,7 +319,7 @@ export default function ChangeContactDetailsButton({
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-sm transition-colors disabled:opacity-70"
               >
                 {commitMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Save & Sync
+                {targetContactId === 'new_contact' ? 'Add & Sync' : 'Save & Sync'}
               </button>
             </div>
           </div>

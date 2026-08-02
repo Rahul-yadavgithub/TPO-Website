@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 import { EmailStatusTracker } from '@/components/ui/EmailStatusTracker';
 import { SlideOverPanel, CompanyCard, CompanyEntry } from '@/components/ui/SlideOverPanel';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface DashboardSummary {
@@ -408,17 +409,10 @@ function StatCard({
   );
 }
 
-// ─── Main Dashboard Page ──────────────────────────────────────────────────────
 export default function Dashboard() {
   const [lastUpdated] = useState(new Date());
 
-  const { data: userProfile } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
-      return res.data.data;
-    }
-  });
+  const { user: userProfile } = useAuth();
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
 

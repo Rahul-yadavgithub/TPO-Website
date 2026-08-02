@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import { Loader2, Lock, Mail, AlertCircle, ShieldCheck, Eye, EyeOff, RefreshCw, Check, ShieldAlert } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -21,18 +22,17 @@ export default function LoginPage() {
 
 
 
+  const { status, verifySession } = useAuth();
+  
+  useEffect(() => {
+    if (status === 'authenticated') {
+      window.location.href = '/';
+    }
+  }, [status]);
+
   useEffect(() => {
     setCurrentTime(new Date());
     const t = setInterval(() => setCurrentTime(new Date()), 1000);
-
-    // Check if already authenticated
-    axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, { withCredentials: true })
-      .then(res => {
-        if (res.data?.success) {
-          window.location.href = '/';
-        }
-      })
-      .catch(() => { /* not logged in, remain on page */ });
 
     // Fetch custom logo (disabled to force default logo)
     // axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
@@ -75,7 +75,10 @@ export default function LoginPage() {
       if (isCommTpr && portalChoice === 'communication') {
         if (commToken) localStorage.setItem('comm_tpr_token', commToken);
         window.location.href = '/communication-tpr/dashboard';
-      } else { window.location.href = '/'; }
+      } else { 
+        await verifySession(); // Trigger context update which handles redirect if needed, or we just hard redirect
+        window.location.href = '/'; 
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password.');
     } finally { setLoading(false); }

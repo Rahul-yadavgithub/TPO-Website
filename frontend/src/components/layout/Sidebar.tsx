@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import axios from 'axios';
+import { useAuth } from '@/contexts/AuthContext';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -45,26 +46,11 @@ export function Sidebar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState('https://res.cloudinary.com/dzbliymin/image/upload/v1781725894/logonith_gb3opv.webp');
 
+  const { user: userProfile, logout } = useAuth();
+
   const handleLogout = () => {
-    // Redirect immediately to remove delay
-    document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-    window.location.href = '/login';
-    
-    // Perform the API logout in the background
-    axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {}, { withCredentials: true }).catch(console.error);
+    logout();
   };
-
-  const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].some(p => pathname === p || pathname.startsWith(`${p}/`));
-
-  const { data: userProfile } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
-      return res.data.data;
-    },
-    enabled: !isAuthPage,
-    retry: false
-  });
 
   const { data: settings } = useQuery({
     queryKey: ['settings'],
@@ -72,29 +58,21 @@ export function Sidebar() {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/settings`);
       return res.data;
     },
-    enabled: !isAuthPage,
     retry: false
   });
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
-
-  useEffect(() => {
-    if (isAuthPage) return;
-    // axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/portal-settings`)
-    //   .then(res => {
-    //     if (res.data?.data?.portalLogoUrl) {
-    //       setLogoUrl(res.data.data.portalLogoUrl);
-    //     }
-    //   })
-    //   .catch(console.error);
-  }, [isAuthPage]);
 
   // Close mobile sidebar on route change
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
 
-  if (isAuthPage) {
+  const isPublicRoute = ['/login', '/register', '/forgot-password', '/reset-password'].some(
+    r => pathname === r || pathname.startsWith(`${r}/`)
+  );
+
+  if (isPublicRoute) {
     return null;
   }
 

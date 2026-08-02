@@ -8,6 +8,7 @@ import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2, Chevr
 import * as XLSX from 'xlsx';
 import { PastCompanyDetailsModal } from '@/components/ui/PastCompanyDetailsModal';
 import { DuplicateCompaniesTable } from '@/components/ui/DuplicateCompaniesTable';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AdditionalContact {
   hrName: string;
@@ -160,13 +161,8 @@ export default function PastCompaniesPage() {
 
   const queryClient = useQueryClient();
 
-  const { data: userProfile, isLoading: isUserLoading } = useQuery({
-    queryKey: ['auth-me'],
-    queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
-      return res.data.data;
-    }
-  });
+  const { user: userProfile, status } = useAuth();
+  const isUserLoading = status === 'checking';
 
   const { data: sections } = useQuery({
     queryKey: ['previous-sections'],
