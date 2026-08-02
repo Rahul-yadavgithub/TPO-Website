@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -156,6 +156,11 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
   const [availablePage, setAvailablePage] = useState(1);
   const [myRequestedPage, setMyRequestedPage] = useState(1);
   const [othersRequestedPage, setOthersRequestedPage] = useState(1);
+
+  // Cursors for Keyset Pagination
+  const availableCursors = useRef<Record<number, string>>({});
+  const myRequestedCursors = useRef<Record<number, string>>({});
+  const othersRequestedCursors = useRef<Record<number, string>>({});
   
   // Edit State
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
@@ -183,7 +188,12 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
   const { data: availableData, isLoading: availableLoading } = useQuery({
     queryKey: ['previous-available', availablePage],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=not_contacted&page=${availablePage}&limit=10`, { withCredentials: true });
+      const cursor = availableCursors.current[availablePage];
+      const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=not_contacted&page=${availablePage}&limit=10${cursorParam}`, { withCredentials: true });
+      if (res.data?.pagination?.nextCursor) {
+        availableCursors.current[availablePage + 1] = res.data.pagination.nextCursor;
+      }
       return res.data;
     }
   });
@@ -192,7 +202,12 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
   const { data: myRequestedData, isLoading: myRequestedLoading } = useQuery({
     queryKey: ['previous-my-requested', myRequestedPage, branchId, myRequestsSubTab],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=my_requests&page=${myRequestedPage}&limit=10&branchId=${branchId}&subTab=${myRequestsSubTab}`, { withCredentials: true });
+      const cursor = myRequestedCursors.current[myRequestedPage];
+      const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=my_requests&page=${myRequestedPage}&limit=10&branchId=${branchId}&subTab=${myRequestsSubTab}${cursorParam}`, { withCredentials: true });
+      if (res.data?.pagination?.nextCursor) {
+        myRequestedCursors.current[myRequestedPage + 1] = res.data.pagination.nextCursor;
+      }
       return res.data;
     },
     enabled: !!branchId
@@ -202,7 +217,12 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
   const { data: othersRequestedData, isLoading: othersRequestedLoading } = useQuery({
     queryKey: ['previous-others-requested', othersRequestedPage, branchId],
     queryFn: async () => {
-      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=others_requests&page=${othersRequestedPage}&limit=10&branchId=${branchId}`, { withCredentials: true });
+      const cursor = othersRequestedCursors.current[othersRequestedPage];
+      const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/list?status=others_requests&page=${othersRequestedPage}&limit=10&branchId=${branchId}${cursorParam}`, { withCredentials: true });
+      if (res.data?.pagination?.nextCursor) {
+        othersRequestedCursors.current[othersRequestedPage + 1] = res.data.pagination.nextCursor;
+      }
       return res.data;
     },
     enabled: !!branchId

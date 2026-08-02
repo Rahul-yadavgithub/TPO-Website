@@ -145,20 +145,44 @@ router.get('/list', async (req, res) => {
       query.contactStatus = { $in: ['requested', 'contacted'] };
     }
 
-    const skip = (page - 1) * limit;
+    const baseQuery = { ...query };
+    let skip = 0;
+    const cursor = req.query.cursor as string;
+
+    if (cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(cursor, 'base64').toString('utf-8'));
+        if (decoded.createdAt && decoded._id) {
+          query.$or = [
+            { createdAt: { $lt: new Date(decoded.createdAt) } },
+            { 
+              createdAt: new Date(decoded.createdAt), 
+              _id: { $gt: new mongoose.Types.ObjectId(decoded._id) } 
+            }
+          ];
+        }
+      } catch (e) {
+        console.error('Invalid cursor', e);
+      }
+    } else {
+      skip = (page - 1) * limit;
+    }
     
     // For 'not_contacted' we just need the name. For requested, we need full details.
     let selectFields = '';
     if (status === 'not_contacted') {
-      selectFields = 'companyName academicYear contactStatus section normalizedName';
+      selectFields = 'companyName academicYear contactStatus section normalizedName createdAt _id';
+    } else {
+      selectFields = '-__v'; // Ensure createdAt and _id are included for cursor
     }
 
     const [companies, total] = await Promise.all([
       PreviousCompany.find(query).select(selectFields).skip(skip).limit(limit).sort({ createdAt: -1, _id: 1 }),
-      PreviousCompany.countDocuments(query)
+      PreviousCompany.countDocuments(baseQuery)
     ]);
 
     let finalCompanies = companies.map(c => c.toObject());
+
 
     // Check existence in Current Year
     if (finalCompanies.length > 0) {
@@ -198,13 +222,25 @@ router.get('/list', async (req, res) => {
       }
     }
 
+    let nextCursor = null;
+    if (finalCompanies.length > 0) {
+      const last = finalCompanies[finalCompanies.length - 1];
+      if (last.createdAt && last._id) {
+        nextCursor = Buffer.from(JSON.stringify({ 
+          createdAt: last.createdAt, 
+          _id: last._id 
+        })).toString('base64');
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: finalCompanies,
       pagination: {
         total,
         page,
-        pages: Math.ceil(total / limit)
+        pages: Math.ceil(total / limit),
+        nextCursor
       }
     });
   } catch (error) {
