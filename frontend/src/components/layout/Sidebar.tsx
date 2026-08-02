@@ -36,6 +36,7 @@ const navItems = [
   { href: '/branch-portal', label: 'Branch Portal', icon: Users },
   { href: '/tpo-portal', label: 'TPO Portal', icon: Users },
   { href: '/history', label: 'Scan History', icon: History },
+  { href: '/tpo-management', label: 'Manage TPOs', icon: Users },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
@@ -273,6 +274,7 @@ export function Sidebar() {
             if (item.href === '/requests' && !isAdmin) return null;
             if (item.href === '/past-companies' && !isAdmin) return null;
             if (item.href === '/tpo-portal' && !isAdmin) return null;
+            if (item.href === '/tpo-management' && !isAdmin) return null;
             if (isAdmin && (item.href === '/sources' || item.href === '/history')) return null;
             const isActive = pathname === item.href;
             return (

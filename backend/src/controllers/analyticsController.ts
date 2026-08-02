@@ -8,9 +8,8 @@ const analyticsService = new CompanyAnalyticsService(companyRepo);
 export const analyticsController = {
   getBranchOverview: async (req: Request, res: Response) => {
     try {
-      if ((req as any).user?.role !== 'admin' && (req as any).user?.role !== 'communication_tpr') {
-        return res.status(403).json({ error: 'Admin access required' });
-      }
+      // Allow all authenticated users (TPRs included) to view the branch overview
+
 
       const result = await analyticsService.getBranchOverview(req.query);
       

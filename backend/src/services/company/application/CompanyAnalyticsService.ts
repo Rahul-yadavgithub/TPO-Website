@@ -8,7 +8,9 @@ export class CompanyAnalyticsService {
     const limit = parseInt(params.limit as string) || 20;
     const skip = (page - 1) * limit;
 
-    const query: any = { assignedBranch: { $exists: true, $ne: null } };
+    const query: any = { 
+      assignedBranch: { $exists: true, $nin: [null, 'Pending Assignment'] } 
+    };
     
     if (params.search) {
       query.companyName = { $regex: params.search, $options: 'i' };
@@ -17,7 +19,31 @@ export class CompanyAnalyticsService {
       query.assignedBranch = params.branch;
     }
     if (params.program) {
-      query.program = params.program;
+      if (params.program === 'B.Tech') {
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { program: 'B.Tech' },
+            { 
+              program: { $in: [null, ''] },
+              assignedBranch: { $not: /M\.Tech/i, $ne: 'Central Admin' } 
+            }
+          ]
+        });
+      } else if (params.program === 'M.Tech') {
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { program: 'M.Tech' },
+            { 
+              program: { $in: [null, ''] },
+              assignedBranch: /M\.Tech/i 
+            }
+          ]
+        });
+      } else {
+        query.program = params.program;
+      }
     }
     if (params.is_verified) {
       query.is_verified_by_admin = params.is_verified === 'true';
@@ -26,22 +52,29 @@ export class CompanyAnalyticsService {
       const endOfToday = new Date();
       endOfToday.setHours(23, 59, 59, 999);
       query.confirmation_status = { $ne: 'confirmed' };
-      query.$or = [
-        { contact_status: 'not_contacted' },
-        { 
-          contact_status: 'contacted', 
-          contact_outcome: 'call_again', 
-          nextFollowupDate: { $lte: endOfToday } 
-        }
-      ];
+      query.contact_status = 'contacted';
+      query.contact_outcome = 'call_again';
+      query.nextFollowupDate = { $lte: endOfToday };
     } else if (params.contact_outcome === 'custom') {
       if (params.custom_outcome) {
         query.contact_outcome = { $regex: params.custom_outcome, $options: 'i' };
       } else {
         query.contact_outcome = { $nin: ['call_again', 'brochure_jnf', 'tpo_talk', 'rejected', 'accepted', null, ''] };
       }
+    } else if (params.contact_outcome === 'not_contacted') {
+      query.contact_status = 'not_contacted';
     } else if (params.contact_outcome) {
       query.contact_outcome = params.contact_outcome;
+    }
+    
+    if (params.assignedTPO) {
+      query.assignedTPO = params.assignedTPO;
+    }
+    if (params.tpoType) {
+      query.tpoType = params.tpoType;
+    }
+    if (params.contactOwner) {
+      query.contactOwner = params.contactOwner;
     }
 
     const [data, total] = await Promise.all([

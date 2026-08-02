@@ -203,7 +203,6 @@ export function BulkUploadModal({ branchId, ownerName, ownerType = 'branch', onC
                       <tr>
                         <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Company Name</th>
                         <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider">Assigned Branch</th>
-                        <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider hidden sm:table-cell">POC TPR</th>
                         <th className="px-4 py-2.5 font-semibold text-slate-600 text-xs uppercase tracking-wider text-right">Action</th>
                       </tr>
                     </thead>
@@ -217,7 +216,6 @@ export function BulkUploadModal({ branchId, ownerName, ownerType = 'branch', onC
                               <span className="truncate max-w-[80px] sm:max-w-[120px]">{c.conflictBranch}</span>
                             </div>
                           </td>
-                          <td className="px-4 py-2.5 text-slate-600 hidden sm:table-cell">{c.conflictOwner}</td>
                           <td className="px-4 py-2.5 text-right">
                             <button
                               onClick={() => handleRequestTransfer(c)}

@@ -62,9 +62,17 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   const [assignTpoName, setAssignTpoName] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
 
-  const TPO_STAFF = ["Chandradev Raj Singh", "Atul Negi"];
-  const TPO_FACULTY = ["Dr. Somesh Kr. Sharma", "Dr. Ray Singh Meena", "Dr. Swaraj Chowdhury", "Dr. Jiwanjot Singh", "Dr. Sreeram TS"];
-  
+  const { data: activeTpos } = useQuery({
+    queryKey: ['active-tpos'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/tpos/active`, { withCredentials: true });
+      return res.data;
+    }
+  });
+
+  const facultyTpos = activeTpos?.filter((t: any) => t.type === 'Faculty') || [];
+  const staffTpos = activeTpos?.filter((t: any) => t.type === 'Staff') || [];
+
   const queryClient = useQueryClient();
 
   const { data: sections } = useQuery({
@@ -403,8 +411,8 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                             className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 bg-white"
                           >
                             <option value="">Select Name</option>
-                            {(assignCategory === 'Faculty' ? TPO_FACULTY : TPO_STAFF).map(name => (
-                              <option key={name} value={name}>{name}</option>
+                            {(assignCategory === 'Faculty' ? facultyTpos : staffTpos).map((t: any) => (
+                              <option key={t._id} value={t.name}>{t.name}</option>
                             ))}
                           </select>
                         </div>

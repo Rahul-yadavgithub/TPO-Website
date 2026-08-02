@@ -156,7 +156,10 @@ router.get('/companies', async (req, res) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const skip = (page - 1) * limit;
 
-    const query: any = { 'source.platform': { $ne: 'PreviousYearDatabase' } };
+    const query: any = { 
+      'source.platform': { $nin: ['PreviousYearDatabase', 'MANUAL_ADMIN', 'EXCEL_IMPORT'] },
+      data_source: { $ne: 'excel_import' }
+    };
     if (req.query.search) {
       query.companyName = { $regex: req.query.search, $options: 'i' };
     }
@@ -251,6 +254,30 @@ router.put('/companies/:id/assignment', outreachController.assignCompany);
 router.put('/companies/:id/override-assign', outreachController.overrideAssign);
 
 router.patch('/companies/:id/review', outreachController.reviewCompany);
+
+// --- USERS & PERSONNEL ---
+router.get('/tprs/active', async (req, res) => {
+  try {
+    const User = mongoose.model('User');
+    const tprs = await User.find({ role: 'tpr', status: 'approved' })
+      .select('name branchId course')
+      .populate('branchId', 'name')
+      .lean();
+    res.json(tprs);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch active TPRs' });
+  }
+});
+
+router.get('/tpos/active', async (req, res) => {
+  try {
+    const TPOPerson = mongoose.model('TPOPerson');
+    const tpos = await TPOPerson.find({ status: 'active' }).lean();
+    res.json(tpos);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch active TPOs' });
+  }
+});
 
 // --- BRANCHES & ASSIGNMENTS ---
 router.get('/branches', async (req, res) => {

@@ -7,8 +7,13 @@ import { CloudUpload, History, CheckCircle2, Loader2, DownloadCloud, Settings2, 
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SyncCenterPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'communication_tpr';
+  const userBranchName = user?.branchId?.name;
+
   const queryClient = useQueryClient();
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedBulkBranch, setSelectedBulkBranch] = useState<string>('');
@@ -24,6 +29,8 @@ export default function SyncCenterPage() {
     }
   });
 
+  const filteredPending = isAdmin ? pending : pending?.filter((item: any) => item.branch_name === userBranchName);
+
   const { data: history, isLoading: historyLoading } = useQuery({
     queryKey: ['sync-history'],
     queryFn: async () => {
@@ -31,6 +38,8 @@ export default function SyncCenterPage() {
       return res.data;
     }
   });
+
+  const filteredHistory = isAdmin ? history : history?.filter((item: any) => item.branch_name === userBranchName);
 
   const { data: branches } = useQuery({
     queryKey: ['branches'],
@@ -231,46 +240,55 @@ export default function SyncCenterPage() {
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 relative z-10 w-full lg:w-auto">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 sm:flex-none w-full sm:w-auto">
-            <select 
-              value={selectedInboundCourse}
-              onChange={(e) => {
-                setSelectedInboundCourse(e.target.value);
-                setSelectedInboundBranch('');
-              }}
-              className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
-            >
-              <option value="All">All Courses</option>
-              <option value="B.Tech">B.Tech</option>
-              <option value="M.Tech">M.Tech</option>
-            </select>
-            <select
-              value={selectedInboundBranch}
-              onChange={(e) => setSelectedInboundBranch(e.target.value)}
-              className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
-            >
-              <option value="">All Branches</option>
-              {selectedInboundCourse === 'M.Tech' ? (
-                ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
-                  const branch = branches?.find((b: any) => b.name === name);
-                  if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
-                  return null;
-                })
-              ) : (
-                branches
-                  ?.filter((b: any) => b.name !== 'Central Admin')
-                  .filter((b: any) => {
-                    if (selectedInboundCourse === 'B.Tech') {
-                      return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
-                    }
-                    return true;
-                  })
-                  .map((b: any) => (
-                    <option key={b._id} value={b._id}>{b.name}</option>
-                  ))
-              )}
-            </select>
+            {isAdmin ? (
+              <>
+                <select 
+                  value={selectedInboundCourse}
+                  onChange={(e) => {
+                    setSelectedInboundCourse(e.target.value);
+                    setSelectedInboundBranch('');
+                  }}
+                  className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
+                >
+                  <option value="All">All Courses</option>
+                  <option value="B.Tech">B.Tech</option>
+                  <option value="M.Tech">M.Tech</option>
+                </select>
+                <select
+                  value={selectedInboundBranch}
+                  onChange={(e) => setSelectedInboundBranch(e.target.value)}
+                  className="w-full sm:w-auto text-sm border border-slate-200 bg-slate-50 rounded-lg py-2.5 px-4 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all font-medium"
+                >
+                  <option value="">All Branches</option>
+                  {selectedInboundCourse === 'M.Tech' ? (
+                    ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
+                      const branch = branches?.find((b: any) => b.name === name);
+                      if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
+                      return null;
+                    })
+                  ) : (
+                    branches
+                      ?.filter((b: any) => b.name !== 'Central Admin')
+                      .filter((b: any) => {
+                        if (selectedInboundCourse === 'B.Tech') {
+                          return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
+                        }
+                        return true;
+                      })
+                      .map((b: any) => (
+                        <option key={b._id} value={b._id}>{b.name}</option>
+                      ))
+                  )}
+                </select>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 text-blue-700 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-sm whitespace-nowrap">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                {userBranchName || 'Your Branch'}
+              </div>
+            )}
             <button
-              onClick={() => inboundSyncMutation.mutate(selectedInboundBranch)}
+              onClick={() => inboundSyncMutation.mutate(isAdmin ? selectedInboundBranch : user?.branchId?._id)}
               disabled={inboundSyncMutation.isPending}
               className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-400 text-white font-semibold py-2.5 px-6 rounded-lg transition-colors shadow-sm whitespace-nowrap"
             >
@@ -330,48 +348,56 @@ export default function SyncCenterPage() {
           <div className="flex items-center gap-2 text-slate-500 py-8">
             <Loader2 className="w-5 h-5 animate-spin" /> Loading pending items...
           </div>
-        ) : pending?.length === 0 ? (
+        ) : filteredPending?.length === 0 ? (
           <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-12 text-center text-slate-500">
             No pending assignments to sync.
           </div>
         ) : (
           <div className="space-y-10">
-            {/* Pending: Circuital */}
-            {pending?.filter((item: any) => item.branch_category === 'Circuital').length > 0 && (
-              <div>
-                <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  Circuital Branches
-                </h3>
-                <div className="space-y-2">
-                  {pending.filter((item: any) => item.branch_category === 'Circuital').map((item: any) => renderBranchTable(item))}
-                </div>
-              </div>
-            )}
+            {isAdmin ? (
+              <>
+                {/* Pending: Circuital */}
+                {filteredPending?.filter((item: any) => item.branch_category === 'Circuital').length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      Circuital Branches
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredPending.filter((item: any) => item.branch_category === 'Circuital').map((item: any) => renderBranchTable(item))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Pending: Core */}
-            {pending?.filter((item: any) => item.branch_category === 'Core').length > 0 && (
-              <div>
-                <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
-                  <div className="w-3 h-3 rounded-full bg-slate-500"></div>
-                  Core Branches
-                </h3>
-                <div className="space-y-2">
-                  {pending.filter((item: any) => item.branch_category === 'Core').map((item: any) => renderBranchTable(item))}
-                </div>
-              </div>
-            )}
+                {/* Pending: Core */}
+                {filteredPending?.filter((item: any) => item.branch_category === 'Core').length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
+                      <div className="w-3 h-3 rounded-full bg-slate-500"></div>
+                      Core Branches
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredPending.filter((item: any) => item.branch_category === 'Core').map((item: any) => renderBranchTable(item))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Pending: Other */}
-            {pending?.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').length > 0 && (
-              <div>
-                <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
-                  <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
-                  Other Branches
-                </h3>
-                <div className="space-y-2">
-                  {pending.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').map((item: any) => renderBranchTable(item))}
-                </div>
+                {/* Pending: Other */}
+                {filteredPending?.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
+                      <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+                      Other Branches
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredPending.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').map((item: any) => renderBranchTable(item))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-2">
+                {filteredPending?.map((item: any) => renderBranchTable(item))}
               </div>
             )}
           </div>
@@ -389,48 +415,56 @@ export default function SyncCenterPage() {
           <div className="flex items-center gap-2 text-slate-500 py-8">
             <Loader2 className="w-5 h-5 animate-spin" /> Loading history...
           </div>
-        ) : history?.length === 0 ? (
+        ) : filteredHistory?.length === 0 ? (
           <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-12 text-center text-slate-500">
             No sync history available yet.
           </div>
         ) : (
           <div className="space-y-10">
-            {/* History: Circuital */}
-            {history?.filter((item: any) => item.branch_category === 'Circuital').length > 0 && (
-              <div>
-                <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  Circuital Branches
-                </h3>
-                <div className="space-y-2">
-                  {history.filter((item: any) => item.branch_category === 'Circuital').map((item: any) => renderBranchTable(item, true))}
-                </div>
-              </div>
-            )}
+            {isAdmin ? (
+              <>
+                {/* History: Circuital */}
+                {filteredHistory?.filter((item: any) => item.branch_category === 'Circuital').length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      Circuital Branches
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredHistory.filter((item: any) => item.branch_category === 'Circuital').map((item: any) => renderBranchTable(item, true))}
+                    </div>
+                  </div>
+                )}
 
-            {/* History: Core */}
-            {history?.filter((item: any) => item.branch_category === 'Core').length > 0 && (
-              <div>
-                <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
-                  <div className="w-3 h-3 rounded-full bg-slate-500"></div>
-                  Core Branches
-                </h3>
-                <div className="space-y-2">
-                  {history.filter((item: any) => item.branch_category === 'Core').map((item: any) => renderBranchTable(item, true))}
-                </div>
-              </div>
-            )}
+                {/* History: Core */}
+                {filteredHistory?.filter((item: any) => item.branch_category === 'Core').length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
+                      <div className="w-3 h-3 rounded-full bg-slate-500"></div>
+                      Core Branches
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredHistory.filter((item: any) => item.branch_category === 'Core').map((item: any) => renderBranchTable(item, true))}
+                    </div>
+                  </div>
+                )}
 
-            {/* History: Other */}
-            {history?.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').length > 0 && (
-              <div>
-                <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
-                  <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
-                  Other Branches
-                </h3>
-                <div className="space-y-2">
-                  {history.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').map((item: any) => renderBranchTable(item, true))}
-                </div>
+                {/* History: Other */}
+                {filteredHistory?.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').length > 0 && (
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-6 flex items-center gap-2 mt-8">
+                      <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+                      Other Branches
+                    </h3>
+                    <div className="space-y-2">
+                      {filteredHistory.filter((item: any) => item.branch_category !== 'Circuital' && item.branch_category !== 'Core').map((item: any) => renderBranchTable(item, true))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-2">
+                {filteredHistory?.map((item: any) => renderBranchTable(item, true))}
               </div>
             )}
           </div>

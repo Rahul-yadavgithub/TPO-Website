@@ -69,8 +69,16 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   const [assignTpoType, setAssignTpoType] = useState<'Faculty' | 'Staff' | ''>('');
   const [assignTpoName, setAssignTpoName] = useState('');
 
-  const TPO_FACULTY = ["Dr. Somesh Kr. Sharma", "Dr. Ray Singh Meena", "Dr. Swaraj Chowdhury", "Dr. Jiwanjot Singh", "Dr. Sreeram TS"];
-  const TPO_STAFF = ["Chandradev Raj Singh", "Atul Negi"];
+  const { data: activeTpos } = useQuery({
+    queryKey: ['active-tpos'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/tpos/active`, { withCredentials: true });
+      return res.data;
+    }
+  });
+
+  const facultyTpos = activeTpos?.filter((t: any) => t.type === 'Faculty') || [];
+  const staffTpos = activeTpos?.filter((t: any) => t.type === 'Staff') || [];
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -318,8 +326,8 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                   className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px] disabled:bg-slate-50 disabled:text-slate-400"
                 >
                   <option value="" disabled>Select Name...</option>
-                  {assignTpoType === 'Faculty' && TPO_FACULTY.map(name => <option key={name} value={name}>{name}</option>)}
-                  {assignTpoType === 'Staff' && TPO_STAFF.map(name => <option key={name} value={name}>{name}</option>)}
+                  {assignTpoType === 'Faculty' && facultyTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)}
+                  {assignTpoType === 'Staff' && staffTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)}
                 </select>
                 <button
                   onClick={() => assignMutation.mutate()}

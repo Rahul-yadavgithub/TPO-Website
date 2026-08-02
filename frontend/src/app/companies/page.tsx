@@ -9,6 +9,7 @@ import { CompanyDetailsModal } from '@/components/ui/CompanyDetailsModal';
 import { GlobalBulkUploadModal } from '@/components/ui/GlobalBulkUploadModal';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 import { BranchCompaniesView } from './BranchCompaniesView';
+import { CurrentYearDatabaseView } from './CurrentYearDatabaseView';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Company {
@@ -41,6 +42,7 @@ interface Company {
 }
 
 export default function CompaniesPage() {
+  const [activeTab, setActiveTab] = useState<'scanned' | 'database'>('database');
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -84,20 +86,51 @@ export default function CompaniesPage() {
   }
 
   return (
-    <div className="p-2 md:p-8 max-w-7xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+    <div className="p-2 md:p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Scan Database</h1>
-          <p className="text-muted-foreground mt-1">
-            Auto-discovered companies pending review and assignment. Sheet-synced companies are managed via the Sync Center.
-          </p>
+          <h1 className="text-3xl font-bold text-slate-900">Company Management</h1>
+          <p className="text-slate-500 mt-1">Manage scanned companies and view the current year's database.</p>
         </div>
-        
-        <div className="flex gap-4 w-full md:w-auto">
-          <select 
-            className="bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 shadow-sm"
-            value={statusFilter}
-            onChange={(e) => {
+        <div className="flex gap-2 p-1 bg-slate-100 rounded-xl border border-slate-200">
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'database' 
+                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+          >
+            Current Year Database
+          </button>
+          <button
+            onClick={() => setActiveTab('scanned')}
+            className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+              activeTab === 'scanned' 
+                ? 'bg-white text-indigo-600 shadow-sm border border-slate-200' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+          >
+            Scanned Companies
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'database' ? (
+        <CurrentYearDatabaseView />
+      ) : (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Scan Database</h2>
+              <p className="text-sm text-slate-500 mt-1">Auto-discovered companies pending review and assignment.</p>
+            </div>
+            
+            <div className="flex gap-4 w-full md:w-auto">
+              <select 
+                className="bg-white border border-slate-200 text-slate-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 p-2.5 shadow-sm"
+                value={statusFilter}
+                onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
@@ -267,6 +300,8 @@ export default function CompaniesPage() {
           </div>
         )}
       </div>
+        </div>
+      )}
 
       <CompanyDetailsModal 
         isOpen={!!selectedCompany}

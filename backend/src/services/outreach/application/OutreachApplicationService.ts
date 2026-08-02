@@ -15,12 +15,14 @@ export class OutreachApplicationService {
   ) {}
 
   async verifyCompany(companyId: string): Promise<any> {
-    const company = await this.companyRepo.findById(companyId);
-    if (!company) throw new Error('Company not found');
+    return this.uow.runInTransaction(async (session) => {
+      const company = await this.companyRepo.findById(companyId, session);
+      if (!company) throw new Error('Company not found');
 
-    company.is_verified_by_admin = true;
-    await this.companyRepo.save(company);
-    return company;
+      company.is_verified_by_admin = true;
+      await this.companyRepo.save(company, session);
+      return company;
+    });
   }
 
   async assignCompany(companyId: string, branchId: string, assignedBy: string): Promise<any> {

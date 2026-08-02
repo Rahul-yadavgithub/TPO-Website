@@ -26,9 +26,16 @@ export default function TpoPortalPage() {
   const [lastVisitedCompanyId, setLastVisitedCompanyId] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<'not_contacted' | 'call_again' | 'pending' | null>(null);
   
-  const TPO_STAFF = ["Chandradev Raj Singh", "Atul Negi"];
-  const TPO_FACULTY = ["Dr. Somesh Kr. Sharma", "Dr. Ray Singh Meena", "Dr. Swaraj Chowdhury", "Dr. Jiwanjot Singh", "Dr. Sreeram TS"];
-  
+  const { data: activeTpos } = useQuery({
+    queryKey: ['active-tpos'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/tpos/active`, { withCredentials: true });
+      return res.data;
+    }
+  });
+
+  const facultyTpos = activeTpos?.filter((t: any) => t.type === 'Faculty') || [];
+  const staffTpos = activeTpos?.filter((t: any) => t.type === 'Staff') || [];  
   // Fast Client-Side List Search
   const [listSearchQuery, setListSearchQuery] = useState('');
   
@@ -183,11 +190,10 @@ export default function TpoPortalPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tpoName = params.get('tpoName');
-      if (tpoName && !selectedTPO) {
-        if (TPO_STAFF.includes(tpoName)) {
-          setTpoCategory('Staff');
-        } else if (TPO_FACULTY.includes(tpoName)) {
-          setTpoCategory('Faculty');
+      if (tpoName && !selectedTPO && activeTpos) {
+        const tpo = activeTpos.find((t: any) => t.name === tpoName);
+        if (tpo) {
+          setTpoCategory(tpo.type as 'Faculty' | 'Staff');
         }
         setSelectedTPO(tpoName);
       }
@@ -620,10 +626,11 @@ export default function TpoPortalPage() {
                 disabled={!isAdmin}
               >
                 <option value="">-- Choose {tpoCategory} --</option>
-                {tpoCategory === 'Staff' ? (
-                  TPO_STAFF.map(name => <option key={name} value={name}>{name}</option>)
-                ) : (
-                  TPO_FACULTY.map(name => <option key={name} value={name}>{name}</option>)
+                {tpoCategory === 'Staff' && (
+                  staffTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)
+                )}
+                {tpoCategory === 'Faculty' && (
+                  facultyTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)
                 )}
               </select>
             </div>
@@ -812,10 +819,15 @@ export default function TpoPortalPage() {
 
             <div className="overflow-y-auto p-6 space-y-6">
               {isConflict && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col items-start gap-3">
-                  <div className="flex items-start gap-3 text-red-800">
-                    <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                    <p className="text-sm font-medium">{conflictMessage}</p>
+                <div className="bg-white border-2 border-red-100 shadow-sm rounded-xl p-5 flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-red-50 rounded-lg shrink-0">
+                      <AlertCircle className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 mb-1">Company Already Assigned</h4>
+                      <p className="text-sm text-slate-600 font-medium leading-relaxed">{conflictMessage}</p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -826,19 +838,23 @@ export default function TpoPortalPage() {
                 </div>
               )}
 
-              {/* Smart Paste Feature */}
-              <div className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
-                <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
-                  <span className="text-sm font-bold text-slate-900 uppercase tracking-widest">SMART PASTE</span>
-                </div>
-                <textarea 
-                  placeholder="PASTE ANY RAW TEXT HERE (E.G. FROM AN EMAIL SIGNATURE, LINKEDIN POST, OR MESSAGE). THE SYSTEM WILL AUTOMATICALLY EXTRACT AND FILL THE DETAILS BELOW..."
-                  className="w-full bg-white border-0 text-slate-900 text-sm p-4 focus:ring-0 transition-all resize-none placeholder:text-slate-400 placeholder:font-bold font-medium"
-                  rows={3}
-                  value={smartPasteText}
-                  onChange={(e) => setSmartPasteText(e.target.value)}
-                />
-              </div>
+              {!isConflict && (
+                <>
+                  {/* Smart Paste Feature */}
+                  <div className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-900 uppercase tracking-widest">SMART PASTE</span>
+                    </div>
+                    <textarea 
+                      placeholder="PASTE ANY RAW TEXT HERE (E.G. FROM AN EMAIL SIGNATURE, LINKEDIN POST, OR MESSAGE). THE SYSTEM WILL AUTOMATICALLY EXTRACT AND FILL THE DETAILS BELOW..."
+                      className="w-full bg-white border-0 text-slate-900 text-sm p-4 focus:ring-0 transition-all resize-none placeholder:text-slate-400 placeholder:font-bold font-medium"
+                      rows={3}
+                      value={smartPasteText}
+                      onChange={(e) => setSmartPasteText(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Company Name *</label>
@@ -854,51 +870,55 @@ export default function TpoPortalPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">HR Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. John Doe"
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
-                    value={manualForm.hrName}
-                    onChange={(e) => setManualForm({ ...manualForm, hrName: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">HR Phone</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. +91 9876543210"
-                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
-                    value={manualForm.hrPhone}
-                    onChange={(e) => setManualForm({ ...manualForm, hrPhone: e.target.value })}
-                  />
-                </div>
-              </div>
+              {!isConflict && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">HR Name</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. John Doe"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
+                        value={manualForm.hrName}
+                        onChange={(e) => setManualForm({ ...manualForm, hrName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">HR Phone</label>
+                      <input 
+                        type="text" 
+                        placeholder="e.g. +91 9876543210"
+                        className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
+                        value={manualForm.hrPhone}
+                        onChange={(e) => setManualForm({ ...manualForm, hrPhone: e.target.value })}
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">HR Email</label>
-                <input 
-                  type="email" 
-                  placeholder="e.g. hr@company.com"
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
-                  value={manualForm.hrEmail}
-                  onChange={(e) => setManualForm({ ...manualForm, hrEmail: e.target.value })}
-                />
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">HR Email</label>
+                    <input 
+                      type="email" 
+                      placeholder="e.g. hr@company.com"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
+                      value={manualForm.hrEmail}
+                      onChange={(e) => setManualForm({ ...manualForm, hrEmail: e.target.value })}
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">LinkedIn Profile URL</label>
-                <input 
-                  type="url" 
-                  placeholder="e.g. https://linkedin.com/in/..."
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
-                  value={manualForm.linkedinProfile}
-                  onChange={(e) => setManualForm({ ...manualForm, linkedinProfile: e.target.value })}
-                />
-                <p className="text-xs text-slate-400 mt-2">LinkedIn profile will be saved securely but will NOT be synced to Google Sheets.</p>
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">LinkedIn Profile URL</label>
+                    <input 
+                      type="url" 
+                      placeholder="e.g. https://linkedin.com/in/..."
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl p-3.5 focus:ring-indigo-500 focus:border-indigo-500 transition-all shadow-sm"
+                      value={manualForm.linkedinProfile}
+                      onChange={(e) => setManualForm({ ...manualForm, linkedinProfile: e.target.value })}
+                    />
+                    <p className="text-xs text-slate-400 mt-2">LinkedIn profile will be saved securely but will NOT be synced to Google Sheets.</p>
+                  </div>
+                </>
+              )}
 
               <div className="pt-4">
                 <button 

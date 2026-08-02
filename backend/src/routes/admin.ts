@@ -3,6 +3,8 @@ import User from '../models/User';
 import Company from '../models/Company';
 import PreviousCompanyContactRequest from '../models/PreviousCompanyContactRequest';
 import PreviousCompany from '../models/PreviousCompany';
+import TPOPerson from '../models/TPOPerson';
+import mongoose from 'mongoose';
 import { protect, AuthRequest, authorizeRoles } from '../middleware/auth';
 
 const router = express.Router();
@@ -297,6 +299,105 @@ router.delete('/tprs/:id', async (req, res) => {
     await User.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ success: true, message: 'User deleted successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// --- TPO Management ---
+
+// @route   GET /api/admin/tpos
+// @desc    Get all TPOs
+router.get('/tpos', async (req, res) => {
+  try {
+    const tpos = await TPOPerson.find().sort({ type: 1, name: 1 });
+    res.status(200).json({ success: true, data: tpos });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   POST /api/admin/tpos
+// @desc    Add a new TPO
+router.post('/tpos', async (req, res) => {
+  try {
+    const { name, designation, type } = req.body;
+    if (!name || !designation || !type) {
+      return res.status(400).json({ success: false, message: 'Name, designation, and type are required' });
+    }
+    
+    const existing = await TPOPerson.findOne({ name, type });
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'TPO already exists' });
+    }
+    const newTPO = await TPOPerson.create({ name, designation, type });
+    res.status(201).json({ success: true, data: newTPO });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   POST /api/admin/replace-tpo/:newTpoId
+// @desc    Replace an old TPO with a new one and reassign companies
+router.post('/replace-tpo/:newTpoId', async (req, res) => {
+  try {
+    const { replaceTpoId } = req.body;
+    if (!replaceTpoId) {
+      return res.status(400).json({ success: false, message: 'Old TPO ID is required for replacement' });
+    }
+
+    
+    const newTpo = await TPOPerson.findById(req.params.newTpoId);
+    const oldTpo = await TPOPerson.findById(replaceTpoId);
+
+    if (!newTpo || !oldTpo) {
+      return res.status(404).json({ success: false, message: 'TPO not found' });
+    }
+
+    // Transfer active companies assigned to the old TPO to the new TPO
+    await Company.updateMany(
+      { assignedTPO: oldTpo.name },
+      { $set: { assignedTPO: newTpo.name } }
+    );
+
+    // Update PreviousCompany records as well
+    await PreviousCompany.updateMany(
+      { assignedTPO: oldTpo.name },
+      { $set: { assignedTPO: newTpo.name } }
+    );
+
+    oldTpo.status = 'replaced';
+    oldTpo.replacedBy = newTpo._id;
+    await oldTpo.save();
+
+    res.status(200).json({ success: true, message: 'TPO Replaced & Companies Handed Over Successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   DELETE /api/admin/tpos/:id
+// @desc    Delete a TPO
+router.delete('/tpos/:id', async (req, res) => {
+  try {
+    
+    const tpo = await TPOPerson.findById(req.params.id);
+    if (!tpo) {
+      return res.status(404).json({ success: false, message: 'TPO not found' });
+    }
+    
+    // Check if companies are assigned to this TPO
+    const companiesAssigned = await Company.countDocuments({ assignedTPO: tpo.name });
+    if (companiesAssigned > 0) {
+      return res.status(400).json({ success: false, message: 'Cannot delete TPO with assigned companies. Please replace or reassign them first.' });
+    }
+
+    await TPOPerson.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'TPO deleted successfully' });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error' });
