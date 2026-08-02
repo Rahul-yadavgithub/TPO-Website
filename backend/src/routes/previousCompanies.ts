@@ -154,7 +154,7 @@ router.get('/list', async (req, res) => {
     }
 
     const [companies, total] = await Promise.all([
-      PreviousCompany.find(query).select(selectFields).skip(skip).limit(limit).sort({ createdAt: -1 }),
+      PreviousCompany.find(query).select(selectFields).skip(skip).limit(limit).sort({ createdAt: -1, _id: 1 }),
       PreviousCompany.countDocuments(query)
     ]);
 
@@ -235,7 +235,7 @@ router.get('/all-tpo', async (req, res) => {
 
     const total = await PreviousCompany.countDocuments(query);
     const companies = await PreviousCompany.find(query)
-      .sort(q ? { score: { $meta: 'textScore' } } : { createdAt: -1 })
+      .sort(q ? { score: { $meta: 'textScore' }, _id: 1 } : { createdAt: -1, _id: 1 })
       .skip(skip)
       .limit(limit);
 
@@ -283,18 +283,18 @@ router.get('/all', authorizeRoles('admin', 'communication_tpr'), async (req: any
 
     if (req.query.q) {
       // First try text search
-      companies = await PreviousCompany.find(query).skip(skip).limit(limit).sort({ createdAt: -1 });
+      companies = await PreviousCompany.find(query).skip(skip).limit(limit).sort({ createdAt: -1, _id: 1 });
       total = await PreviousCompany.countDocuments(query);
       
       // Fallback to regex if text search yields 0 results
       if (companies.length === 0) {
         let regexQuery: any = { ...query, companyName: { $regex: req.query.q as string, $options: 'i' } };
         delete regexQuery.$text;
-        companies = await PreviousCompany.find(regexQuery).skip(skip).limit(limit).sort({ createdAt: -1 });
+        companies = await PreviousCompany.find(regexQuery).skip(skip).limit(limit).sort({ createdAt: -1, _id: 1 });
         total = await PreviousCompany.countDocuments(regexQuery);
       }
     } else {
-      companies = await PreviousCompany.find(query).skip(skip).limit(limit).sort({ createdAt: -1 });
+      companies = await PreviousCompany.find(query).skip(skip).limit(limit).sort({ createdAt: -1, _id: 1 });
       total = await PreviousCompany.countDocuments(query);
     }
 

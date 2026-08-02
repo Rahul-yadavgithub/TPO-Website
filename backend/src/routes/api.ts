@@ -170,7 +170,7 @@ router.get('/companies', async (req, res) => {
     // Run find and count in parallel + use .lean() to skip Mongoose hydration
     const [companies, total] = await Promise.all([
       Company.find(query)
-        .sort({ createdAt: -1 })
+        .sort({ createdAt: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -2045,7 +2045,7 @@ router.get('/dashboard/brochure-jnf-requests', async (req, res) => {
 
     const [companies, total] = await Promise.all([
       Company.find(query)
-        .sort({ emailStatusUpdatedAt: -1, updatedAt: -1 })
+        .sort({ emailStatusUpdatedAt: -1, updatedAt: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -2118,7 +2118,7 @@ router.get('/dashboard/brochure-sent-companies', async (req, res) => {
 
     const [companies, total] = await Promise.all([
       Company.find(query)
-        .sort({ emailStatusUpdatedAt: -1, updatedAt: -1 })
+        .sort({ emailStatusUpdatedAt: -1, updatedAt: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -2182,7 +2182,7 @@ router.get('/dashboard/confirmed-companies', async (req, res) => {
       // Fetch Previous Companies
       [companies, total] = await Promise.all([
         PreviousCompany.find({ academicYear: year })
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, _id: 1 })
           .skip(skip)
           .limit(limit)
           .lean(),
@@ -2226,7 +2226,7 @@ router.get('/dashboard/confirmed-companies', async (req, res) => {
 
     [companies, total] = await Promise.all([
       Company.find(query)
-        .sort({ expected_year: -1, expected_month: -1 })
+        .sort({ expected_year: -1, expected_month: -1, _id: 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
