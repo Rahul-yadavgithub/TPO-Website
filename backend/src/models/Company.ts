@@ -113,6 +113,12 @@ export interface ICompany extends Document {
   syncStatus: 'pending' | 'synced' | 'failed';
   lastSynced?: Date;
   is_verified_by_admin?: boolean;
+
+  // Manual Email Tracking
+  emailDeliveryStatus?: 'pending' | 'sent' | 'failed';
+  emailFailureReason?: string;
+  emailStatusUpdatedAt?: Date;
+  emailStatusUpdatedBy?: string;
 }
 
 const CompanySchema: Schema = new Schema(
@@ -230,7 +236,13 @@ const CompanySchema: Schema = new Schema(
     },
     syncStatus: { type: String, enum: ['pending', 'synced', 'failed'], default: 'pending' },
     lastSynced: { type: Date },
-    is_verified_by_admin: { type: Boolean, default: false }
+    is_verified_by_admin: { type: Boolean, default: false },
+
+    // Manual Email Tracking
+    emailDeliveryStatus: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+    emailFailureReason: { type: String },
+    emailStatusUpdatedAt: { type: Date },
+    emailStatusUpdatedBy: { type: String }
   },
   { timestamps: true }
 );

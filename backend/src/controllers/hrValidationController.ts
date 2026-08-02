@@ -257,52 +257,15 @@ export const hrValidationController = {
       }
 
       if (is_additional) {
-        // If we are verifying an additional contact, it gets PROMOTED to primary
-        // and the old primary gets DEMOTED to additional.
         const additionalContactIndex = company.additionalContacts?.findIndex(c => (c as any)._id?.toString() === contact_id || c.hrEmail === contact_id);
         
         if (additionalContactIndex === undefined || additionalContactIndex === -1 || !company.additionalContacts) {
           return res.status(404).json({ success: false, message: 'Additional contact not found' });
         }
 
-        const additionalContact = company.additionalContacts[additionalContactIndex];
-
-        // 1. Demote current primary (if exists)
-        const currentPrimary = await HrContact.findOne({ company_id });
-        if (currentPrimary && (currentPrimary.name || currentPrimary.email || currentPrimary.mobile || currentPrimary.designation)) {
-          company.additionalContacts.push({
-            hrName: currentPrimary.name || '',
-            hrEmail: currentPrimary.email || '',
-            hrPhone: currentPrimary.mobile || '',
-            sourceSheet: 'Demoted Primary',
-            academicYear: company.academic_year || 'Current',
-            isVerified: currentPrimary.is_verified || false,
-            isFlagged: currentPrimary.is_incorrect || false,
-            incorrect_marked_by: currentPrimary.incorrect_marked_by
-          });
-        }
-
-        // 2. Promote additional to primary
-        const updateData = {
-          name: additionalContact.hrName,
-          email: additionalContact.hrEmail,
-          mobile: additionalContact.hrPhone,
-          designation: 'HR', // Default
-          is_verified: true,
-          is_incorrect: false,
-          incorrect_marked_by: undefined
-        };
-
-        if (currentPrimary) {
-          await HrContact.findByIdAndUpdate(currentPrimary._id, updateData, { new: true });
-        } else {
-          await HrContact.create({ company_id: new mongoose.Types.ObjectId(company_id as string), ...updateData });
-        }
-
-        // 3. Remove the promoted contact from additionalContacts
-        company.additionalContacts.splice(additionalContactIndex, 1);
+        // Just toggle verify on the additional contact without promoting
+        company.additionalContacts[additionalContactIndex].isVerified = is_verified;
         
-        company.primary_contact_verified = true;
         company.syncStatus = 'pending';
         await company.save();
 

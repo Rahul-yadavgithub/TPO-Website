@@ -170,12 +170,12 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                   ${callingStatus === 'call_again' ? 'bg-amber-100 text-amber-800' : 
                     callingStatus === 'accepted' ? 'bg-green-100 text-green-800' :
                     callingStatus === 'rejected' ? 'bg-red-100 text-red-800' : 
-                    callingStatus === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
+                    callingStatus === 'brochure_jnf' ? (company.emailDeliveryStatus === 'sent' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800') :
                     callingStatus === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
                     'bg-slate-100 text-slate-800'}`}
                 >
-                  <PhoneCall className="w-3 h-3" />
-                  {callingStatus === 'brochure_jnf' ? 'Brochure + JNF' :
+                  {callingStatus === 'brochure_jnf' && company.emailDeliveryStatus === 'sent' ? <CheckCircle2 className="w-3 h-3" /> : <PhoneCall className="w-3 h-3" />}
+                  {callingStatus === 'brochure_jnf' ? (company.emailDeliveryStatus === 'sent' ? 'Brochure Sent' : 'Brochure + JNF') :
                    callingStatus === 'tpo_talk' ? 'TPO Talk' :
                    callingStatus === 'call_again' ? 'Call Again' :
                    callingStatus === 'rejected' ? 'Rejected' :

@@ -15,6 +15,7 @@ import { BulkUploadModal } from '@/components/ui/BulkUploadModal';
 import { PreviousContactsView } from '@/components/ui/PreviousContactsView';
 import { TransferRequestsIncomingView } from '@/components/ui/TransferRequestsIncomingView';
 import { TransferRequestsOutgoingView } from '@/components/ui/TransferRequestsOutgoingView';
+import { SlideOverPanel } from '@/components/ui/SlideOverPanel';
 import { MessageSquare } from 'lucide-react';
 
 export default function BranchPortalPage() {
@@ -41,6 +42,7 @@ export default function BranchPortalPage() {
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showPreviousCompanyModal, setShowPreviousCompanyModal] = useState(false);
   const [historyPanelCompany, setHistoryPanelCompany] = useState<any>(null);
+  const [showVerificationAlert, setShowVerificationAlert] = useState(false);
   
   // Form State
   const [outcome, setOutcome] = useState<string>('');
@@ -177,6 +179,16 @@ export default function BranchPortalPage() {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`);
       return res.data.data;
     }
+  });
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['dashboard-summary', selectedBranchId],
+    queryFn: async () => {
+      const params = selectedBranchId ? { branchId: selectedBranchId } : {};
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/summary`, { params });
+      return res.data;
+    },
+    enabled: !!selectedBranchId
   });
 
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr';
@@ -608,7 +620,8 @@ export default function BranchPortalPage() {
         notes,
         created_by: userProfile?.name || 'TPR', // Dynamically set TPR name
         next_contact_date: outcome === 'call_again' ? nextContactDate : undefined,
-        show_to_tpo: true
+        show_to_tpo: true,
+        is_admin: isAdmin
       };
       const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/contact-logs`, payload);
       return res.data;
@@ -1326,14 +1339,35 @@ export default function BranchPortalPage() {
                       
                       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                         <span className="text-sm font-medium text-slate-500">Status</span>
-                        <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center gap-1.5 inline-flex ${
-                          company.confirmation_status === 'confirmed' ? 'bg-green-50 text-green-700 border border-green-200' : 
-                          company.confirmation_status === 'not_confirmed' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
-                          'bg-slate-50 text-slate-700 border border-slate-200'
-                        }`}>
-                          {company.confirmation_status === 'confirmed' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                          {company.confirmation_status ? company.confirmation_status.replace('_', ' ') : 'Pending'}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          {company.emailDeliveryStatus === 'sent' ? (
+                            <span className="inline-flex bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md items-center gap-1.5 border border-emerald-200 shadow-sm" title="Brochure & JNF Sent">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Brochure Sent
+                            </span>
+                          ) : company.emailDeliveryStatus === 'failed' ? (
+                            <span className="inline-flex bg-red-50 text-red-700 text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md items-center gap-1.5 border border-red-200 shadow-sm cursor-help" title={company.emailFailureReason || 'Failed to send Brochure & JNF'}>
+                              <AlertCircle className="w-3.5 h-3.5" /> Delivery Failed
+                            </span>
+                          ) : (
+                            <span className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center gap-1.5 inline-flex ${
+                              company.confirmation_status === 'confirmed' ? 'bg-green-50 text-green-700 border border-green-200' : 
+                              company.confirmation_status === 'not_confirmed' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 
+                              'bg-slate-50 text-slate-700 border border-slate-200'
+                            }`}>
+                              {company.confirmation_status === 'confirmed' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                              {company.confirmation_status === 'confirmed' 
+                                ? 'CONFIRMED' 
+                                : (company.contact_outcome 
+                                    ? (company.contact_outcome === 'brochure_jnf' ? 'Brochure + JNF Sent' 
+                                      : company.contact_outcome === 'call_again' ? 'Call Again'
+                                      : company.contact_outcome === 'tpo_talk' ? 'Want to talk to TPO'
+                                      : company.contact_outcome === 'rejected' ? 'Rejected'
+                                      : company.contact_outcome === 'accepted' ? 'Accepted'
+                                      : company.contact_outcome.replace('_', ' '))
+                                    : (company.confirmation_status ? company.confirmation_status.replace('_', ' ') : 'Pending'))}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1713,7 +1747,16 @@ export default function BranchPortalPage() {
                           
                           <div className="flex w-full sm:w-auto gap-3">
                             <button 
-                              onClick={() => logMutation.mutate(company._id)}
+                              onClick={() => {
+                                if (outcome === 'brochure_jnf') {
+                                  const hasVerifiedContact = (company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified));
+                                  if (!hasVerifiedContact) {
+                                    setShowVerificationAlert(true);
+                                    return;
+                                  }
+                                }
+                                logMutation.mutate(company._id);
+                              }}
                               disabled={logMutation.isPending || !outcome || (outcome === 'call_again' && !nextContactDate) || (outcome === 'custom' && !customOutcome.trim())}
                               className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:text-slate-500 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm shadow-blue-500/20 hover:shadow-blue-500/40"
                             >
@@ -2013,17 +2056,49 @@ export default function BranchPortalPage() {
                         }`}
                       >
                         <div className="mb-6">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-slate-900 text-lg">{company.companyName}</h4>
-                            {company.is_verified_by_admin ? (
-                              <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-4 h-4 text-emerald-500" /></span>
-                            ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
-                              <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
-                            ) : null}
+                          <div className="flex justify-between items-start mb-2 gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className="font-bold text-slate-900 text-lg">{company.companyName}</h4>
+                              {company.is_verified_by_admin ? (
+                                <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-4 h-4 text-emerald-500" /></span>
+                              ) : ((company as any).primary_contact_verified || (company.additionalContacts && company.additionalContacts.some((c: any) => c.isVerified))) ? (
+                                <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
+                              ) : null}
+                            </div>
+                            
+                            <div className="flex flex-col items-end gap-1.5 shrink-0 ml-1 mt-0.5">
+                              {company.emailDeliveryStatus === 'sent' ? (
+                                <span className="inline-flex bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded items-center gap-1 border border-emerald-200 shadow-sm whitespace-nowrap">
+                                  <CheckCircle2 className="w-2.5 h-2.5" /> Brochure Sent
+                                </span>
+                              ) : company.emailDeliveryStatus === 'failed' ? (
+                                <span className="inline-flex bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded items-center gap-1 border border-red-200 shadow-sm cursor-help whitespace-nowrap" title={company.emailFailureReason || 'Failed to send Brochure & JNF'}>
+                                  <AlertCircle className="w-2.5 h-2.5" /> Delivery Failed
+                                </span>
+                              ) : (
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border inline-flex items-center gap-1 text-right whitespace-nowrap ${
+                                  company.confirmation_status === 'confirmed' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                  company.confirmation_status === 'not_confirmed' ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                                  'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}>
+                                  {company.confirmation_status === 'confirmed' ? <CheckCircle2 className="w-2.5 h-2.5" /> : <Clock className="w-2.5 h-2.5" />}
+                                  {company.confirmation_status === 'confirmed' 
+                                    ? 'CONFIRMED' 
+                                    : (company.contact_outcome 
+                                        ? (company.contact_outcome === 'brochure_jnf' ? 'Brochure + JNF' 
+                                          : company.contact_outcome === 'call_again' ? 'Call Again'
+                                          : company.contact_outcome === 'tpo_talk' ? 'Want to talk to TPO'
+                                          : company.contact_outcome === 'rejected' ? 'Rejected'
+                                          : company.contact_outcome === 'accepted' ? 'Accepted'
+                                          : company.contact_outcome.replace('_', ' '))
+                                        : (company.confirmation_status ? company.confirmation_status.replace('_', ' ') : 'Pending'))}
+                                </span>
+                              )}
+                            </div>
                           </div>
+
                           {activeCategory === 'not_contacted' && <p className="text-xs text-slate-500 mt-2 uppercase tracking-wider font-semibold flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Priority: {company.placementPriority || 'Standard'}</p>}
                           {activeCategory === 'call_again' && <p className="text-xs text-blue-600 mt-2 uppercase tracking-wider font-semibold flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Follow-up: {company.nextFollowupDate ? format(new Date(company.nextFollowupDate), 'MMM d, yyyy') : 'Overdue'}</p>}
-                          {activeCategory === 'pending' && <p className="text-xs text-amber-600 mt-2 uppercase tracking-wider font-semibold flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Status: Awaiting Reply</p>}
                         </div>
                         <button 
                           onClick={() => {
@@ -2270,6 +2345,30 @@ export default function BranchPortalPage() {
           </div>
         </div>
       )}
+      {/* Modals & Panels */}
+      {/* Verification Required Modal */}
+      {showVerificationAlert && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Verification Required</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Please verify at least one HR contact before saving the "Brochure + JNF Sent" log.
+              </p>
+              <button
+                onClick={() => setShowVerificationAlert(false)}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition-colors"
+              >
+                Okay, I'll verify first
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -34,6 +34,12 @@ export interface IPreviousCompany extends Document {
   extraData?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
+  
+  // Manual Email Tracking
+  emailDeliveryStatus?: 'pending' | 'sent' | 'failed';
+  emailFailureReason?: string;
+  emailStatusUpdatedAt?: Date;
+  emailStatusUpdatedBy?: string;
 }
 
 const PreviousCompanySchema: Schema = new Schema({
@@ -67,7 +73,13 @@ const PreviousCompanySchema: Schema = new Schema({
   assignedTPO: { type: String },
   assignedTpoType: { type: String },
   section: { type: String, required: true, default: 'Uncategorized' },
-  extraData: { type: Schema.Types.Mixed, default: {} }
+  extraData: { type: Schema.Types.Mixed, default: {} },
+  
+  // Manual Email Tracking
+  emailDeliveryStatus: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
+  emailFailureReason: { type: String },
+  emailStatusUpdatedAt: { type: Date },
+  emailStatusUpdatedBy: { type: String }
 }, { timestamps: true, collection: 'PreviousCompany' });
 
 PreviousCompanySchema.index({ companyName: 'text' });

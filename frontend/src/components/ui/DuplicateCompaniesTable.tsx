@@ -15,6 +15,8 @@ interface DuplicateCompany {
     hrEmail?: string;
     section: string;
     academicYear: string;
+    emailDeliveryStatus?: 'pending' | 'sent' | 'failed';
+    emailFailureReason?: string;
   };
   companyName: string;
   hrName?: string;
@@ -24,6 +26,8 @@ interface DuplicateCompany {
   academicYear: string;
   extraData?: Record<string, any>;
   createdAt: string;
+  emailDeliveryStatus?: 'pending' | 'sent' | 'failed';
+  emailFailureReason?: string;
 }
 
 export function DuplicateCompaniesTable({ searchQuery = '' }: { searchQuery?: string }) {
@@ -77,7 +81,22 @@ export function DuplicateCompaniesTable({ searchQuery = '' }: { searchQuery?: st
                   <td className="px-6 py-4">
                     <div className="flex flex-col max-w-xs">
                       <span className="font-semibold text-slate-900 text-base">{dup.companyName}</span>
-                      <span className="text-xs text-slate-500 mt-1">{new Date(dup.createdAt).toLocaleDateString()}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-slate-500">{new Date(dup.createdAt).toLocaleDateString()}</span>
+                        {dup.originalCompanyId?.emailDeliveryStatus === 'sent' && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-md">
+                            <CheckCircle className="w-3 h-3" /> Sent
+                          </span>
+                        )}
+                        {dup.originalCompanyId?.emailDeliveryStatus === 'failed' && (
+                          <span 
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-red-100 text-red-700 rounded-md cursor-help"
+                            title={dup.originalCompanyId?.emailFailureReason || 'Failed to send'}
+                          >
+                            <AlertCircle className="w-3 h-3" /> Failed
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4">

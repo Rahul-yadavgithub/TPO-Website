@@ -1,24 +1,24 @@
 const fs = require('fs');
-const file = 'src/routes/api.ts';
-let code = fs.readFileSync(file, 'utf8');
 
-const regex1 = /(router\.post\('\/sync\/:branch_id',[\s\S]*?router\.get\('\/sync\/history\/:branch_id\/companies',[\s\S]*?}\);\n)/;
-const match1 = code.match(regex1);
-if (!match1) {
-  console.log("Could not find block 1");
-  process.exit(1);
+function fixFile(filePath) {
+  let content = fs.readFileSync(filePath, 'utf8');
+  const exportStatement = 'export default router;';
+  const parts = content.split(exportStatement);
+  
+  if (parts.length > 2) {
+    console.log(`Multiple exports found in ${filePath}, doing nothing.`);
+    return;
+  }
+  
+  if (parts.length === 2 && parts[1].trim().length > 0) {
+    // There is content after export default router;
+    const newContent = parts[0] + parts[1] + '\n' + exportStatement + '\n';
+    fs.writeFileSync(filePath, newContent, 'utf8');
+    console.log(`Fixed ${filePath}`);
+  } else {
+    console.log(`No content after export in ${filePath}`);
+  }
 }
-const block1 = match1[0];
 
-// Remove block 1 from the original position
-code = code.replace(block1, '');
-
-// Find where to insert it: right before "// --- BRANCH PORTAL & CONTACTS ---"
-const insertPoint = '// --- BRANCH PORTAL & CONTACTS ---';
-if (code.includes(insertPoint)) {
-  code = code.replace(insertPoint, block1 + '\n' + insertPoint);
-  fs.writeFileSync(file, code);
-  console.log("Success");
-} else {
-  console.log("Could not find insert point");
-}
+fixFile('src/routes/api.ts');
+fixFile('src/routes/previousCompanies.ts');

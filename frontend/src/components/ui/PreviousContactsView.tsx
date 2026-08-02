@@ -4,6 +4,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Search, Building2, CheckCircle2, Save, Users, Calendar, XCircle, ShieldCheck, Phone, Mail, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
+import { EmailStatusTracker } from './EmailStatusTracker';
 
 interface ExtractedContact {
   id: string;
@@ -610,12 +611,21 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
                           </div>
                           
                           {isApproved && !isEditing && (
-                            <button 
-                              onClick={() => startEdit(company)}
-                              className="w-full sm:w-auto px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors text-sm text-center"
-                            >
-                              Update & Sync
-                            </button>
+                            <div className="flex flex-col sm:flex-row items-center gap-3">
+                              <EmailStatusTracker 
+                                companyId={company._id}
+                                companyName={company.companyName}
+                                hrEmail={company.hrEmail || company.additionalContacts?.[0]?.hrEmail || ''}
+                                currentStatus={company.emailDeliveryStatus}
+                                failureReason={company.emailFailureReason}
+                              />
+                              <button 
+                                onClick={() => startEdit(company)}
+                                className="w-full sm:w-auto px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors text-sm text-center"
+                              >
+                                Update & Sync
+                              </button>
+                            </div>
                           )}
                         </div>
 

@@ -1125,4 +1125,51 @@ router.delete('/:id', authorizeRoles('admin'), async (req: any, res) => {
   }
 });
 
+
+
+import { sendFailureAlertToGroup } from '../services/whatsapp.service';
+
+router.patch('/:id/email-status', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { status, reason, customReason } = req.body;
+    
+    if (!['sent', 'failed'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const finalReason = status === 'failed' ? (reason === 'Custom' ? customReason : reason) : undefined;
+    
+    const company = await PreviousCompany.findByIdAndUpdate(id, {
+      emailDeliveryStatus: status,
+      emailFailureReason: finalReason,
+      emailStatusUpdatedAt: new Date(),
+      emailStatusUpdatedBy: req.user?.name || req.user?.email || 'Unknown User'
+    }, { new: true });
+
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    if (status === 'failed') {
+      const pocName = company.contactedByTprName || company.updatedByTprName || company.contactedByBranchName || req.user?.name || req.user?.email || 'Unknown User';
+      let hrEmail = company.hrEmail || 'N/A';
+      if (!hrEmail || hrEmail === 'N/A') {
+        const verifiedContact = company.additionalContacts?.find((c: any) => c.isVerified);
+        if (verifiedContact && verifiedContact.hrEmail) hrEmail = verifiedContact.hrEmail;
+        else if (company.additionalContacts?.[0]?.hrEmail) hrEmail = company.additionalContacts[0].hrEmail;
+      }
+      
+      // Fire and forget
+      sendFailureAlertToGroup(company.companyName, hrEmail, finalReason || 'Unknown Error', pocName)
+        .catch(console.error);
+    }
+
+    res.json(company);
+  } catch (error) {
+    console.error('Error updating email status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

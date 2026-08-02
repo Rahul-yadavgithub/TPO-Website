@@ -997,7 +997,7 @@ router.post('/contact-logs', async (req, res) => {
   session.startTransaction();
 
   try {
-    const { company_id, branch_id, contact_date, channel, outcome, notes, created_by, next_contact_date, show_to_tpr, show_to_tpo, tpo_name } = req.body;
+    const { company_id, branch_id, contact_date, channel, outcome, notes, created_by, next_contact_date, show_to_tpr, show_to_tpo, tpo_name, is_admin } = req.body;
 
     let validBranchId = undefined;
     if (branch_id && mongoose.Types.ObjectId.isValid(branch_id)) {
@@ -1038,6 +1038,11 @@ router.post('/contact-logs', async (req, res) => {
       } else if (outcome === 'brochure_jnf') {
         company.contact_outcome = 'brochure_jnf';
         company.primary_contact_verified = true;
+        if (is_admin) {
+          company.emailDeliveryStatus = 'sent';
+          company.emailStatusUpdatedAt = new Date();
+          company.emailStatusUpdatedBy = created_by;
+        }
         const currentPrimary = await HrContact.findOne({ company_id }).session(session);
         if (currentPrimary) {
           currentPrimary.is_verified = true;
@@ -1904,16 +1909,37 @@ router.get('/dashboard/summary', async (req, res) => {
       contactTodayQuery.assignedBranch = branchName;
     }
 
-    const [pendingReview, confirmedThisYear, contactToday, previousCompanyCount] = await Promise.all([
+    const brochureJnfQuery: any = {
+      ...currentYearBaseQuery,
+      contact_outcome: 'brochure_jnf',
+      emailDeliveryStatus: { $ne: 'sent' }
+    };
+    if (branchName) {
+      brochureJnfQuery.assignedBranch = branchName;
+    }
+
+    const brochureSentQuery: any = {
+      ...currentYearBaseQuery,
+      emailDeliveryStatus: 'sent'
+    };
+    if (branchName) {
+      brochureSentQuery.assignedBranch = branchName;
+    }
+
+    const [pendingReview, confirmedThisYear, contactToday, previousCompanyCount, brochureJnfCount, brochureSentCount] = await Promise.all([
       Company.countDocuments({ data_source: 'scanned', review_status: 'scanned' }),
       Company.countDocuments(confirmedQuery),
       Company.countDocuments(contactTodayQuery),
-      PreviousCompany.countDocuments({ academicYear: last })
+      PreviousCompany.countDocuments({ academicYear: last }),
+      Company.countDocuments(brochureJnfQuery),
+      Company.countDocuments(brochureSentQuery)
     ]);
 
     res.json({
       pending_review_count: pendingReview,
       contact_today_count: contactToday,
+      brochure_jnf_requests_count: brochureJnfCount,
+      brochure_sent_count: brochureSentCount,
       confirmed_this_year: {
         academic_year: current,
         total: confirmedThisYear
@@ -1946,7 +1972,7 @@ router.get('/dashboard/recent-activity', async (req, res) => {
     }
 
     const logs = await ContactLog.find(query)
-      .populate('company_id', 'companyName assignedBranch')
+      .populate('company_id', 'companyName assignedBranch emailDeliveryStatus')
       .populate('branch_id', 'name')
       .sort({ contact_date: -1 })
       .lean();
@@ -1955,6 +1981,152 @@ router.get('/dashboard/recent-activity', async (req, res) => {
   } catch (error) {
     console.error('Recent activity error:', error);
     res.status(500).json({ error: 'Failed to fetch recent activity' });
+  }
+});
+router.get('/dashboard/brochure-jnf-requests', async (req, res) => {
+  try {
+    const branchId = req.query.branchId as string;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = 20;
+    const skip = (page - 1) * limit;
+
+    let branchName = '';
+    if (branchId) {
+      const branch = await Branch.findById(branchId);
+      if (branch) branchName = branch.name;
+    }
+
+    const { current } = getAcademicYears();
+    const currentYearBaseQuery = {
+      $or: [
+        { academic_year: current },
+        { academic_year: null },
+        { academic_year: '' },
+        { academic_year: { $exists: false } }
+      ]
+    };
+
+    const query: any = {
+      ...currentYearBaseQuery,
+      contact_outcome: 'brochure_jnf',
+      emailDeliveryStatus: { $ne: 'sent' }
+    };
+
+    if (branchName) {
+      query.assignedBranch = branchName;
+    }
+
+    const [companies, total] = await Promise.all([
+      Company.find(query)
+        .sort({ emailStatusUpdatedAt: -1, updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Company.countDocuments(query)
+    ]);
+
+    const companyIds = companies.map(c => c._id).filter(Boolean);
+    const hrContacts = companyIds.length > 0
+      ? await HrContact.find({ company_id: { $in: companyIds } }).lean()
+      : [];
+    const hrMap = new Map(hrContacts.map(h => [h.company_id.toString(), h]));
+
+    const enriched = companies.map((c: any) => ({
+      _id: c._id,
+      company_name: c.companyName || c.company_name || 'Unknown',
+      drive_type: c.drive_type || null,
+      role: c.role || null,
+      package: c.package || null,
+      expected_month: c.expected_month || null,
+      expected_year: c.expected_year || null,
+      assignedBranch: c.assignedBranch || null,
+      isPreviousCompany: false,
+      emailDeliveryStatus: c.emailDeliveryStatus || null,
+      emailFailureReason: c.emailFailureReason || null,
+      emailStatusUpdatedAt: c.emailStatusUpdatedAt || null,
+      hr: hrMap.get(c._id?.toString()) ? {
+        name: hrMap.get(c._id.toString())?.name,
+        email: hrMap.get(c._id.toString())?.email,
+        mobile: hrMap.get(c._id.toString())?.mobile,
+      } : null
+    }));
+
+    res.json({ companies: enriched, total, page, per_page: limit, pages: Math.ceil(total / limit) });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch brochure jnf requests' });
+  }
+});
+
+router.get('/dashboard/brochure-sent-companies', async (req, res) => {
+  try {
+    const branchId = req.query.branchId as string;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = 20;
+    const skip = (page - 1) * limit;
+
+    let branchName = '';
+    if (branchId) {
+      const branch = await Branch.findById(branchId);
+      if (branch) branchName = branch.name;
+    }
+
+    const { current } = getAcademicYears();
+    const currentYearBaseQuery = {
+      $or: [
+        { academic_year: current },
+        { academic_year: null },
+        { academic_year: '' },
+        { academic_year: { $exists: false } }
+      ]
+    };
+
+    const query: any = {
+      ...currentYearBaseQuery,
+      emailDeliveryStatus: 'sent'
+    };
+
+    if (branchName) {
+      query.assignedBranch = branchName;
+    }
+
+    const [companies, total] = await Promise.all([
+      Company.find(query)
+        .sort({ emailStatusUpdatedAt: -1, updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Company.countDocuments(query)
+    ]);
+
+    const companyIds = companies.map(c => c._id).filter(Boolean);
+    const hrContacts = companyIds.length > 0
+      ? await HrContact.find({ company_id: { $in: companyIds } }).lean()
+      : [];
+    const hrMap = new Map(hrContacts.map(h => [h.company_id.toString(), h]));
+
+    const enriched = companies.map((c: any) => ({
+      _id: c._id,
+      company_name: c.companyName || c.company_name || 'Unknown',
+      drive_type: c.drive_type || null,
+      role: c.role || null,
+      package: c.package || null,
+      expected_month: c.expected_month || null,
+      expected_year: c.expected_year || null,
+      assignedBranch: c.assignedBranch || null,
+      isPreviousCompany: false,
+      emailDeliveryStatus: c.emailDeliveryStatus || null,
+      emailFailureReason: c.emailFailureReason || null,
+      emailStatusUpdatedAt: c.emailStatusUpdatedAt || null,
+      hr: hrMap.get(c._id?.toString()) ? {
+        name: hrMap.get(c._id.toString())?.name,
+        email: hrMap.get(c._id.toString())?.email,
+        mobile: hrMap.get(c._id.toString())?.mobile,
+      } : null
+    }));
+
+    res.json({ companies: enriched, total, page, per_page: limit, pages: Math.ceil(total / limit) });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch brochure sent companies' });
   }
 });
 
@@ -2267,5 +2439,59 @@ router.post('/companies/:company_id/acknowledge-hr-update', hrValidationControll
     console.error('[Migration] Failed to run legacy company migration:', err);
   }
 })();
+
+
+
+// --- MANUAL EMAIL TRACKING ---
+import { sendFailureAlertToGroup } from '../services/whatsapp.service';
+
+router.patch('/companies/:id/email-status', protect, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const { status, reason, customReason } = req.body;
+    
+    if (!['sent', 'failed'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const finalReason = status === 'failed' ? (reason === 'Custom' ? customReason : reason) : undefined;
+    
+    const company = await Company.findByIdAndUpdate(id, {
+      emailDeliveryStatus: status,
+      emailFailureReason: finalReason,
+      emailStatusUpdatedAt: new Date(),
+      emailStatusUpdatedBy: req.user?.name || req.user?.email || 'Unknown User'
+    }, { new: true });
+
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    if (status === 'failed') {
+      let hrEmail = company.hrEmail || company.talentAcquisitionEmail || company.founderEmail || 'N/A';
+      
+      const hrContact = await HrContact.findOne({ company_id: company._id, is_verified: true }) || 
+                        await HrContact.findOne({ company_id: company._id });
+      if (hrContact && hrContact.email) {
+        hrEmail = hrContact.email;
+      }
+
+      let pocName = company.assignedBranch || req.user?.name || req.user?.email || 'Unknown User';
+      const lastLog = await ContactLog.findOne({ company_id: company._id }).sort({ contact_date: -1 });
+      if (lastLog && lastLog.created_by && lastLog.created_by !== 'Admin') {
+        pocName = lastLog.created_by;
+      }
+      
+      // Fire and forget
+      sendFailureAlertToGroup(company.companyName, hrEmail, finalReason || 'Unknown Error', pocName)
+        .catch(console.error);
+    }
+
+    res.json(company);
+  } catch (error) {
+    console.error('Error updating email status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 export default router;
