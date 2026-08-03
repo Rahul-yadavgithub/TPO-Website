@@ -638,6 +638,7 @@ export function PreviousContactsView({ branchId, branchName, onBack }: PreviousC
                                 hrEmail={company.hrEmail || company.additionalContacts?.[0]?.hrEmail || ''}
                                 currentStatus={company.emailDeliveryStatus}
                                 failureReason={company.emailFailureReason}
+                                hideControls={true}
                               />
                               <button 
                                 onClick={() => startEdit(company)}
