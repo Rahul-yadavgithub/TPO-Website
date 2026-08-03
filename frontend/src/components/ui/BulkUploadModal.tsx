@@ -77,23 +77,30 @@ export function BulkUploadModal({ branchId, ownerName, ownerType = 'branch', onC
       const json = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
       // Map columns heuristically
+      const allKeys = Array.from(new Set(json.flatMap(Object.keys)));
+      const findKey = (keywords: string[]) => allKeys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+      
+      const companyKey = findKey(['company', 'name', 'organization']) || allKeys[0];
+      const hrNameKey = findKey(['hr name', 'contact person', 'hr']);
+      const phoneKey = findKey(['phone', 'mobile', 'contact', 'number']);
+      const emailKey = findKey(['email', 'mail']);
+      const linkedinKey = findKey(['linkedin']);
+
+      let lastCompanyName = '';
       const companies = json.map(row => {
-        // Try to find columns for Company Name, HR Name, Email, Phone
-        const keys = Object.keys(row);
-        const findKey = (keywords: string[]) => keys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
-        
-        const companyKey = findKey(['company', 'name', 'organization']) || keys[0];
-        const hrNameKey = findKey(['hr name', 'contact person', 'hr']);
-        const phoneKey = findKey(['phone', 'mobile', 'contact']);
-        const emailKey = findKey(['email', 'mail']);
-        const linkedinKey = findKey(['linkedin']);
+        let companyName = companyKey && row[companyKey] ? String(row[companyKey]).trim() : '';
+        if (companyName) {
+          lastCompanyName = companyName;
+        } else if (lastCompanyName) {
+          companyName = lastCompanyName;
+        }
 
         return {
-          companyName: row[companyKey] ? String(row[companyKey]).trim() : '',
-          hrName: hrNameKey ? String(row[hrNameKey]).trim() : '',
-          hrPhone: phoneKey ? String(row[phoneKey]).trim() : '',
-          hrEmail: emailKey ? String(row[emailKey]).trim() : '',
-          linkedinProfile: linkedinKey ? String(row[linkedinKey]).trim() : ''
+          companyName,
+          hrName: hrNameKey && row[hrNameKey] ? String(row[hrNameKey]).trim() : '',
+          hrPhone: phoneKey && row[phoneKey] ? String(row[phoneKey]).trim() : '',
+          hrEmail: emailKey && row[emailKey] ? String(row[emailKey]).trim() : '',
+          linkedinProfile: linkedinKey && row[linkedinKey] ? String(row[linkedinKey]).trim() : ''
         };
       }).filter(c => c.companyName); // Filter out rows without company name
 

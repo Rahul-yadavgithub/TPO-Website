@@ -78,33 +78,41 @@ export function GlobalBulkUploadModal({ mode, onClose, onSuccess }: GlobalBulkUp
       const worksheet = workbook.Sheets[sheetName];
       const json = XLSX.utils.sheet_to_json(worksheet, { raw: false }) as any[];
 
+      const allKeys = Array.from(new Set(json.flatMap(Object.keys)));
+      const findKey = (keywords: string[]) => allKeys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
+      
+      const companyKey = findKey(['company', 'name', 'organization']) || allKeys[0];
+      const hrNameKey = findKey(['hr name', 'contact person', 'hr']);
+      const phoneKey = findKey(['phone', 'mobile', 'contact', 'number']);
+      const emailKey = findKey(['email', 'mail']);
+      const linkedinKey = findKey(['linkedin']);
+      const yearKey = findKey(['year', 'academic']);
+
+      let lastCompanyName = '';
       const companies = json.map(row => {
-        const keys = Object.keys(row);
-        const findKey = (keywords: string[]) => keys.find(k => keywords.some(kw => k.toLowerCase().includes(kw)));
-        
-        const companyKey = findKey(['company', 'name', 'organization']) || keys[0];
-        const hrNameKey = findKey(['hr name', 'contact person', 'hr']);
-        const phoneKey = findKey(['phone', 'mobile', 'contact']);
-        const emailKey = findKey(['email', 'mail']);
-        const linkedinKey = findKey(['linkedin']);
-        const yearKey = findKey(['year', 'academic']);
+        let companyName = companyKey && row[companyKey] ? String(row[companyKey]).trim() : '';
+        if (companyName) {
+          lastCompanyName = companyName;
+        } else if (lastCompanyName) {
+          companyName = lastCompanyName;
+        }
 
         const companyData: any = {
-          companyName: row[companyKey] ? String(row[companyKey]).trim() : '',
-          hrName: hrNameKey ? String(row[hrNameKey]).trim() : '',
-          hrPhone: phoneKey ? String(row[phoneKey]).trim() : '',
-          hrEmail: emailKey ? String(row[emailKey]).trim() : '',
+          companyName,
+          hrName: hrNameKey && row[hrNameKey] ? String(row[hrNameKey]).trim() : '',
+          hrPhone: phoneKey && row[phoneKey] ? String(row[phoneKey]).trim() : '',
+          hrEmail: emailKey && row[emailKey] ? String(row[emailKey]).trim() : '',
         };
 
         if (mode === 'current') {
-          companyData.linkedinProfile = linkedinKey ? String(row[linkedinKey]).trim() : '';
+          companyData.linkedinProfile = linkedinKey && row[linkedinKey] ? String(row[linkedinKey]).trim() : '';
         } else {
-          companyData.academicYear = yearKey ? String(row[yearKey]).trim() : new Date().getFullYear().toString();
+          companyData.academicYear = yearKey && row[yearKey] ? String(row[yearKey]).trim() : new Date().getFullYear().toString();
           companyData.section = section;
           
           const extraData: Record<string, any> = {};
           const standardKeys = [companyKey, hrNameKey, phoneKey, emailKey, yearKey].filter(Boolean);
-          keys.forEach(k => {
+          Object.keys(row).forEach(k => {
             if (!standardKeys.includes(k)) {
               extraData[k] = row[k];
             }
