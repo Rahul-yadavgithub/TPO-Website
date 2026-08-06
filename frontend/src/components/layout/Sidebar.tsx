@@ -30,8 +30,8 @@ import { useAuth } from '@/contexts/AuthContext';
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/sources', label: 'Scan Center', icon: Briefcase },
-  { href: '/companies', label: 'Companies', icon: Database },
-  { href: '/past-companies', label: 'Past Companies', icon: Archive },
+  { href: '/companies', label: 'Current TPR Work', icon: Database },
+  { href: '/past-companies', label: 'Companies', icon: Archive },
   { href: '/requests', label: 'Requests', icon: Inbox },
   { href: '/student-records', label: 'Student Records', icon: ClipboardList },
   { href: '/sync', label: 'Sync Center', icon: CloudUpload },

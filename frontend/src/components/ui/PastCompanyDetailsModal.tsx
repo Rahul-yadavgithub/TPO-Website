@@ -51,7 +51,7 @@ interface PastCompanyDetailsModalProps {
 export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompanyDetailsModalProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<Partial<PastCompany>>({});
-  const [editExtraData, setEditExtraData] = useState<{ id: string; key: string; value: string }[]>([]);
+  const [editExtraData, setEditExtraData] = useState<{ id: string; typeKey: string; customKey: string; value: string }[]>([]);
   const [extraContacts, setExtraContacts] = useState<ExtraContact[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isNewSection, setIsNewSection] = useState(false);
@@ -61,6 +61,21 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   const [assignCategory, setAssignCategory] = useState<'Faculty' | 'Staff' | ''>('');
   const [assignTpoName, setAssignTpoName] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
+
+  const currentYear = new Date().getFullYear();
+  const selectedYears = formData.academicYear ? formData.academicYear.split(',').map(y => y.trim()).filter(Boolean) : [];
+
+  const toggleYear = (year: string) => {
+    let newYears = [...selectedYears];
+    if (newYears.includes(year)) {
+      newYears = newYears.filter(y => y !== year);
+    } else {
+      newYears.push(year);
+      newYears.sort((a, b) => parseInt(b) - parseInt(a));
+      newYears = newYears.slice(0, 3);
+    }
+    setFormData({ ...formData, academicYear: newYears.join(', ') });
+  };
 
   const { data: activeTpos } = useQuery({
     queryKey: ['active-tpos'],
@@ -84,6 +99,15 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
     enabled: isEditing
   });
 
+  const { data: branches } = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/branches`, { withCredentials: true });
+      return res.data;
+    },
+    enabled: isEditing
+  });
+
   useEffect(() => {
     if (company) {
       // Deep clone to avoid mutating original
@@ -91,7 +115,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
       
       // Initialize extra data array for editing
       
-      const genericExtra: { id: string; key: string; value: string }[] = [];
+      const genericExtra: { id: string; typeKey: string; customKey: string; value: string }[] = [];
       const hrContactsMap: Record<string, ExtraContact> = {};
 
       Object.entries(company.extraData || {}).forEach(([k, v]) => {
@@ -119,9 +143,11 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
           if (phoneMatch) hrContactsMap[suffix].phone = String(v);
           if (verifiedMatch) hrContactsMap[suffix].isVerified = String(v).toLowerCase() === 'true';
         } else {
+          const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
           genericExtra.push({
             id: `extra-${Date.now()}-${Math.random()}`,
-            key: k,
+            typeKey: isPredefined ? k : 'Custom',
+            customKey: isPredefined ? '' : k,
             value: typeof v === 'object' ? JSON.stringify(v) : String(v)
           });
         }
@@ -163,7 +189,8 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
       // Rebuild extraData object
       const finalExtraData: Record<string, any> = {};
       editExtraData.forEach(item => {
-        if (item.key.trim()) finalExtraData[item.key.trim()] = item.value;
+        const finalKey = item.typeKey === 'Custom' ? item.customKey : item.typeKey;
+        if (finalKey && finalKey.trim()) finalExtraData[finalKey.trim()] = item.value;
       });
 
       extraContacts.forEach(contact => {
@@ -230,7 +257,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
     setExtraContacts([...extraContacts, { id: nextId, name: '', phone: '', email: '', isVerified: false, isFlagged: false }]);
   };
 
-  const handleExtraDataChange = (id: string, field: 'key' | 'value', val: string) => {
+  const handleExtraDataChange = (id: string, field: 'typeKey' | 'customKey' | 'value', val: string) => {
     setEditExtraData(editExtraData.map(item => item.id === id ? { ...item, [field]: val } : item));
   };
 
@@ -239,7 +266,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   };
 
   const handleAddExtraData = () => {
-    setEditExtraData([...editExtraData, { id: `extra-new-${Date.now()}`, key: '', value: '' }]);
+    setEditExtraData([...editExtraData, { id: `extra-new-${Date.now()}`, typeKey: '', customKey: '', value: '' }]);
   };
 
   const handleAssignToTpo = async () => {
@@ -317,13 +344,28 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 {isEditing ? (
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full">
-                    <input 
-                      type="text" 
-                      value={formData.academicYear || ''}
-                      onChange={e => setFormData({...formData, academicYear: e.target.value})}
-                      className="px-2 py-1.5 rounded bg-white border border-slate-300 text-sm text-slate-600 w-full sm:w-24 focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Year"
-                    />
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[currentYear, currentYear - 1, currentYear - 2].map((y) => {
+                        const yearStr = y.toString();
+                        const isSelected = selectedYears.includes(yearStr);
+                        return (
+                          <label key={yearStr} className={`flex items-center gap-1.5 cursor-pointer px-2.5 py-1 rounded-md border transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}>
+                            <div className="relative flex items-center justify-center">
+                              <input
+                                type="checkbox"
+                                className="sr-only"
+                                checked={isSelected}
+                                onChange={() => toggleYear(yearStr)}
+                              />
+                              <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-slate-400 bg-white'}`}>
+                                {isSelected && <div className="w-1 h-1 rounded-full bg-white" />}
+                              </div>
+                            </div>
+                            <span className={`text-xs font-semibold ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>{yearStr}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                     <select
                       value={isNewSection ? 'ADD_NEW' : formData.section}
                       onChange={e => {
@@ -640,24 +682,110 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
               
               <div className="flex flex-col divide-y divide-slate-100">
                 {isEditing ? (
-                  editExtraData.map((item) => (
-                    <div key={item.id} className="flex flex-col sm:flex-row gap-3 p-4 hover:bg-slate-50/30 transition-colors">
-                      <div className="w-full sm:w-1/3 shrink-0">
-                        <input 
-                          type="text" 
-                          value={item.key}
-                          onChange={(e) => handleExtraDataChange(item.id, 'key', e.target.value)}
-                          placeholder="Field Name"
+                  editExtraData.map((item, idx) => (
+                    <div key={item.id} className="flex flex-col sm:flex-row gap-3 p-4 hover:bg-slate-50/30 transition-colors items-start">
+                      <div className="w-full sm:w-1/3 shrink-0 space-y-2">
+                        <select
+                          value={item.typeKey}
+                          onChange={(e) => handleExtraDataChange(item.id, 'typeKey', e.target.value)}
                           className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 bg-white"
-                        />
+                        >
+                          <option value="" disabled>Select Option</option>
+                          <option value="Drive Date">Drive Date</option>
+                          <option value="Package">Package</option>
+                          <option value="Eligible Branches">Eligible Branches</option>
+                          <option value="Role">Role</option>
+                          <option value="Custom">Other (Custom)</option>
+                        </select>
+                        {item.typeKey === 'Custom' && (
+                          <input 
+                            type="text" 
+                            value={item.customKey}
+                            onChange={(e) => handleExtraDataChange(item.id, 'customKey', e.target.value)}
+                            placeholder="Enter custom name"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 bg-white"
+                          />
+                        )}
                       </div>
                       <div className="w-full sm:flex-1 flex items-start gap-2">
-                        <textarea 
-                          value={item.value}
-                          onChange={(e) => handleExtraDataChange(item.id, 'value', e.target.value)}
-                          placeholder="Value"
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 min-h-[42px]"
-                        />
+                        {item.typeKey === 'Drive Date' ? (
+                          <input
+                            type="date"
+                            value={item.value}
+                            onChange={(e) => handleExtraDataChange(item.id, 'value', e.target.value)}
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 min-h-[42px]"
+                          />
+                        ) : item.typeKey === 'Eligible Branches' ? (
+                          (() => {
+                            const val = item.value || '';
+                            const isBTech = val.startsWith('B.Tech');
+                            const isMTech = val.startsWith('M.Tech');
+                            const isOpenToAll = val === 'Open to all';
+                            
+                            const currentProgram = isOpenToAll ? 'Open to all' : (isBTech ? 'B.Tech' : (isMTech ? 'M.Tech' : ''));
+                            const currentBranchesStr = (isBTech || isMTech) ? val.split(' - ')[1] || '' : '';
+                            const selectedBranches = currentBranchesStr ? currentBranchesStr.split(', ').filter(Boolean) : [];
+                            
+                            const handleProgramChange = (prog: string) => {
+                              if (prog === 'Open to all') {
+                                handleExtraDataChange(item.id, 'value', 'Open to all');
+                              } else {
+                                handleExtraDataChange(item.id, 'value', `${prog} - `);
+                              }
+                            };
+                            
+                            const toggleBranch = (branchName: string) => {
+                              let newBranches = [...selectedBranches];
+                              if (newBranches.includes(branchName)) {
+                                newBranches = newBranches.filter(b => b !== branchName);
+                              } else {
+                                newBranches.push(branchName);
+                              }
+                              handleExtraDataChange(item.id, 'value', `${currentProgram} - ${newBranches.join(', ')}`);
+                            };
+
+                            const availableBranches = currentProgram === 'M.Tech'
+                              ? ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE']
+                              : (branches?.filter((b: any) => b.name !== 'Central Admin' && !b.name.includes('M.Tech')).map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE']);
+
+                            return (
+                              <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg w-full">
+                                <select 
+                                  value={currentProgram}
+                                  onChange={(e) => handleProgramChange(e.target.value)}
+                                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                                >
+                                  <option value="" disabled>Select Program</option>
+                                  <option value="Open to all">Open to all</option>
+                                  <option value="B.Tech">B.Tech</option>
+                                  <option value="M.Tech">M.Tech</option>
+                                </select>
+                                
+                                {(currentProgram === 'B.Tech' || currentProgram === 'M.Tech') && (
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {availableBranches.map((bName: string) => (
+                                      <button
+                                        key={bName}
+                                        type="button"
+                                        onClick={() => toggleBranch(bName)}
+                                        className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors border ${selectedBranches.includes(bName) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                      >
+                                        {bName}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <textarea 
+                            value={item.value}
+                            onChange={(e) => handleExtraDataChange(item.id, 'value', e.target.value)}
+                            placeholder="Value"
+                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 min-h-[42px]"
+                          />
+                        )}
                         <button 
                           onClick={() => handleRemoveExtraData(item.id)}
                           className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 mt-0.5"

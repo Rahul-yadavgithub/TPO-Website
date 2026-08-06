@@ -470,7 +470,7 @@ router.post('/manual', authorizeRoles('admin'), async (req: any, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
-    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData, is_verified_by_admin, targetSection, primary_contact_flagged } = req.body;
+    const { companyName, academicYear, hrName, hrPhone, hrEmail, section, extraData, is_verified_by_admin, targetSection, primary_contact_flagged, additionalContacts } = req.body;
     if (!companyName || !academicYear) {
       await session.abortTransaction();
       session.endSession();
@@ -482,35 +482,40 @@ router.post('/manual', authorizeRoles('admin'), async (req: any, res) => {
 
     if (company) {
       // Upsert: Update existing company
-      if (targetSection && targetSection !== 'Primary') {
-        // Update a specific additional contact
+      if (additionalContacts !== undefined) {
+        // If frontend passes the full array of additional contacts, use it
+        company.additionalContacts = additionalContacts;
+      } else if (targetSection && targetSection !== 'Primary') {
+        // Fallback for single contact update (if old UI calls this)
         if (company.additionalContacts) {
           const contactIndex = company.additionalContacts.findIndex((c: any) => c.sourceSheet === targetSection);
           if (contactIndex !== -1) {
-            company.additionalContacts[contactIndex].hrName = hrName || company.additionalContacts[contactIndex].hrName;
-            company.additionalContacts[contactIndex].hrPhone = hrPhone || company.additionalContacts[contactIndex].hrPhone;
-            company.additionalContacts[contactIndex].hrEmail = hrEmail || company.additionalContacts[contactIndex].hrEmail;
+            company.additionalContacts[contactIndex].hrName = hrName !== undefined ? hrName : company.additionalContacts[contactIndex].hrName;
+            company.additionalContacts[contactIndex].hrPhone = hrPhone !== undefined ? hrPhone : company.additionalContacts[contactIndex].hrPhone;
+            company.additionalContacts[contactIndex].hrEmail = hrEmail !== undefined ? hrEmail : company.additionalContacts[contactIndex].hrEmail;
           }
         }
-      } else {
-        // Update primary contact
-        company.hrName = hrName || company.hrName;
-        company.hrPhone = hrPhone || company.hrPhone;
-        company.hrEmail = hrEmail || company.hrEmail;
-        company.section = section || company.section;
-        if (primary_contact_flagged !== undefined) {
-          company.primary_contact_flagged = primary_contact_flagged;
-          if (primary_contact_flagged) company.primary_contact_verified = false;
-        }
-        if (is_verified_by_admin !== undefined) {
-          company.primary_contact_verified = is_verified_by_admin;
-          if (is_verified_by_admin) company.primary_contact_flagged = false;
-        }
+      } 
+      
+      // Update primary contact explicitly if provided (even if empty, to support shifting)
+      if (hrName !== undefined) company.hrName = hrName;
+      if (hrPhone !== undefined) company.hrPhone = hrPhone;
+      if (hrEmail !== undefined) company.hrEmail = hrEmail;
+      
+      if (section !== undefined) company.section = section;
+
+      if (primary_contact_flagged !== undefined) {
+        company.primary_contact_flagged = primary_contact_flagged;
+        if (primary_contact_flagged) company.primary_contact_verified = false;
+      }
+      if (is_verified_by_admin !== undefined) {
+        company.primary_contact_verified = is_verified_by_admin;
+        if (is_verified_by_admin) company.primary_contact_flagged = false;
       }
       
       if (academicYear) company.academicYear = academicYear;
       if (is_verified_by_admin !== undefined) company.is_verified_by_admin = is_verified_by_admin;
-      company.extraData = { ...company.extraData, ...(extraData || {}) };
+      if (extraData !== undefined) company.extraData = extraData;
       company.syncStatus = 'pending';
     } else {
       // Insert new

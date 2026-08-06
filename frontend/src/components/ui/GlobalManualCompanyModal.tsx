@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2, AlertCircle, Wand2 } from 'lucide-react';
+import { X, Building2, User, Phone, Mail, Link, Calendar, Loader2, FileSpreadsheet, Plus, Trash2, AlertCircle, Wand2, Edit2 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
@@ -34,9 +34,29 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   const [isFlagged, setIsFlagged] = useState(false);
   const [additionalContacts, setAdditionalContacts] = useState<any[]>([]);
   const [primaryContactDetails, setPrimaryContactDetails] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<string>('Primary');
+  
+  const [existingContacts, setExistingContacts] = useState<any[]>([]);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editingContactData, setEditingContactData] = useState<any>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [editSmartPasteText, setEditSmartPasteText] = useState('');
   
   const [smartPasteText, setSmartPasteText] = useState('');
+
+  const currentYear = new Date().getFullYear();
+  const selectedYears = formData.academicYear ? formData.academicYear.split(',').map(y => y.trim()).filter(Boolean) : [];
+
+  const toggleYear = (year: string) => {
+    let newYears = [...selectedYears];
+    if (newYears.includes(year)) {
+      newYears = newYears.filter(y => y !== year);
+    } else {
+      newYears.push(year);
+      newYears.sort((a, b) => parseInt(b) - parseInt(a));
+      newYears = newYears.slice(0, 3);
+    }
+    setFormData({ ...formData, academicYear: newYears.join(', ') });
+  };
 
   // Handle Smart Paste parsing
   useEffect(() => {
@@ -116,6 +136,47 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
     return () => clearTimeout(timer);
   }, [smartPasteText]);
 
+  // Handle Edit Sub-form Smart Paste parsing
+  useEffect(() => {
+    if (!editSmartPasteText.trim() || !editingContactData) return;
+
+    const timer = setTimeout(() => {
+      const text = editSmartPasteText;
+      const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i;
+      const phoneRegex = /(?:(?:\+|0{0,2})91(\s*[-]\s*)?|[0]?)?[6789]\d{9}|(\d{3}[-\.\s]\d{3}[-\.\s]\d{4}|\(\d{3}\)\s*\d{3}[-\.\s]\d{4}|\d{3}[-\.\s]\d{4})/g;
+
+      const emailMatch = text.match(emailRegex);
+      const phoneMatches = text.match(phoneRegex);
+
+      setEditingContactData((prev: any) => {
+        const newData = { ...prev };
+        if (emailMatch && !prev.hrEmail) newData.hrEmail = emailMatch[0];
+        if (phoneMatches && !prev.hrPhone) newData.hrPhone = phoneMatches[0].replace(/[\s\-\(\)]/g, '');
+
+        let cleanText = text;
+        if (emailMatch) cleanText = cleanText.replace(emailMatch[0], '');
+        if (phoneMatches) {
+          phoneMatches.forEach(match => {
+            cleanText = cleanText.replace(match, '');
+          });
+        }
+        cleanText = cleanText.replace(/Phone|Email|Mobile|Contact|Name/gi, '');
+        cleanText = cleanText.replace(/[:|+]/g, '');
+
+        const words = cleanText.split(/[\s,]+/).filter(w => w.length > 2);
+        if (words.length > 0 && !prev.hrName) {
+          newData.hrName = words.slice(0, 2).join(' ');
+        }
+        return newData;
+      });
+
+      toast.success('Smart Paste extracted information for contact.');
+      setEditSmartPasteText('');
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [editSmartPasteText]);
+
   const { data: branches, isLoading: branchesLoading } = useQuery({
     queryKey: ['branches'],
     queryFn: async () => {
@@ -141,12 +202,86 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
             const comp = res.data.company;
             setFormData(prev => ({
               ...prev,
-              hrName: comp.hrName || '',
-              hrPhone: comp.hrPhone || '',
-              hrEmail: comp.hrEmail || '',
+              // DO NOT OVERWRITE HR FIELDS, leave them for adding a NEW primary contact
               section: comp.section || 'Uncategorized',
               academicYear: comp.academicYear || prev.academicYear
             }));
+            
+            const existing = [];
+            if (comp.hrName || comp.hrPhone || comp.hrEmail) {
+              existing.push({
+                id: 'primary',
+                hrName: comp.hrName || '',
+                hrPhone: comp.hrPhone || '',
+                hrEmail: comp.hrEmail || '',
+                sourceSheet: 'Primary'
+              });
+            }
+            if (comp.additionalContacts && comp.additionalContacts.length > 0) {
+              comp.additionalContacts.forEach((ac: any, i: number) => {
+                existing.push({
+                  id: `additional-${i}`,
+                  hrName: ac.hrName || '',
+                  hrPhone: ac.hrPhone || '',
+                  hrEmail: ac.hrEmail || '',
+                  sourceSheet: ac.sourceSheet || `Sheet${i+1}`
+                });
+              });
+            }
+            if (comp.extraData) {
+              const keys = Object.keys(comp.extraData);
+              const nameRegex = /^OTHER HR NAME\s*(\d*)$/i;
+              
+              keys.forEach(key => {
+                const match = key.match(nameRegex);
+                if (match) {
+                  const idxStr = match[1] || '';
+                  const name = comp.extraData[key];
+                  let phone = '';
+                  let email = '';
+                  
+                  const possiblePhoneKeys = [
+                    `OTHER HR MOBILE ${idxStr}`.trim(),
+                    `OTHER HR PHONE ${idxStr}`.trim(),
+                    `OTHER HR NUMBER ${idxStr}`.trim(),
+                    `OTHER HR CONTACT ${idxStr}`.trim()
+                  ];
+                  
+                  const possibleEmailKeys = [
+                    `OTHER HR EMAIL ${idxStr}`.trim(),
+                    `OTHER HR MAIL ${idxStr}`.trim()
+                  ];
+                  
+                  for (const pk of possiblePhoneKeys) {
+                    const actualPk = keys.find(k => k.toLowerCase() === pk.toLowerCase());
+                    if (actualPk) {
+                      phone = comp.extraData[actualPk];
+                      break;
+                    }
+                  }
+                  
+                  for (const ek of possibleEmailKeys) {
+                    const actualEk = keys.find(k => k.toLowerCase() === ek.toLowerCase());
+                    if (actualEk) {
+                      email = comp.extraData[actualEk];
+                      break;
+                    }
+                  }
+                  
+                  if (name || phone || email) {
+                    existing.push({
+                      id: `extra-${idxStr || Math.random().toString(36).substring(7)}`,
+                      hrName: String(name || ''),
+                      hrPhone: String(phone || ''),
+                      hrEmail: String(email || ''),
+                      sourceSheet: `Extra Contact ${idxStr || ''}`.trim()
+                    });
+                  }
+                }
+              });
+            }
+
+            setExistingContacts(existing);
             
             setPrimaryContactDetails({
               hrName: comp.hrName || '',
@@ -157,22 +292,16 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
             setIsVerified(comp.is_verified_by_admin || false);
             setIsFlagged(comp.primary_contact_flagged || false);
             
-            if (comp.additionalContacts && comp.additionalContacts.length > 0) {
-              setAdditionalContacts(comp.additionalContacts);
-              setActiveTab('Primary');
-            } else {
-              setAdditionalContacts([]);
-              setActiveTab('Primary');
-            }
-            
             if (comp.extraData) {
-              const parsedFields = Object.entries(comp.extraData).map(([k, v]) => {
-                const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
-                return {
-                  key: isPredefined ? k : 'Custom',
-                  customKey: isPredefined ? '' : k,
-                  value: v as string
-                };
+              const parsedFields = Object.entries(comp.extraData)
+                .filter(([k]) => !k.toUpperCase().includes('OTHER HR'))
+                .map(([k, v]) => {
+                  const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
+                  return {
+                    key: isPredefined ? k : 'Custom',
+                    customKey: isPredefined ? '' : k,
+                    value: v as string
+                  };
               });
               setExtraFields(parsedFields);
             } else {
@@ -275,7 +404,49 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
           }
           return acc;
         }, {} as Record<string, string>);
-        payload = { ...payload, extraData, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, targetSection: activeTab };
+
+        // Shift logic:
+        let finalHrName = formData.hrName;
+        let finalHrPhone = formData.hrPhone;
+        let finalHrEmail = formData.hrEmail;
+        let finalAdditionalContacts = [...existingContacts];
+
+        if (finalHrName || finalHrPhone || finalHrEmail) {
+          // User entered a new contact. It becomes primary. 
+          // All existing contacts go to additionalContacts.
+          finalAdditionalContacts = existingContacts.map(c => ({
+            hrName: c.hrName,
+            hrPhone: c.hrPhone,
+            hrEmail: c.hrEmail,
+            sourceSheet: c.sourceSheet === 'Primary' ? 'Past Primary' : c.sourceSheet
+          }));
+        } else {
+          // User did NOT enter a new contact.
+          if (existingContacts.length > 0) {
+            const first = existingContacts[0];
+            finalHrName = first.hrName;
+            finalHrPhone = first.hrPhone;
+            finalHrEmail = first.hrEmail;
+            
+            finalAdditionalContacts = existingContacts.slice(1).map(c => ({
+              hrName: c.hrName,
+              hrPhone: c.hrPhone,
+              hrEmail: c.hrEmail,
+              sourceSheet: c.sourceSheet
+            }));
+          }
+        }
+
+        payload = { 
+          ...payload, 
+          hrName: finalHrName,
+          hrPhone: finalHrPhone,
+          hrEmail: finalHrEmail,
+          extraData, 
+          is_verified_by_admin: isVerified, 
+          primary_contact_flagged: isFlagged, 
+          additionalContacts: finalAdditionalContacts 
+        };
       } else {
         const branchObj = branches?.find((b: any) => b._id === selectedBranchId || b.name === selectedBranchId);
         const branchName = selectedProgram === 'M.Tech' ? selectedBranchId : (branchObj ? branchObj.name : undefined);
@@ -301,7 +472,113 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 relative">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300 relative">
+        {deleteConfirmId && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95">
+              <h3 className="text-lg font-bold text-slate-900 mb-2">Delete Contact</h3>
+              <p className="text-sm text-slate-600 mb-6">Are you sure you want to remove this contact? This will only be permanent when you save the company.</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExistingContacts(prev => prev.filter(c => c.id !== deleteConfirmId));
+                    setDeleteConfirmId(null);
+                    toast.success('Contact removed temporarily.');
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingContactId && editingContactData && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-6 shadow-2xl w-full max-w-lg relative animate-in zoom-in-95">
+              <h4 className="text-sm font-bold text-indigo-900 mb-4 flex items-center gap-2">
+                <Edit2 className="w-4 h-4" /> Editing Contact
+              </h4>
+              
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-indigo-900 mb-1.5">
+                  SMART PASTE (For this contact)
+                </label>
+                <textarea 
+                  value={editSmartPasteText}
+                  onChange={(e) => setEditSmartPasteText(e.target.value)}
+                  placeholder="Paste contact info here to auto-fill..."
+                  className="w-full h-16 p-3 text-sm bg-white border border-indigo-200 text-black rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">HR Name</label>
+                  <input 
+                    type="text" 
+                    value={editingContactData.hrName || ''}
+                    onChange={(e) => setEditingContactData({...editingContactData, hrName: e.target.value})}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Phone</label>
+                  <input 
+                    type="text" 
+                    value={editingContactData.hrPhone || ''}
+                    onChange={(e) => setEditingContactData({...editingContactData, hrPhone: e.target.value})}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                  <input 
+                    type="email" 
+                    value={editingContactData.hrEmail || ''}
+                    onChange={(e) => setEditingContactData({...editingContactData, hrEmail: e.target.value})}
+                    className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-indigo-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingContactId(null);
+                    setEditingContactData(null);
+                  }}
+                  className="px-4 py-1.5 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExistingContacts(prev => prev.map(c => c.id === editingContactId ? { ...c, ...editingContactData } : c));
+                    setEditingContactId(null);
+                    setEditingContactData(null);
+                    toast.success('Contact updated temporarily. Click "Save Company" to confirm.');
+                  }}
+                  className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Save Contact
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
             <Building2 className="w-6 h-6 text-blue-600" />
@@ -314,17 +591,49 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
 
         <div className="overflow-y-auto p-6 space-y-6">
           
-          {/* Smart Auto-Fill Section */}
-          <div>
-            <label className="block text-sm font-bold text-black mb-1.5">
-              SMART PASTE
-            </label>
-            <textarea 
-              value={smartPasteText}
-              onChange={(e) => setSmartPasteText(e.target.value)}
-              placeholder="SMART PASTE"
-              className="w-full h-24 p-4 text-sm bg-white border border-slate-300 text-black placeholder:text-black placeholder:font-bold rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all resize-none"
-            />
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Smart Auto-Fill Section */}
+            <div className="flex-1">
+              <label className="block text-sm font-bold text-black mb-1.5">
+                SMART PASTE
+              </label>
+              <textarea 
+                value={smartPasteText}
+                onChange={(e) => setSmartPasteText(e.target.value)}
+                placeholder="SMART PASTE"
+                className="w-full h-24 p-4 text-sm bg-white border border-slate-300 text-black placeholder:text-black placeholder:font-bold rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition-all resize-none"
+              />
+            </div>
+            
+            {mode === 'previous' && (
+              <div className="w-full md:w-1/3">
+                <label className="block text-sm font-bold text-black mb-1.5">
+                  Visited Year (Max 3)
+                </label>
+                <div className="flex flex-col gap-2">
+                  {[currentYear, currentYear - 1, currentYear - 2].map((y) => {
+                    const yearStr = y.toString();
+                    const isSelected = selectedYears.includes(yearStr);
+                    return (
+                      <label key={yearStr} className={`flex items-center gap-3 cursor-pointer p-2 rounded-lg border transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}>
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={isSelected}
+                            onChange={() => toggleYear(yearStr)}
+                          />
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-slate-400 bg-white'}`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                        </div>
+                        <span className={`text-sm font-semibold ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>{yearStr}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <hr className="border-slate-100" />
@@ -409,22 +718,6 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
             </div>
             
             {mode === 'previous' && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-slate-400" /> Academic Year *
-                </label>
-                <input 
-                  type="text" 
-                  required
-                  placeholder="e.g. 2023-2024"
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  value={formData.academicYear}
-                  onChange={(e) => setFormData({ ...formData, academicYear: e.target.value })}
-                />
-              </div>
-            )}
-
-            {mode === 'previous' && (
               <div className="mt-4">
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-2">
                   <FileSpreadsheet className="w-4 h-4 text-slate-400" /> Section Name
@@ -481,45 +774,8 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
 
             <div className="pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-slate-900">HR Contact Information (Optional)</h3>
-                
-                {mode === 'previous' && isEditing && additionalContacts.length > 0 && (
-                  <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveTab('Primary');
-                        setFormData(prev => ({
-                          ...prev,
-                          hrName: primaryContactDetails?.hrName || '',
-                          hrPhone: primaryContactDetails?.hrPhone || '',
-                          hrEmail: primaryContactDetails?.hrEmail || ''
-                        }));
-                      }}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'Primary' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                      Primary
-                    </button>
-                    {additionalContacts.map((c, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          setActiveTab(c.sourceSheet);
-                          setFormData(prev => ({
-                            ...prev,
-                            hrName: c.hrName || '',
-                            hrPhone: c.hrPhone || '',
-                            hrEmail: c.hrEmail || ''
-                          }));
-                        }}
-                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === c.sourceSheet ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}
-                      >
-                        {c.sourceSheet}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <h3 className="text-sm font-bold text-slate-900">Add New HR Contact (Optional)</h3>
+                <p className="text-xs text-slate-500">Adding a contact here will set it as the new Primary Contact.</p>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -574,6 +830,70 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                     value={formData.linkedinProfile}
                     onChange={(e) => setFormData({ ...formData, linkedinProfile: e.target.value })}
                   />
+                </div>
+              )}
+
+              {mode === 'previous' && isEditing && existingContacts.length > 0 && (
+                <div className="mt-6 pt-4 border-t border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-900 mb-4">Existing HR Contacts</h3>
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                    {existingContacts.map((contact, idx) => {
+                      return (
+                        <div key={contact.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative group hover:border-blue-300 transition-colors">
+                          <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingContactId(contact.id);
+                                setEditingContactData({ ...contact });
+                                setEditSmartPasteText('');
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              title="Edit Contact"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmId(contact.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                              title="Delete Contact"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex flex-shrink-0 items-center justify-center border border-slate-200">
+                              <User className="w-5 h-5 text-slate-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="text-sm font-bold text-slate-900 truncate">
+                                  {contact.hrName || 'Unnamed Contact'}
+                                </h4>
+                                <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full border border-slate-200">
+                                  {contact.sourceSheet}
+                                </span>
+                              </div>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-slate-600">
+                                {contact.hrPhone && (
+                                  <div className="flex items-center gap-1.5">
+                                    <Phone className="w-3.5 h-3.5 text-slate-400" /> {contact.hrPhone}
+                                  </div>
+                                )}
+                                {contact.hrEmail && (
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <Mail className="w-3.5 h-3.5 text-slate-400" /> {contact.hrEmail}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

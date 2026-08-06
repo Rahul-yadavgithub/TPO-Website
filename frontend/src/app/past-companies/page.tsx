@@ -511,8 +511,8 @@ export default function PastCompaniesPage() {
               <tr>
                 <th className="px-6 py-4">Company Name</th>
                 <th className="px-6 py-4">Primary Contact</th>
-                <th className="px-6 py-4">Extra Contacts</th>
-                <th className="px-6 py-4">Academic Year</th>
+                <th className="px-6 py-4">CTC</th>
+                <th className="px-6 py-4">Visited Year</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -565,18 +565,30 @@ export default function PastCompaniesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {company.additionalContacts && company.additionalContacts.length > 0 ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          +{company.additionalContacts.length} Contacts
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">None</span>
-                      )}
+                      {(() => {
+                        const ctcKey = company.extraData ? Object.keys(company.extraData).find(k => k.toLowerCase() === 'package' || k.toLowerCase() === 'ctc') : null;
+                        const ctcValue = ctcKey ? company.extraData[ctcKey] : null;
+                        return ctcValue ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm whitespace-nowrap">
+                            {ctcValue}
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md shadow-sm">N/A</span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium border border-slate-200">
-                        {company.academicYear}
-                      </span>
+                      {company.academicYear ? (
+                        <div className="flex rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)] border border-indigo-200 overflow-hidden w-fit">
+                          {company.academicYear.split(',').map((yr: string) => yr.trim()).filter(Boolean).sort((a, b) => parseInt(b) - parseInt(a)).map((year: string, idx: number) => (
+                            <span key={idx} className="px-2.5 py-1 bg-gradient-to-b from-indigo-50 to-white text-indigo-700 text-xs font-bold border-r border-indigo-200 last:border-r-0 tracking-wide">
+                              {year}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md shadow-sm">N/A</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
