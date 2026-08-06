@@ -1187,7 +1187,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                 
                 // Reset extra data array
                 
-                const genericExtra: { id: string; key: string; value: string }[] = [];
+                const genericExtra: { id: string; typeKey: string; customKey: string; value: string }[] = [];
                 const hrContactsMap: Record<string, ExtraContact> = {};
 
                 Object.entries(company.extraData || {}).forEach(([k, v]) => {
@@ -1216,9 +1216,11 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                     if (verifiedMatch) hrContactsMap[suffix].isVerified = String(v).toLowerCase() === 'true';
                     if (flaggedMatch) hrContactsMap[suffix].isFlagged = String(v).toLowerCase() === 'true';
                   } else {
+                    const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(k);
                     genericExtra.push({
                       id: `extra-${Date.now()}-${Math.random()}`,
-                      key: k,
+                      typeKey: isPredefined ? k : 'Custom',
+                      customKey: isPredefined ? '' : k,
                       value: typeof v === 'object' ? JSON.stringify(v) : String(v)
                     });
                   }
