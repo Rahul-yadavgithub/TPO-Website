@@ -279,6 +279,12 @@ export function Sidebar() {
             if (item.href === '/tpo-management' && !isAdmin) return null;
             if (isAdmin && (item.href === '/sources' || item.href === '/history')) return null;
             const isActive = pathname === item.href;
+            
+            let displayLabel = item.label;
+            if (item.href === '/companies' && !isAdmin) {
+              displayLabel = 'Companies';
+            }
+
             return (
               <Link
                 key={item.href}
@@ -290,10 +296,10 @@ export function Sidebar() {
                     : "hover:bg-slate-100 hover:text-slate-900 text-slate-600",
                   isCollapsed && !isMobileOpen ? "justify-center p-3" : "gap-3 px-3 py-2.5"
                 )}
-                title={isCollapsed && !isMobileOpen ? item.label : undefined}
+                title={isCollapsed && !isMobileOpen ? displayLabel : undefined}
               >
                 <item.icon className="w-5 h-5 flex-shrink-0" />
-                {(!isCollapsed || isMobileOpen) && <span className="whitespace-nowrap">{item.label}</span>}
+                {(!isCollapsed || isMobileOpen) && <span className="whitespace-nowrap">{displayLabel}</span>}
               </Link>
             );
           })}

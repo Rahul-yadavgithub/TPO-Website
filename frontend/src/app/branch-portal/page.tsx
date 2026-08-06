@@ -1688,7 +1688,7 @@ export default function BranchPortalPage() {
                             >
                               <option value="">-- Select --</option>
                               <option value="call_again">Call Again (Reschedule)</option>
-                              <option value="brochure_jnf">Brochure + JNF Sent</option>
+                              <option value="brochure_jnf">{isAdmin ? 'Brochure + JNF Sent' : 'Brochure + JNF Requested'}</option>
                               <option value="tpo_talk">Want to talk to TPO</option>
                               <option value="rejected">Rejected / Not Interested</option>
                               <option value="accepted">Accepted / Confirmed</option>

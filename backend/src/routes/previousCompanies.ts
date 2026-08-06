@@ -516,6 +516,7 @@ router.post('/manual', authorizeRoles('admin'), async (req: any, res) => {
       if (academicYear) company.academicYear = academicYear;
       if (is_verified_by_admin !== undefined) company.is_verified_by_admin = is_verified_by_admin;
       if (extraData !== undefined) company.extraData = extraData;
+      if (additionalContacts !== undefined) company.additionalContacts = additionalContacts;
       company.syncStatus = 'pending';
     } else {
       // Insert new
@@ -530,7 +531,8 @@ router.post('/manual', authorizeRoles('admin'), async (req: any, res) => {
         extraData: extraData || {},
         is_verified_by_admin: is_verified_by_admin || false,
         primary_contact_verified: is_verified_by_admin || false,
-        primary_contact_flagged: primary_contact_flagged || false
+        primary_contact_flagged: primary_contact_flagged || false,
+        additionalContacts: additionalContacts || []
       });
     }
     
@@ -642,6 +644,38 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
       return res.status(403).json({ success: false, message: 'You need an approved request to update contact info.' });
     }
 
+    // Extract unstructured HR contacts from extraData
+    const parsedAdditionalContacts: any[] = [];
+    if (previousCompany.extraData) {
+      const hrContactsMap: Record<string, any> = {};
+      Object.entries(previousCompany.extraData).forEach(([k, v]) => {
+        const nameMatch = k.match(/^OTHER HR NAME\s*(\d*)$/i);
+        const emailMatch = k.match(/^OTHER HR EMAIL\s*(\d*)$/i) || k.match(/^OTHER HR MAIL\s*(\d*)$/i);
+        const phoneMatch = k.match(/^OTHER HR MOBILE\s*(\d*)$/i) || k.match(/^OTHER HR PHONE\s*(\d*)$/i) || k.match(/^OTHER HR NUMBER\s*(\d*)$/i);
+        
+        let suffix = '';
+        let isHrContact = false;
+
+        if (nameMatch) { suffix = nameMatch[1]; isHrContact = true; }
+        else if (emailMatch) { suffix = emailMatch[1]; isHrContact = true; }
+        else if (phoneMatch) { suffix = phoneMatch[1]; isHrContact = true; }
+        
+        if (isHrContact) {
+          if (!hrContactsMap[suffix]) hrContactsMap[suffix] = { hrName: '', hrEmail: '', hrPhone: '', sourceSheet: 'Past Data' };
+          if (nameMatch) hrContactsMap[suffix].hrName = String(v);
+          if (emailMatch) hrContactsMap[suffix].hrEmail = String(v);
+          if (phoneMatch) hrContactsMap[suffix].hrPhone = String(v);
+        }
+      });
+      
+      parsedAdditionalContacts.push(...Object.values(hrContactsMap).filter(c => c.hrName || c.hrEmail || c.hrPhone));
+    }
+    
+    const combinedAdditionalContacts = [
+      ...(previousCompany.additionalContacts || []),
+      ...parsedAdditionalContacts
+    ];
+
     previousCompany.hrName = hrName;
     previousCompany.hrEmail = hrEmail;
     previousCompany.hrPhone = hrPhone;
@@ -689,7 +723,9 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
         totalDrivesConducted: 0,
         syncStatus: 'pending',
         primary_contact_verified: isVerified || false,
-        primary_contact_flagged: isFlagged || false
+        primary_contact_flagged: isFlagged || false,
+        extraData: previousCompany.extraData,
+        additionalContacts: combinedAdditionalContacts
       });
       await currentCompany.save();
 
@@ -713,6 +749,11 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
         currentCompany.primary_contact_flagged = true;
         currentCompany.primary_contact_verified = false;
       }
+      currentCompany.extraData = { ...(currentCompany.extraData || {}), ...(previousCompany.extraData || {}) };
+      currentCompany.additionalContacts = [
+        ...(currentCompany.additionalContacts || []),
+        ...combinedAdditionalContacts
+      ];
       await currentCompany.save();
 
       let hrContact = await HrContact.findOne({ company_id: currentCompany._id });

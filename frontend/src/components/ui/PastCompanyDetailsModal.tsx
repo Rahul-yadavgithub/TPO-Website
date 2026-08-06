@@ -266,7 +266,7 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   };
 
   const handleAddExtraData = () => {
-    setEditExtraData([...editExtraData, { id: `extra-new-${Date.now()}`, typeKey: '', customKey: '', value: '' }]);
+    setEditExtraData([{ id: `extra-new-${Date.now()}`, typeKey: '', customKey: '', value: '' }, ...editExtraData]);
   };
 
   const handleAssignToTpo = async () => {

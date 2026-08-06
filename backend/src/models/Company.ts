@@ -110,6 +110,7 @@ export interface ICompany extends Document {
   reviewed_at?: Date;
   reviewed_by?: string;
   pending_delete?: boolean;
+  extraData?: Record<string, any>;
 
   // Branch Assignment & Sync
   assignedBranch?: string;
@@ -237,6 +238,9 @@ const CompanySchema: Schema = new Schema(
     reviewed_at: { type: Date },
     reviewed_by: { type: String },
     pending_delete: { type: Boolean, default: false },
+
+    // Additional dynamic data from Previous Company or other sources
+    extraData: { type: Schema.Types.Mixed, default: {} },
 
     // Branch & TPO Assignment & Sync
     assignedBranch: {

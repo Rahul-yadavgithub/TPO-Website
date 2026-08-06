@@ -1069,6 +1069,8 @@ router.post('/contact-logs', async (req, res) => {
           company.emailDeliveryStatus = 'sent';
           company.emailStatusUpdatedAt = new Date();
           company.emailStatusUpdatedBy = created_by;
+        } else {
+          company.emailDeliveryStatus = 'pending';
         }
         const currentPrimary = await HrContact.findOne({ company_id }).session(session);
         if (currentPrimary) {

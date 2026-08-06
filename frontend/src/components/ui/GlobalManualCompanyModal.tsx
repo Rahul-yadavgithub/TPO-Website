@@ -904,7 +904,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                   <h3 className="text-sm font-bold text-slate-900">Additional Information (Optional)</h3>
                   <button
                     type="button"
-                    onClick={() => setExtraFields([...extraFields, { key: '', customKey: '', value: '' }])}
+                    onClick={() => setExtraFields([{ key: '', customKey: '', value: '' }, ...extraFields])}
                     className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium"
                   >
                     <Plus className="w-4 h-4" /> Add Detail
