@@ -4,11 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { PastCompanyDetailsModal } from '@/components/ui/PastCompanyDetailsModal';
 import { DuplicateCompaniesTable } from '@/components/ui/DuplicateCompaniesTable';
 import { useAuth } from '@/contexts/AuthContext';
+import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
 
 interface AdditionalContact {
   hrName: string;
@@ -158,6 +159,7 @@ export default function PastCompaniesPage() {
   });
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -364,21 +366,29 @@ export default function PastCompaniesPage() {
             </p>
           </div>
           
-          <div className="flex gap-4 w-full md:w-auto">
+          <div className="flex gap-2 md:gap-4 w-full md:w-auto">
             {activeTab === 'master' && (
               <>
                 <button
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="flex items-center justify-center gap-1.5 md:gap-2 px-3 py-2 md:px-4 md:py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4" /> 
+                  <span className="md:hidden">Add</span>
+                  <span className="hidden md:inline">Add Company</span>
+                </button>
+                <button
                   onClick={handleExport}
                   disabled={isExporting}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 md:gap-2 px-3 py-2 md:px-4 md:py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                 >
-                  {isExporting ? <span className="animate-pulse">Exporting...</span> : <><Download className="w-4 h-4" /> Export</>}
+                  {isExporting ? <span className="animate-pulse">Exporting...</span> : <><Download className="w-4 h-4" /> <span className="md:hidden">Export</span><span className="hidden md:inline">Export</span></>}
                 </button>
                 <button
                   onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-                  className={`flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto border ${isFilterPanelOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                  className={`flex items-center justify-center gap-1.5 md:gap-2 px-3 py-2 md:px-4 md:py-2.5 text-xs md:text-sm font-semibold rounded-xl transition-colors shadow-sm w-full md:w-auto border ${isFilterPanelOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
                 >
-                  <Filter className="w-4 h-4" /> Filters
+                  <Filter className="w-4 h-4" /> <span className="md:hidden">Filters</span><span className="hidden md:inline">Filters</span>
                 </button>
               </>
             )}
@@ -665,6 +675,17 @@ export default function PastCompaniesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {isAddModalOpen && (
+        <GlobalManualCompanyModal
+          mode="previous"
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={() => {
+            setIsAddModalOpen(false);
+            queryClient.invalidateQueries({ queryKey: ['past-companies'] });
+          }}
+        />
       )}
     </div>
   );
