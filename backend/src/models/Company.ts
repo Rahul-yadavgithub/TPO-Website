@@ -126,6 +126,11 @@ export interface ICompany extends Document {
   emailFailureReason?: string;
   emailStatusUpdatedAt?: Date;
   emailStatusUpdatedBy?: string;
+
+  // SWS Integration
+  is_student_manage?: boolean;
+  swsDriveId?: string;
+  sws_sync?: 'pending' | 'ok';
 }
 
 const CompanySchema: Schema = new Schema(
@@ -256,7 +261,12 @@ const CompanySchema: Schema = new Schema(
     emailDeliveryStatus: { type: String, enum: ['pending', 'sent', 'failed'], default: 'pending' },
     emailFailureReason: { type: String },
     emailStatusUpdatedAt: { type: Date },
-    emailStatusUpdatedBy: { type: String }
+    emailStatusUpdatedBy: { type: String },
+
+    // SWS Integration
+    is_student_manage: { type: Boolean, default: false },
+    swsDriveId: { type: String },
+    sws_sync: { type: String, enum: ['pending', 'ok'] }
   },
   { timestamps: true }
 );

@@ -19,7 +19,8 @@ import {
   ChevronDown,
   ExternalLink,
   Inbox,
-  LogOut
+  LogOut,
+  ClipboardList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/companies', label: 'Companies', icon: Database },
   { href: '/past-companies', label: 'Past Companies', icon: Archive },
   { href: '/requests', label: 'Requests', icon: Inbox },
+  { href: '/student-records', label: 'Student Records', icon: ClipboardList },
   { href: '/sync', label: 'Sync Center', icon: CloudUpload },
   { href: '/branch-portal', label: 'Branch Portal', icon: Users },
   { href: '/tpo-portal', label: 'TPO Portal', icon: Users },

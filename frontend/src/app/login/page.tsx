@@ -22,7 +22,7 @@ export default function LoginPage() {
 
 
 
-  const { status, verifySession } = useAuth();
+  const { status, verifySession, login } = useAuth();
   
   useEffect(() => {
     if (status === 'authenticated') {
@@ -64,24 +64,14 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        { email, password, portal: 'base' }, { withCredentials: true });
-      const { commToken } = await res.data.data || {};
-      
-      if (commToken) {
-        document.cookie = `tpr_token=${commToken}; path=/; max-age=2592000; ${window.location.protocol === 'https:' ? 'Secure;' : ''}`;
-      }
-
-      if (isCommTpr && portalChoice === 'communication') {
-        if (commToken) localStorage.setItem('comm_tpr_token', commToken);
-        window.location.href = '/communication-tpr/dashboard';
-      } else { 
-        await verifySession(); // Trigger context update which handles redirect if needed, or we just hard redirect
-        window.location.href = '/'; 
-      }
+      await login({ email, password }, portalChoice, isCommTpr);
+      // AuthContext handles the state change and cookie storage, and will broadcast the login.
+      // We rely on the useEffect monitoring 'status' to redirect to '/' if authenticated.
     } catch (err: any) {
       setError(err.response?.data?.message || 'Invalid email or password.');
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const fmt = (d: Date) => d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });

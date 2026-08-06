@@ -54,6 +54,7 @@ import adminRoutes from './routes/admin';
 import tpoRoutes from './routes/tpo';
 import transferRequestsRoutes from './routes/transferRequests';
 import webhookRoutes from './routes/webhooks';
+import studentRecordsRoutes from './routes/studentRecords';
 
 // Connect DB
 connectDB().then(() => {
@@ -72,6 +73,7 @@ app.use('/api/previous-companies', previousCompaniesRoutes);
 app.use('/api/tpo', tpoRoutes);
 app.use('/api/transfer-requests', transferRequestsRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/student-records', studentRecordsRoutes);
 app.use('/api', apiRoutes);
 
 // Basic route
