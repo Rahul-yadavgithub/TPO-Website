@@ -311,7 +311,10 @@ export default function BranchPortalPage() {
       queryClient.invalidateQueries({ queryKey: ['incoming-requests', selectedBranchId] });
       queryClient.invalidateQueries({ queryKey: ['contact-today', selectedBranchId] });
     },
-    onError: () => toast.error('Failed to approve request')
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to approve request');
+      queryClient.invalidateQueries({ queryKey: ['incoming-requests', selectedBranchId] });
+    }
   });
 
   const rejectRequestMutation = useMutation({
@@ -322,7 +325,7 @@ export default function BranchPortalPage() {
       toast.success('Transfer request rejected.');
       queryClient.invalidateQueries({ queryKey: ['incoming-requests', selectedBranchId] });
     },
-    onError: () => toast.error('Failed to reject request')
+    onError: (error: any) => toast.error(error.response?.data?.error || 'Failed to reject request')
   });
 
   const syncMutation = useMutation({

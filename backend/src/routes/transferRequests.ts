@@ -142,9 +142,11 @@ router.post('/:id/approve', async (req: any, res) => {
 
     const company = await Company.findById(request.companyId).session(session);
     if (!company) {
-      await session.abortTransaction();
+      request.status = 'rejected';
+      await request.save({ session });
+      await session.commitTransaction();
       session.endSession();
-      return res.status(404).json({ error: 'Company not found' });
+      return res.status(404).json({ error: 'The company for this request no longer exists. Request has been auto-rejected.' });
     }
 
     // 1. Update Company Ownership
