@@ -18,6 +18,7 @@ import { TransferRequestsIncomingView } from '@/components/ui/TransferRequestsIn
 import { TransferRequestsOutgoingView } from '@/components/ui/TransferRequestsOutgoingView';
 import { SlideOverPanel } from '@/components/ui/SlideOverPanel';
 import { MessageSquare } from 'lucide-react';
+import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 
 export default function BranchPortalPage() {
   const queryClient = useQueryClient();
@@ -64,6 +65,9 @@ export default function BranchPortalPage() {
   const [editAcademicYear, setEditAcademicYear] = useState<string>('');
 
   const router = useRouter();
+
+  // Initialize Real-Time Listener for this specific branch
+  useDashboardRealtime(selectedBranchId);
 
   // Session Storage State Persistence
   useEffect(() => {

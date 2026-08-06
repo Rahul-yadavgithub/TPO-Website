@@ -10,8 +10,8 @@ import Settings from '../models/Settings';
 import CompanyStatusHistory from '../models/CompanyStatusHistory';
 import Branch from '../models/Branch';
 import PreviousCompany from '../models/PreviousCompany';
-
 import HrContact from '../models/HrContact';
+import { SocketEventPublisher } from '../socket/eventPublisher';
 import ContactLog from '../models/ContactLog';
 import TargetCompany from '../models/TargetCompany';
 import { googleSheetService } from '../services/google/GoogleSheetProvider';
@@ -1109,6 +1109,14 @@ router.post('/contact-logs', async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    if (company) {
+      if (outcome === 'brochure_jnf' && is_admin) {
+         SocketEventPublisher.publishBrochureSent(company, { id: created_by });
+      } else {
+         SocketEventPublisher.publishCompanyUpdated(company, { id: created_by });
+      }
+    }
 
     res.json(newLog[0]);
   } catch (error) {

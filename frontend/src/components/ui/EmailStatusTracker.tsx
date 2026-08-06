@@ -70,6 +70,11 @@ export function EmailStatusTracker({
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['brochure-jnf-requests'] });
       queryClient.invalidateQueries({ queryKey: ['brochure-sent-companies'] });
+      queryClient.invalidateQueries({ queryKey: ['contact-today'] });
+      queryClient.invalidateQueries({ queryKey: ['confirmed'] });
+      queryClient.invalidateQueries({ queryKey: ['not-confirmed'] });
+      queryClient.invalidateQueries({ queryKey: ['companies-branch-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-activity'] });
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to update email status');

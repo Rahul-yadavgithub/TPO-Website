@@ -7,10 +7,17 @@ import cookieParser from 'cookie-parser';
 import { connectDB } from './config/db';
 import { seedAdmin } from './config/seed';
 
+import { createServer } from 'http';
+import { initSocketServer } from './socket/socketServer';
+
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// Initialize Socket.IO
+initSocketServer(httpServer);
 
 // Middleware
 app.use(express.json({
@@ -81,6 +88,6 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running' });
 });
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { EmailStatusTracker } from '@/components/ui/EmailStatusTracker';
 import { SlideOverPanel, CompanyCard, CompanyEntry } from '@/components/ui/SlideOverPanel';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDashboardRealtime } from '@/hooks/useDashboardRealtime';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface DashboardSummary {
@@ -433,6 +434,8 @@ export default function Dashboard() {
   });
 
   const branchId = (!isAdmin && userProfile?.branchId) ? (typeof userProfile.branchId === 'object' ? userProfile.branchId._id : userProfile.branchId) : '';
+
+  useDashboardRealtime(branchId);
 
 
   const { data: branchesData } = useQuery({

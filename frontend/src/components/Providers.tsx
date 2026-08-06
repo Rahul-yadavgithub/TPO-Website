@@ -1,9 +1,10 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import axios from 'axios';
-import { useRouter, usePathname } from 'next/navigation';
+import { SocketProvider } from '@/contexts/SocketProvider';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 axios.defaults.withCredentials = true;
 
@@ -23,14 +24,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
     },
   }));
 
-  const router = useRouter();
-  const pathname = usePathname();
-
   // The Axios 401 interceptor has been moved to AuthContext to centrally handle logout.
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <AuthProvider>
+        <SocketProvider>
+          {children}
+        </SocketProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
