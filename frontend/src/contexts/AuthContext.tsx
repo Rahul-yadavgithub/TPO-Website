@@ -151,6 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (statusCode === 401 || statusCode === 403) {
         setStatus('unauthenticated');
         setUser(null);
+        document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       } else {
         // Network error, 5xx, or timeout
         if (retryCount < MAX_RETRIES) {
@@ -231,6 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setStatus('unauthenticated');
       setUser(null);
+      document.cookie = 'tpr_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       broadcastAuthEvent('session_expired');
       
       const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
