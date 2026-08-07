@@ -12,7 +12,7 @@ interface BulkUploadModalProps {
   ownerType?: 'branch' | 'tpo';
   onClose: () => void;
   onSuccess: () => void;
-}}
+}
 
 function ConflictRow({ c, ownerName, handleRequestTransfer, requestedTransfers, requestingTransferId }: any) {
   const [expanded, setExpanded] = useState(false);
