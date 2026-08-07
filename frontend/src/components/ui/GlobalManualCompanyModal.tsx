@@ -202,14 +202,45 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess, editData }:
     const timer = setTimeout(async () => {
       setIsSearchingSuggestions(true);
       try {
-        if (mode === 'previous') {
-          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/suggestions?q=${encodeURIComponent(name)}`, { withCredentials: true });
-          setSuggestions(res.data.data || []);
-        } else {
-          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/suggestions?q=${encodeURIComponent(name)}`, { withCredentials: true });
-          setSuggestions(res.data.data || []);
-        }
-        setShowSuggestions(true);
+        const [currRes, prevRes] = await Promise.all([
+          axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/search-suggestions?q=${encodeURIComponent(name)}`, { withCredentials: true }),
+          mode === 'previous' ? axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/suggestions?q=${encodeURIComponent(name)}`, { withCredentials: true }) : Promise.resolve({ data: { data: [] } })
+        ]);
+
+        const currSugs = currRes.data.suggestions || [];
+        const prevSugs = prevRes.data.data || [];
+
+        const map = new Map();
+        
+        // Add previous first
+        prevSugs.forEach((s: any) => {
+          const norm = s.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          map.set(norm, {
+            companyName: s.companyName,
+            hrName: s.hrName,
+            hrPhone: s.hrPhone,
+            hrEmail: s.hrEmail,
+            linkedinProfile: s.linkedinCompanyUrl,
+            sourceText: s.section ? `Source: ${s.section}` : 'Past Year'
+          });
+        });
+
+        // Add current (overrides previous if same name, so we get latest current year HR details!)
+        currSugs.forEach((s: any) => {
+          const norm = s.companyName.toLowerCase().replace(/[^a-z0-9]/g, '');
+          map.set(norm, {
+            companyName: s.companyName,
+            hrName: s.hrContact?.name || map.get(norm)?.hrName,
+            hrPhone: s.hrContact?.mobile || map.get(norm)?.hrPhone,
+            hrEmail: s.hrContact?.email || map.get(norm)?.hrEmail,
+            linkedinProfile: s.hrContact?.linkedin_url || map.get(norm)?.linkedinProfile,
+            sourceText: 'Current Year DB'
+          });
+        });
+
+        const finalSuggestions = Array.from(map.values()).slice(0, 10);
+        setSuggestions(finalSuggestions);
+        setShowSuggestions(finalSuggestions.length > 0);
       } catch (err) {
         console.error('Failed to fetch suggestions:', err);
       } finally {
@@ -756,20 +787,30 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess, editData }:
               
               {showSuggestions && suggestions.length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {suggestions.map((s, idx) => (
+                  {suggestions.map((s: any, idx) => (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => {
-                        setFormData({ ...formData, companyName: s.companyName });
+                        setFormData(prev => ({
+                          ...prev,
+                          companyName: s.companyName,
+                          hrName: s.hrName || prev.hrName,
+                          hrPhone: s.hrPhone || prev.hrPhone,
+                          hrEmail: s.hrEmail || prev.hrEmail,
+                          linkedinProfile: s.linkedinProfile || prev.linkedinProfile
+                        }));
                         setShowSuggestions(false);
                       }}
-                      className="w-full text-left px-4 py-2 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none transition-colors border-b border-slate-50 last:border-0"
+                      className="w-full text-left px-4 py-2 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none transition-colors border-b border-slate-50 last:border-0 flex items-center justify-between group"
                     >
-                      <div className="font-semibold text-slate-800">{s.companyName}</div>
-                      <div className="text-xs text-slate-500">
-                        {mode === 'previous' ? `Source: ${s.section || 'Uncategorized'}` : `Branch: ${s.assignedBranch || 'None'}`}
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-800 group-hover:text-blue-600 transition-colors">{s.companyName}</span>
+                        {s.hrName && <span className="text-xs text-slate-500">{s.hrName}</span>}
                       </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full">
+                        {s.sourceText || (mode === 'previous' ? 'Past Year' : 'Current Year')}
+                      </span>
                     </button>
                   ))}
                 </div>
