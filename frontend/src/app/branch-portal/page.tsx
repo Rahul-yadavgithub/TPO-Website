@@ -530,42 +530,25 @@ export default function BranchPortalPage() {
     return () => clearTimeout(timer);
   }, [smartPasteText]);
 
-  // Suggestions Effect
-  useEffect(() => {
-    const name = manualForm.companyName.trim();
-    if (name.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
-    const timeoutId = setTimeout(async () => {
-      setIsSearchingSuggestions(true);
-      try {
-        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/suggestions?q=${encodeURIComponent(name)}`);
-        setSuggestions(res.data.data || []);
-        setShowSuggestions(true);
-      } catch (e) {
-        console.error('Failed to fetch suggestions', e);
-      } finally {
-        setIsSearchingSuggestions(false);
-      }
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [manualForm.companyName]);
-
   // Duplicate Check Effect
   useEffect(() => {
     if (!manualForm.companyName || manualForm.companyName.trim().length < 2) {
       setIsDuplicate(false);
       setIsConflict(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
       return;
     }
     const timeoutId = setTimeout(async () => {
       setCheckingName(true);
       try {
-        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(manualForm.companyName)}`);
-        if (res.data.exists) {
-          const comp = res.data.company;
+        const [checkRes, suggestionsRes] = await Promise.all([
+          axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/check-name?name=${encodeURIComponent(manualForm.companyName)}`),
+          axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/search-suggestions?q=${encodeURIComponent(manualForm.companyName)}`)
+        ]);
+
+        if (checkRes.data.exists) {
+          const comp = checkRes.data.company;
           const currentBranch = branches?.find((b: any) => b._id === selectedBranchId);
           if (comp.assignedBranch && currentBranch && comp.assignedBranch !== currentBranch.name) {
             setIsConflict(true);
@@ -582,16 +565,23 @@ export default function BranchPortalPage() {
             setIsDuplicate(true);
             setManualForm(prev => ({
               ...prev,
-              hrName: res.data.hrContact?.name || prev.hrName,
-              hrPhone: res.data.hrContact?.mobile || prev.hrPhone,
-              hrEmail: res.data.hrContact?.email || prev.hrEmail,
-              linkedinProfile: res.data.hrContact?.linkedin_url || prev.linkedinProfile
+              hrName: checkRes.data.hrContact?.name || prev.hrName,
+              hrPhone: checkRes.data.hrContact?.mobile || prev.hrPhone,
+              hrEmail: checkRes.data.hrContact?.email || prev.hrEmail,
+              linkedinProfile: checkRes.data.hrContact?.linkedin_url || prev.linkedinProfile
             }));
-            toast.info('Company exists. Switched to Update Mode.', { icon: '🔄' });
+            toast.info('Company exists. Switched to Update Mode.', { icon: '🔄', id: 'dup-toast' });
           }
         } else {
           setIsConflict(false);
           setIsDuplicate(false);
+        }
+
+        setSuggestions(suggestionsRes.data.suggestions || []);
+        if ((suggestionsRes.data.suggestions || []).length > 0 && !checkRes.data.exists && !isConflict) {
+          setShowSuggestions(true);
+        } else {
+          setShowSuggestions(false);
         }
       } catch (e) {
         console.error(e);
@@ -1138,34 +1128,34 @@ export default function BranchPortalPage() {
                   
                   {/* Suggestions Dropdown */}
                   {showSuggestions && suggestions.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto overflow-x-hidden">
-                      {suggestions.map((suggestion, idx) => (
+                    <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                      {suggestions.map((suggestion, index) => (
                         <div 
-                          key={suggestion._id || idx}
+                          key={suggestion._id}
+                          className={`p-3 cursor-pointer hover:bg-slate-50 transition-colors ${index !== suggestions.length - 1 ? 'border-b border-slate-100' : ''}`}
                           onClick={() => {
                             setManualForm(prev => ({
                               ...prev,
                               companyName: suggestion.companyName,
-                              hrName: suggestion.hrName || prev.hrName,
-                              hrEmail: suggestion.hrEmail || prev.hrEmail,
-                              hrPhone: suggestion.hrPhone || prev.hrPhone,
-                              linkedinProfile: suggestion.linkedinCompanyUrl || prev.linkedinProfile
+                              hrName: suggestion.hrContact?.name || prev.hrName,
+                              hrPhone: suggestion.hrContact?.mobile || prev.hrPhone,
+                              hrEmail: suggestion.hrContact?.email || prev.hrEmail,
+                              linkedinProfile: suggestion.hrContact?.linkedin_url || prev.linkedinProfile
                             }));
                             setShowSuggestions(false);
                           }}
-                          className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between group"
                         >
-                          <div className="flex flex-col max-w-[70%]">
-                            <span className="text-sm font-bold text-slate-800 truncate">{suggestion.companyName}</span>
-                            {suggestion.hrName && (
-                              <span className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
-                                <User className="w-3 h-3" /> {suggestion.hrName}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                             <div className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold">Select</div>
-                          </div>
+                          <div className="font-bold text-slate-800">{suggestion.companyName}</div>
+                          {suggestion.hrContact && (
+                            <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+                              <span>👤 {suggestion.hrContact.name || 'HR'}</span>
+                              {(suggestion.hrContact.email || suggestion.hrContact.mobile) && (
+                                <span className="text-slate-300">•</span>
+                              )}
+                              {suggestion.hrContact.email && <span>📧 {suggestion.hrContact.email}</span>}
+                              {suggestion.hrContact.mobile && <span>📱 {suggestion.hrContact.mobile}</span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

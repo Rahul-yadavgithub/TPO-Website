@@ -82,7 +82,7 @@ export function EmailStatusTracker({
   });
 
   const handleSendMail = () => {
-    window.open(`mailto:${hrEmail}`, '_blank');
+    window.location.href = `mailto:${hrEmail}`;
   };
 
   return (

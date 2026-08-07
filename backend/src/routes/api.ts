@@ -269,6 +269,40 @@ router.get('/companies/check-name', async (req, res) => {
   };
 })
 
+// GET /api/companies/search-suggestions?q=...
+router.get('/companies/search-suggestions', async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string' || q.trim().length < 2) {
+      return res.json({ suggestions: [] });
+    }
+
+    const regex = new RegExp(q.trim(), 'i');
+    const companies = await Company.find({ companyName: regex })
+      .limit(8)
+      .lean();
+
+    const suggestions = await Promise.all(companies.map(async (company) => {
+      const hrContact = await HrContact.findOne({ company_id: company._id });
+      return {
+        _id: company._id,
+        companyName: company.companyName,
+        hrContact: hrContact ? {
+          name: hrContact.name,
+          mobile: hrContact.mobile,
+          email: hrContact.email,
+          linkedin_url: hrContact.linkedin_url
+        } : null
+      };
+    }));
+
+    return res.json({ suggestions });
+  } catch (error) {
+    console.error('Search suggestions error:', error);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
 // @route   POST /api/companies/manual-company
 // @desc    Admin only: Add a manual company to global pool
 router.post('/companies/manual-company', companyController.addManualCompany);
