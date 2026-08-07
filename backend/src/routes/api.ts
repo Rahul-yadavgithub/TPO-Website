@@ -1463,15 +1463,15 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
       if (existing) {
         if (existing.assignedBranch && existing.assignedBranch !== branch.name) {
           
-          const searchTerms = c.companyName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(t => t.length > 2);
-          let related = [];
+          const searchTerms = c.companyName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter((t: string) => t.length > 2);
+          let related: any[] = [];
           if (searchTerms.length > 0) {
             related = existingCompanies.filter((ec: any) => {
               if (!ec.companyName || !ec.assignedBranch) return false;
               if (ec.assignedBranch === branch.name) return false; // don't suggest our own companies
               if (ec._id.toString() === existing._id.toString()) return false; // already exact match
               const ecName = ec.companyName.toLowerCase();
-              return searchTerms.some(term => ecName.includes(term));
+              return searchTerms.some((term: string) => ecName.includes(term));
             });
           }
 
