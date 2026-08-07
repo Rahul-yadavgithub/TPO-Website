@@ -313,6 +313,13 @@ router.get('/all', authorizeRoles('admin', 'communication_tpr'), async (req: any
     if (req.query.branch && req.query.branch !== 'All') {
       query.contactedByBranchName = req.query.branch;
     }
+    if (req.query.flagged === 'true') {
+      query.$or = [
+        { primary_contact_flagged: true },
+        { 'additionalContacts.isFlagged': true },
+        { $expr: { $gt: [{ $size: { $filter: { input: { $objectToArray: { $ifNull: ['$extraData', {}] } }, as: 'el', cond: { $and: [{ $regexMatch: { input: '$$el.k', regex: /OTHER HR FLAGGED/i } }, { $eq: ['$$el.v', 'true'] }] } } } }, 0] } }
+      ];
+    }
 
     let companies = [];
     let total = 0;
@@ -345,6 +352,267 @@ router.get('/all', authorizeRoles('admin', 'communication_tpr'), async (req: any
     });
   } catch (error) {
     console.error('All list error:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   PATCH /api/previous-companies/:id/admin-resolve-contact
+// @desc    Admin only: Resolve a specific incorrect flagged contact and sync across databases
+router.patch('/:id/admin-resolve-contact', authorizeRoles('admin', 'communication_tpr'), async (req: any, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { id } = req.params;
+    const { contactId, hrName, hrPhone, hrEmail, isVerified } = req.body;
+
+    const previousCompany = await PreviousCompany.findById(id).session(session);
+    if (!previousCompany) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: 'Previous company not found' });
+    }
+
+    let isPrimaryContact = false;
+
+    // 1. Update the specific contact in PreviousCompany
+    if (contactId === 'primary') {
+      isPrimaryContact = true;
+      previousCompany.hrName = hrName || previousCompany.hrName;
+      previousCompany.hrPhone = hrPhone || previousCompany.hrPhone;
+      previousCompany.hrEmail = hrEmail || previousCompany.hrEmail;
+      previousCompany.primary_contact_flagged = false;
+      if (isVerified !== undefined) {
+        previousCompany.primary_contact_verified = isVerified;
+        if (isVerified) previousCompany.is_verified_by_admin = true;
+      }
+    } else if (contactId.startsWith('additional-')) {
+      const idx = parseInt(contactId.split('-')[1]);
+      if (previousCompany.additionalContacts && previousCompany.additionalContacts[idx]) {
+        previousCompany.additionalContacts[idx].hrName = hrName || previousCompany.additionalContacts[idx].hrName;
+        previousCompany.additionalContacts[idx].hrPhone = hrPhone || previousCompany.additionalContacts[idx].hrPhone;
+        previousCompany.additionalContacts[idx].hrEmail = hrEmail || previousCompany.additionalContacts[idx].hrEmail;
+        previousCompany.additionalContacts[idx].isFlagged = false;
+        if (isVerified !== undefined) {
+          previousCompany.additionalContacts[idx].isVerified = isVerified;
+        }
+      }
+    } else if (contactId.startsWith('extra-')) {
+      const idxStr = contactId.split('-')[1];
+      if (previousCompany.extraData) {
+        // Find existing keys for this suffix
+        const keys = Object.keys(previousCompany.extraData);
+        const nameKey = keys.find(k => k.toLowerCase() === `OTHER HR NAME ${idxStr}`.toLowerCase().trim()) || `OTHER HR NAME ${idxStr}`.trim();
+        const phoneKey = keys.find(k => k.toLowerCase().match(new RegExp(`OTHER HR (MOBILE|PHONE|NUMBER|CONTACT) ${idxStr}`, 'i'))) || `OTHER HR MOBILE ${idxStr}`.trim();
+        const emailKey = keys.find(k => k.toLowerCase().match(new RegExp(`OTHER HR (EMAIL|MAIL) ${idxStr}`, 'i'))) || `OTHER HR EMAIL ${idxStr}`.trim();
+        
+        if (hrName) previousCompany.extraData[nameKey] = hrName;
+        if (hrPhone) previousCompany.extraData[phoneKey] = hrPhone;
+        if (hrEmail) previousCompany.extraData[emailKey] = hrEmail;
+        
+        previousCompany.extraData[`OTHER HR FLAGGED ${idxStr}`.trim()] = 'false';
+        if (isVerified !== undefined) {
+          previousCompany.extraData[`OTHER HR VERIFIED ${idxStr}`.trim()] = isVerified.toString();
+        }
+        previousCompany.markModified('extraData');
+      }
+    }
+
+    // Always mark previous company for sync so Google Sheets get updated
+    previousCompany.syncStatus = 'pending';
+    await previousCompany.save({ session });
+
+    // 2. Sync with Current Year Company database & HrContact
+    // The user requested that ALL updated contacts sync to the current year.
+    // However, the current year model usually tracks ONE primary contact (in Company.hrEmail)
+    // and multiple contacts in HrContact if supported (or just one).
+    // We will update all current year companies that match this previous company.
+    const normalizedName = previousCompany.normalizedName;
+    const currentCompanies = await Company.find({ normalizedName }).session(session);
+    
+    for (const currentCompany of currentCompanies) {
+      if (isPrimaryContact) {
+        currentCompany.hrEmail = hrEmail || currentCompany.hrEmail;
+        currentCompany.primary_contact_flagged = false;
+        if (isVerified !== undefined) {
+          currentCompany.primary_contact_verified = isVerified;
+        }
+      } else {
+        // For additional/extra, we sync it into the currentCompany's additionalContacts
+        // Let's assume we want to push it or update an existing one if it matches.
+        // For simplicity and based on existing schemas, we will push it to additionalContacts.
+        const newContact = { 
+          hrName, 
+          hrPhone, 
+          hrEmail, 
+          isVerified, 
+          isFlagged: false, 
+          sourceSheet: 'Admin Resolution',
+          academicYear: (currentCompany as any).academic_year || previousCompany.academicYear || '2024-25'
+        };
+        if (!currentCompany.additionalContacts) currentCompany.additionalContacts = [];
+        // Optional: Check for duplicates before pushing
+        const exists = currentCompany.additionalContacts.some((c: any) => c.hrEmail === hrEmail && hrEmail);
+        if (!exists) {
+           currentCompany.additionalContacts.push(newContact);
+        }
+      }
+      
+      currentCompany.syncStatus = 'pending';
+      await currentCompany.save({ session });
+
+      // Update HrContact - we will overwrite the main HrContact for the company
+      // as requested by the user: "sync and overwrite the current-year HrContact record"
+      let hrContact = await mongoose.model('HrContact').findOne({ company_id: currentCompany._id }).session(session);
+      if (!hrContact) {
+         hrContact = new (mongoose.model('HrContact'))({ company_id: currentCompany._id });
+      }
+      hrContact.name = hrName || hrContact.name;
+      hrContact.mobile = hrPhone || hrContact.mobile;
+      hrContact.email = hrEmail || hrContact.email;
+      hrContact.is_incorrect = false;
+      hrContact.incorrect_marked_by = null;
+      if (isVerified !== undefined) {
+        hrContact.is_verified = isVerified;
+      }
+      await hrContact.save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Trigger branch sync to push to the current year Google Sheet
+    try {
+      if (currentCompanies.length > 0) {
+        for (const cc of currentCompanies) {
+          const branch = await mongoose.model('Branch').findOne({ name: cc.assignedBranch });
+          if (branch && branch.sheetId) {
+            const googleSheetService = require('../../services/googleSheetService').default;
+            await googleSheetService.syncCompanyToSheet(cc._id, branch.sheetId);
+          }
+        }
+      }
+    } catch (sheetError) {
+      console.error('Error syncing resolved contact to current year Google Sheet:', sheetError);
+    }
+
+    res.json({ success: true, message: 'Contact resolved successfully', company: previousCompany });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error('Resolve Contact error:', error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   PATCH /api/previous-companies/:id/resolve-flag
+// @desc    Admin only: Resolve an incorrect flagged contact and sync across databases
+router.patch('/:id/resolve-flag', authorizeRoles('admin', 'communication_tpr'), async (req: any, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { id } = req.params;
+    const { hrName, hrPhone, hrEmail, isVerified } = req.body;
+
+    const previousCompany = await PreviousCompany.findById(id).session(session);
+    if (!previousCompany) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: 'Previous company not found' });
+    }
+
+    // Update primary contact on the previous company
+    previousCompany.hrName = hrName || previousCompany.hrName;
+    previousCompany.hrPhone = hrPhone || previousCompany.hrPhone;
+    previousCompany.hrEmail = hrEmail || previousCompany.hrEmail;
+    
+    // Clear flags
+    previousCompany.primary_contact_flagged = false;
+    if (isVerified !== undefined) {
+      previousCompany.primary_contact_verified = isVerified;
+      previousCompany.is_verified_by_admin = isVerified;
+    }
+    
+    // Clear flags from additionalContacts and extraData as well
+    if (previousCompany.additionalContacts) {
+      previousCompany.additionalContacts.forEach((c: any) => {
+        c.isFlagged = false;
+      });
+    }
+    if (previousCompany.extraData) {
+      Object.keys(previousCompany.extraData).forEach(key => {
+        if (key.match(/OTHER HR FLAGGED/i)) {
+          previousCompany.extraData![key] = 'false';
+        }
+      });
+      previousCompany.markModified('extraData');
+    }
+
+    previousCompany.syncStatus = 'pending';
+    await previousCompany.save({ session });
+
+    // Sync with Current Year Company database
+    const normalizedName = previousCompany.normalizedName;
+    const currentCompanies = await Company.find({ normalizedName }).session(session);
+    
+    for (const currentCompany of currentCompanies) {
+      currentCompany.hrEmail = hrEmail || currentCompany.hrEmail;
+      currentCompany.primary_contact_flagged = false;
+      if (isVerified !== undefined) {
+        currentCompany.primary_contact_verified = isVerified;
+      }
+      currentCompany.syncStatus = 'pending';
+      await currentCompany.save({ session });
+
+      // Update HrContact
+      const hrContact = await mongoose.model('HrContact').findOne({ company_id: currentCompany._id }).session(session);
+      if (hrContact) {
+        hrContact.name = hrName || hrContact.name;
+        hrContact.mobile = hrPhone || hrContact.mobile;
+        hrContact.email = hrEmail || hrContact.email;
+        hrContact.is_incorrect = false;
+        hrContact.incorrect_marked_by = null;
+        if (isVerified !== undefined) {
+          hrContact.is_verified = isVerified;
+        }
+        await hrContact.save({ session });
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // Trigger branch sync to push to the current year Google Sheet
+    try {
+      if (currentCompanies.length > 0) {
+        for (const cc of currentCompanies) {
+          const branch = await mongoose.model('Branch').findOne({ name: cc.assignedBranch });
+          if (branch) {
+            await axios.post(`http://localhost:3001/api/sync/branch/${branch.name}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to trigger auto-sync for branch after resolving flag:', e);
+    }
+    
+    // Sync PreviousCompany to past year sheet
+    try {
+      const settings = await mongoose.model('Settings').findOne();
+      if (settings && settings.pastAcademicYearSheetId) {
+         // Because it's an update, we should ideally find and update, but appending might create duplicates
+         // This is a known limitation, so we just set syncStatus to pending for the cron job or call a dedicated service
+      }
+    } catch (e) {
+      console.error('Failed to sync previous company sheet:', e);
+    }
+
+    res.status(200).json({ success: true, message: 'Flag resolved and contact updated successfully', data: previousCompany });
+  } catch (error) {
+    console.error('Resolve flag error:', error);
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+    session.endSession();
     res.status(500).json({ success: false, message: 'Server Error' });
   }
 });
@@ -435,6 +703,43 @@ router.get('/requests/:branchId', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Server Error' });
+  }
+});
+
+// @route   GET /api/previous-companies/suggestions
+// @desc    Get autocomplete suggestions for previous companies
+router.get('/suggestions', async (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q || typeof q !== 'string' || q.trim().length < 2) {
+      return res.json({ data: [] });
+    }
+
+    const searchQuery = q.trim();
+    // Use regex for case-insensitive substring search
+    const query = {
+      companyName: { $regex: searchQuery, $options: 'i' }
+    };
+
+    const companies = await PreviousCompany.find(query)
+      .select('companyName hrName hrEmail hrPhone linkedinCompanyUrl _id')
+      .limit(50)
+      .lean();
+
+    // Optimal Algorithm: Sort companies that START WITH the query to the top
+    const lowerQuery = searchQuery.toLowerCase();
+    companies.sort((a: any, b: any) => {
+      const aStarts = a.companyName.toLowerCase().startsWith(lowerQuery);
+      const bStarts = b.companyName.toLowerCase().startsWith(lowerQuery);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return a.companyName.localeCompare(b.companyName);
+    });
+
+    res.json({ data: companies.slice(0, 10) });
+  } catch (error) {
+    console.error('Failed to fetch suggestions:', error);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
   }
 });
 

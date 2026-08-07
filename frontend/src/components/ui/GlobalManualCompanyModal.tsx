@@ -5,21 +5,22 @@ import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 
 interface GlobalManualCompanyModalProps {
-  mode: 'current' | 'previous';
+  mode: 'current' | 'previous' | 'edit_incorrect';
   onClose: () => void;
   onSuccess: () => void;
+  editData?: any;
 }
 
-export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalManualCompanyModalProps) {
+export function GlobalManualCompanyModal({ mode, onClose, onSuccess, editData }: GlobalManualCompanyModalProps) {
   const [formData, setFormData] = useState({
-    companyName: '',
-    hrName: '',
-    hrPhone: '',
-    hrEmail: '',
+    companyName: editData?.companyName || editData?.normalizedName || '',
+    hrName: editData?.hrName || '',
+    hrPhone: editData?.hrPhone || '',
+    hrEmail: editData?.hrEmail || '',
     linkedinProfile: '',
     website: '',
-    academicYear: new Date().getFullYear().toString(),
-    section: 'Uncategorized'
+    academicYear: editData?.academicYear || new Date().getFullYear().toString(),
+    section: editData?.section || 'Uncategorized'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState('');
@@ -42,9 +43,12 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   const [editSmartPasteText, setEditSmartPasteText] = useState('');
   
   const [smartPasteText, setSmartPasteText] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
 
   const currentYear = new Date().getFullYear();
-  const selectedYears = formData.academicYear ? formData.academicYear.split(',').map(y => y.trim()).filter(Boolean) : [];
+  const selectedYears = formData.academicYear ? formData.academicYear.split(',').map((y: string) => y.trim()).filter(Boolean) : [];
 
   const toggleYear = (year: string) => {
     let newYears = [...selectedYears];
@@ -187,6 +191,40 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   });
 
   useEffect(() => {
+    if (mode === 'edit_incorrect') return;
+    const name = formData.companyName.trim();
+    if (name.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingSuggestions(true);
+      try {
+        if (mode === 'previous') {
+          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/suggestions?q=${encodeURIComponent(name)}`, { withCredentials: true });
+          setSuggestions(res.data.data || []);
+        } else {
+          const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/suggestions?q=${encodeURIComponent(name)}`, { withCredentials: true });
+          setSuggestions(res.data.data || []);
+        }
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error('Failed to fetch suggestions:', err);
+      } finally {
+        setIsSearchingSuggestions(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [formData.companyName, mode]);
+
+  useEffect(() => {
+    if (mode === 'edit_incorrect') {
+      setIsEditing(true);
+      return;
+    }
     const name = formData.companyName.trim();
     if (!name) {
       setIsEditing(false);
@@ -375,6 +413,9 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
   });
 
   const getEndpoint = () => {
+    if (mode === 'edit_incorrect' && editData?._id) {
+      return `${process.env.NEXT_PUBLIC_API_URL}/previous-companies/${editData._id}/resolve-flag`;
+    }
     return mode === 'current'
       ? `${process.env.NEXT_PUBLIC_API_URL}/companies/manual-company`
       : `${process.env.NEXT_PUBLIC_API_URL}/previous-companies/manual`;
@@ -453,7 +494,11 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
         payload = { ...payload, is_verified_by_admin: isVerified, primary_contact_flagged: isFlagged, assignedBranch: branchName };
       }
 
-      await axios.post(getEndpoint(), payload, { withCredentials: true });
+      if (mode === 'edit_incorrect') {
+        await axios.patch(getEndpoint(), payload, { withCredentials: true });
+      } else {
+        await axios.post(getEndpoint(), payload, { withCredentials: true });
+      }
       toast.success(`Company ${isEditing ? 'updated' : 'added'} successfully!`);
       onSuccess();
     } catch (error: any) {
@@ -691,8 +736,9 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 <input 
                   type="text" 
                   required
+                  disabled={mode === 'edit_incorrect'}
                   placeholder="e.g. Google"
-                  className={`w-full px-4 py-2 bg-slate-50 border ${isConflict ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : isEditing ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500' : 'border-slate-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg transition-all`}
+                  className={`w-full px-4 py-2 bg-slate-50 border ${isConflict ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : isEditing ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500' : 'border-slate-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg transition-all disabled:opacity-70`}
                   value={formData.companyName}
                   onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                 />
@@ -701,7 +747,33 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                     <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                   </div>
                 )}
+                {isSearchingSuggestions && !isChecking && (
+                  <div className="absolute right-3 top-2.5">
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                  </div>
+                )}
               </div>
+              
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {suggestions.map((s, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, companyName: s.companyName });
+                        setShowSuggestions(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-slate-50 focus:bg-slate-50 focus:outline-none transition-colors border-b border-slate-50 last:border-0"
+                    >
+                      <div className="font-semibold text-slate-800">{s.companyName}</div>
+                      <div className="text-xs text-slate-500">
+                        {mode === 'previous' ? `Source: ${s.section || 'Uncategorized'}` : `Branch: ${s.assignedBranch || 'None'}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
               
               {isConflict && (
                 <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2 text-red-800">
@@ -1059,21 +1131,23 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 </div>
               </label>
               
-              <label className="flex-1 flex items-center gap-3 cursor-pointer p-3 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={isFlagged}
-                  onChange={(e) => {
-                    setIsFlagged(e.target.checked);
-                    if (e.target.checked) setIsVerified(false);
-                  }}
-                  className="w-5 h-5 text-red-600 border-red-300 rounded focus:ring-red-500"
-                />
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-red-900">Mark Incorrect</span>
-                  <span className="text-xs text-red-700">Flag as wrong contact.</span>
-                </div>
-              </label>
+              {mode !== 'edit_incorrect' && (
+                <label className="flex-1 flex items-center gap-3 cursor-pointer p-3 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={isFlagged}
+                    onChange={(e) => {
+                      setIsFlagged(e.target.checked);
+                      if (e.target.checked) setIsVerified(false);
+                    }}
+                    className="w-5 h-5 text-red-600 border-red-300 rounded focus:ring-red-500"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-red-900">Mark Incorrect</span>
+                    <span className="text-xs text-red-700">Flag as wrong contact.</span>
+                  </div>
+                </label>
+              )}
             </div>
 
             <div className="pt-6 flex gap-3">
@@ -1090,7 +1164,7 @@ export function GlobalManualCompanyModal({ mode, onClose, onSuccess }: GlobalMan
                 className="flex-[2] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
-                {isEditing ? 'Update Company' : 'Save Company'}
+                {isEditing && mode !== 'edit_incorrect' ? 'Update Company' : mode === 'edit_incorrect' ? 'Resolve & Update' : 'Save Company'}
               </button>
             </div>
           </form>

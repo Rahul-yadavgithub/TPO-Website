@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, ShieldCheck, Eye, Send } from 'lucide-react';
+import { Users, PhoneCall, Calendar, Mail, CheckCircle2, XCircle, ArrowRight, ArrowLeft, Loader2, X, Clock, AlertCircle, Trash2, RefreshCw, CloudUpload, Key, FileSpreadsheet, History, Search, ShieldAlert, Edit2, Save, Briefcase, ShieldCheck, Eye, Send, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -29,7 +29,7 @@ export default function BranchPortalPage() {
   const [courseFilter, setCourseFilter] = useState<string>('All');
   const [activeCompanyId, setActiveCompanyId] = useState<string | null>(null);
   const [lastVisitedCompanyId, setLastVisitedCompanyId] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<'not_contacted' | 'call_again' | 'pending' | null>(null);
+  const [activeCategory, setActiveCategory] = useState<'not_contacted' | 'call_again' | 'pending' | 'rejected' | null>(null);
   
   // Fast Client-Side List Search
   const [listSearchQuery, setListSearchQuery] = useState('');
@@ -40,6 +40,9 @@ export default function BranchPortalPage() {
   const [isConflict, setIsConflict] = useState(false);
   const [conflictMessage, setConflictMessage] = useState('');
   const [checkingName, setCheckingName] = useState(false);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [showPreviousCompanyModal, setShowPreviousCompanyModal] = useState(false);
@@ -524,7 +527,31 @@ export default function BranchPortalPage() {
     }, 800);
 
     return () => clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, [smartPasteText]);
+
+  // Suggestions Effect
+  useEffect(() => {
+    const name = manualForm.companyName.trim();
+    if (name.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    const timeoutId = setTimeout(async () => {
+      setIsSearchingSuggestions(true);
+      try {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/companies/suggestions?q=${encodeURIComponent(name)}`);
+        setSuggestions(res.data.data || []);
+        setShowSuggestions(true);
+      } catch (e) {
+        console.error('Failed to fetch suggestions', e);
+      } finally {
+        setIsSearchingSuggestions(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [manualForm.companyName]);
 
   // Duplicate Check Effect
   useEffect(() => {
@@ -1098,9 +1125,51 @@ export default function BranchPortalPage() {
                     placeholder="e.g. Cloudera"
                     className={`w-full bg-slate-50 border ${isConflict ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : isDuplicate ? 'border-amber-300 focus:ring-amber-500 focus:border-amber-500' : 'border-slate-200 focus:ring-indigo-500 focus:border-indigo-500'} text-slate-900 text-sm rounded-xl p-3.5 transition-all shadow-sm`}
                     value={manualForm.companyName}
-                    onChange={(e) => setManualForm({ ...manualForm, companyName: e.target.value })}
+                    onChange={(e) => {
+                      setManualForm({ ...manualForm, companyName: e.target.value });
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => {
+                      if (suggestions.length > 0) setShowSuggestions(true);
+                    }}
                   />
-                  {checkingName && <Loader2 className="absolute right-4 top-3.5 w-5 h-5 animate-spin text-slate-400" />}
+                  {checkingName && !isSearchingSuggestions && <Loader2 className="absolute right-4 top-3.5 w-5 h-5 animate-spin text-slate-400" />}
+                  {isSearchingSuggestions && <Loader2 className="absolute right-4 top-3.5 w-5 h-5 animate-spin text-slate-400" />}
+                  
+                  {/* Suggestions Dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto overflow-x-hidden">
+                      {suggestions.map((suggestion, idx) => (
+                        <div 
+                          key={suggestion._id || idx}
+                          onClick={() => {
+                            setManualForm(prev => ({
+                              ...prev,
+                              companyName: suggestion.companyName,
+                              hrName: suggestion.hrName || prev.hrName,
+                              hrEmail: suggestion.hrEmail || prev.hrEmail,
+                              hrPhone: suggestion.hrPhone || prev.hrPhone,
+                              linkedinProfile: suggestion.linkedinCompanyUrl || prev.linkedinProfile
+                            }));
+                            setShowSuggestions(false);
+                          }}
+                          className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors flex items-center justify-between group"
+                        >
+                          <div className="flex flex-col max-w-[70%]">
+                            <span className="text-sm font-bold text-slate-800 truncate">{suggestion.companyName}</span>
+                            {suggestion.hrName && (
+                              <span className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                                <User className="w-3 h-3" /> {suggestion.hrName}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                             <div className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold">Select</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1946,10 +2015,11 @@ export default function BranchPortalPage() {
             const notContacted = notConfirmedList?.filter((c: any) => !c.contact_status || c.contact_status === 'not_contacted') || [];
             const callAgain = notConfirmedList?.filter((c: any) => c.contact_outcome === 'call_again') || [];
             const pendingResponse = notConfirmedList?.filter((c: any) => c.contact_status === 'contacted' && c.contact_outcome !== 'call_again' && c.contact_outcome !== 'rejected' && c.contact_outcome !== 'accepted') || [];
+            const rejectedCompany = notConfirmedList?.filter((c: any) => c.contact_outcome === 'rejected') || [];
 
             if (activeCategory === null) {
               return (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Card 1: Not Contacted */}
                   <div 
                     onClick={() => setActiveCategory('not_contacted')}
@@ -1991,31 +2061,48 @@ export default function BranchPortalPage() {
                     <p className="text-5xl font-black text-amber-600">{pendingResponse.length}</p>
                     <p className="text-sm text-amber-500 font-semibold flex items-center gap-1 mt-2 group-hover:text-amber-700 transition-colors">View Queue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></p>
                   </div>
+
+                  {/* Card 4: Rejected Company */}
+                  <div 
+                    onClick={() => setActiveCategory('rejected')}
+                    className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 cursor-pointer hover:shadow-md hover:border-red-300 transition-all group flex flex-col items-center justify-center text-center gap-3 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 w-full h-1 bg-red-500"></div>
+                    <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm border border-red-100">
+                      <XCircle className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-lg font-bold text-red-900 uppercase tracking-wide mt-2">Rejected Company</h3>
+                    <p className="text-5xl font-black text-red-600">{rejectedCompany.length}</p>
+                    <p className="text-sm text-red-500 font-semibold flex items-center gap-1 mt-2 group-hover:text-red-700 transition-colors">View Queue <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" /></p>
+                  </div>
                 </div>
               );
             }
 
             // Expanded List View
-            const activeDataRaw = activeCategory === 'not_contacted' ? notContacted : activeCategory === 'call_again' ? callAgain : pendingResponse;
+            const activeDataRaw = activeCategory === 'not_contacted' ? notContacted : activeCategory === 'call_again' ? callAgain : activeCategory === 'rejected' ? rejectedCompany : pendingResponse;
             const activeData = listSearchQuery.trim() 
               ? activeDataRaw.filter((c: any) => c.companyName.toLowerCase().includes(listSearchQuery.toLowerCase()))
               : activeDataRaw;
-            const title = activeCategory === 'not_contacted' ? 'Not Contacted' : activeCategory === 'call_again' ? 'Call Again' : 'Pending Response';
+            const title = activeCategory === 'not_contacted' ? 'Not Contacted' : activeCategory === 'call_again' ? 'Call Again' : activeCategory === 'rejected' ? 'Rejected' : 'Pending Response';
 
             return (
               <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className={`p-5 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
                   activeCategory === 'not_contacted' ? 'bg-slate-50 border-slate-200' :
                   activeCategory === 'call_again' ? 'bg-blue-50 border-blue-100' :
+                  activeCategory === 'rejected' ? 'bg-red-50 border-red-100' :
                   'bg-amber-50 border-amber-100'
                 }`}>
                   <h3 className={`text-xl font-bold flex items-center gap-2.5 ${
                     activeCategory === 'not_contacted' ? 'text-slate-800' :
                     activeCategory === 'call_again' ? 'text-blue-900' :
+                    activeCategory === 'rejected' ? 'text-red-900' :
                     'text-amber-900'
                   }`}>
                     {activeCategory === 'not_contacted' && <Users className="w-6 h-6 text-slate-500" />}
                     {activeCategory === 'call_again' && <Calendar className="w-6 h-6 text-blue-600" />}
+                    {activeCategory === 'rejected' && <XCircle className="w-6 h-6 text-red-600" />}
                     {activeCategory === 'pending' && <Clock className="w-6 h-6 text-amber-600" />}
                     {title} Queue
                     <span className={`text-xs font-bold px-3 py-1 rounded-full border bg-white shadow-sm ${

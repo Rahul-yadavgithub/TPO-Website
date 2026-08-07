@@ -190,6 +190,43 @@ router.get('/companies', async (req, res) => {
   }
 });
 
+// GET /api/companies/suggestions?q=...
+router.get('/companies/suggestions', async (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q || typeof q !== 'string' || q.trim().length < 2) {
+      return res.json({ data: [] });
+    }
+
+    const searchQuery = q.trim();
+    const query: any = {
+      companyName: { $regex: searchQuery, $options: 'i' },
+      'source.platform': { $nin: ['PreviousYearDatabase', 'MANUAL_ADMIN', 'EXCEL_IMPORT'] },
+      data_source: { $ne: 'excel_import' }
+    };
+
+    const companies = await Company.find(query)
+      .select('companyName hrName hrEmail hrPhone linkedinCompanyUrl _id')
+      .limit(50)
+      .lean();
+
+    // Optimal Algorithm: Sort companies that START WITH the query to the top
+    const lowerQuery = searchQuery.toLowerCase();
+    companies.sort((a: any, b: any) => {
+      const aStarts = a.companyName.toLowerCase().startsWith(lowerQuery);
+      const bStarts = b.companyName.toLowerCase().startsWith(lowerQuery);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return a.companyName.localeCompare(b.companyName);
+    });
+
+    res.json({ data: companies.slice(0, 10) });
+  } catch (error) {
+    console.error('Failed to fetch suggestions:', error);
+    res.status(500).json({ error: 'Failed to fetch suggestions' });
+  }
+});
+
 // GET /api/companies/check-name?name=...
 router.get('/companies/check-name', async (req, res) => {
   try {

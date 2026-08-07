@@ -4,12 +4,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus } from 'lucide-react';
+import { Search, Archive, Info, Trash2, ShieldCheck, Filter, CheckCircle2, ChevronLeft, ChevronRight, Download, Plus, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { PastCompanyDetailsModal } from '@/components/ui/PastCompanyDetailsModal';
 import { DuplicateCompaniesTable } from '@/components/ui/DuplicateCompaniesTable';
 import { useAuth } from '@/contexts/AuthContext';
 import { GlobalManualCompanyModal } from '@/components/ui/GlobalManualCompanyModal';
+import { AdminResolveIncorrectModal } from '@/components/ui/AdminResolveIncorrectModal';
+import { isAllContactsIncorrect } from '@/lib/utils';
 
 interface AdditionalContact {
   hrName: string;
@@ -144,7 +146,8 @@ export default function PastCompaniesPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedCompany, setSelectedCompany] = useState<PastCompany | null>(null);
-  const [activeTab, setActiveTab] = useState<'master' | 'duplicates'>('master');
+  const [activeTab, setActiveTab] = useState<'master' | 'duplicates' | 'incorrect'>('master');
+  const [selectedIncorrectCompany, setSelectedIncorrectCompany] = useState<PastCompany | null>(null);
   const [deleteConfirmCompany, setDeleteConfirmCompany] = useState<{id: string, name: string} | null>(null);
   
   const [tempFilters, setTempFilters] = useState({
@@ -185,17 +188,18 @@ export default function PastCompaniesPage() {
   });
 
   const { data, isLoading } = useQuery({
-    queryKey: ['past-companies', page, search, activeFilters],
+    queryKey: ['past-companies', page, search, activeFilters, activeTab],
     queryFn: async () => {
       const params: Record<string, string | number> = { page, limit: 10, q: search };
       if (activeFilters.section !== 'All') params.section = activeFilters.section;
       if (activeFilters.verified !== 'All') params.verified = activeFilters.verified === 'Verified' ? 'true' : 'false';
       if (activeFilters.branch !== 'All') params.branch = activeFilters.branch;
+      if (activeTab === 'incorrect') params.flagged = 'true';
 
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/previous-companies/all`, { params, withCredentials: true });
       return res.data;
     },
-    enabled: activeTab === 'master' && (userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr')
+    enabled: (activeTab === 'master' || activeTab === 'incorrect') && (userProfile?.role === 'admin' || userProfile?.role === 'communication_tpr')
   });
 
   const confirmDelete = (companyId: string, companyName: string) => {
@@ -501,9 +505,19 @@ export default function PastCompaniesPage() {
         >
           Duplicate Pending Queue
         </button>
+        <button
+          onClick={() => setActiveTab('incorrect')}
+          className={`px-5 py-2 text-sm font-semibold rounded-lg transition-all ${
+            activeTab === 'incorrect'
+              ? 'bg-white text-red-600 shadow-sm'
+              : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          Incorrect Marked Company
+        </button>
       </div>
 
-      {activeTab === 'master' ? (
+      {activeTab === 'master' || activeTab === 'incorrect' ? (
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
@@ -544,7 +558,11 @@ export default function PastCompaniesPage() {
                       <div className="flex flex-col max-w-xs">
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold text-slate-900 text-base">{company.companyName}</span>
-                          {company.is_verified_by_admin ? (
+                          {isAllContactsIncorrect(company) ? (
+                            <span title="Incorrect Contact" className="flex items-center">
+                              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            </span>
+                          ) : company.is_verified_by_admin ? (
                             <span title="Verified Master Company" className="flex items-center">
                               <ShieldCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                             </span>
@@ -592,13 +610,23 @@ export default function PastCompaniesPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => setSelectedCompany(company)}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
-                        >
-                          <Info className="w-4 h-4" />
-                          Details
-                        </button>
+                        {activeTab === 'incorrect' ? (
+                          <button 
+                            onClick={() => setSelectedIncorrectCompany(company)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                          >
+                            <Info className="w-4 h-4" />
+                            Edit
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => setSelectedCompany(company)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 transition-colors"
+                          >
+                            <Info className="w-4 h-4" />
+                            Details
+                          </button>
+                        )}
                         <button 
                           onClick={() => confirmDelete(company._id, company.companyName)}
                           className="inline-flex items-center gap-2 px-2 py-1.5 text-sm font-medium text-red-600 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 hover:text-red-700 transition-colors"
@@ -654,6 +682,13 @@ export default function PastCompaniesPage() {
         onClose={() => setSelectedCompany(null)}
         company={selectedCompany}
       />
+
+      {selectedIncorrectCompany && (
+        <AdminResolveIncorrectModal
+          company={selectedIncorrectCompany}
+          onClose={() => setSelectedIncorrectCompany(null)}
+        />
+      )}
 
       {deleteConfirmCompany && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">

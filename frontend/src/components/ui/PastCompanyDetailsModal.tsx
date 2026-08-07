@@ -3,6 +3,7 @@ import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, Hist
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { isAllContactsIncorrect } from '@/lib/utils';
 
 interface AdditionalContact {
   hrName: string;
@@ -384,7 +385,11 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
               ) : (
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">{company.companyName}</h2>
-                  {company.is_verified_by_admin ? (
+                  {isAllContactsIncorrect(company) ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-700 px-2.5 py-1 rounded-full border border-red-200 shadow-sm shrink-0">
+                      <AlertCircle className="w-3.5 h-3.5" /> Incorrect
+                    </span>
+                  ) : company.is_verified_by_admin ? (
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200 shadow-sm shrink-0">
                       <ShieldCheck className="w-3.5 h-3.5" /> Verified
                     </span>

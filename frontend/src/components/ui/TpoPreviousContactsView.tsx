@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Loader2, ArrowLeft, Search, Building2, CheckCircle2, Save, Users, Calendar, XCircle, ShieldCheck, Phone, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { EmailStatusTracker } from './EmailStatusTracker';
+import { isAllContactsIncorrect } from '@/lib/utils';
 
 interface ExtractedContact {
   id: string;
@@ -434,7 +435,9 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                       <div>
                         <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
                           {company.companyName}
-                          {company.is_verified_by_admin ? (
+                          {isAllContactsIncorrect(company) ? (
+                            <span title="Incorrect Contact" className="inline-flex"><XCircle className="w-5 h-5 text-red-500" /></span>
+                          ) : company.is_verified_by_admin ? (
                             <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-5 h-5 text-emerald-500" /></span>
                           ) : extractAllContacts(company).some((c: any) => c.isVerified) ? (
                             <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-4 h-4 text-emerald-500" /></span>
@@ -537,7 +540,9 @@ export function TpoPreviousContactsView({ tpoName, tpoType, onBack }: TpoTpoPrev
                           <div className="w-full sm:w-auto">
                             <h4 className="font-bold text-slate-800 text-xl flex items-center gap-2">
                               {company.companyName}
-                              {company.is_verified_by_admin ? (
+                              {isAllContactsIncorrect(company) ? (
+                                <span title="Incorrect Contact" className="inline-flex"><XCircle className="w-6 h-6 text-red-500" /></span>
+                              ) : company.is_verified_by_admin ? (
                                 <span title="Verified by Admin" className="inline-flex"><ShieldCheck className="w-6 h-6 text-emerald-500" /></span>
                               ) : extractAllContacts(company).some((c: any) => c.isVerified) ? (
                                 <span title="Contact Verified" className="inline-flex"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></span>
