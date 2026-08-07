@@ -777,8 +777,10 @@ router.patch('/:id/contact-info', async (req: AuthRequest, res) => {
       console.error('Failed to trigger auto-sync for branch:', e);
     }
 
-    // Finally, completely delete the previous company record from the DB
-    await PreviousCompany.findByIdAndDelete(previousCompany._id);
+    // Instead of deleting, mark it as contacted so it still appears in 'Claimed by others'
+    previousCompany.contactStatus = 'contacted';
+    previousCompany.syncStatus = 'synced';
+    await previousCompany.save();
 
     res.status(200).json({ success: true, message: 'Contact info updated successfully. Company removed from previous year and migrated to current year.', data: previousCompany });
   } catch (error) {

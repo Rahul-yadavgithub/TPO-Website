@@ -62,7 +62,8 @@ export class AggregationService {
         ctc: prevCompany.extraData['Package'] || 'Not Specified',
         eligibleBranches: prevCompany.extraData['Eligible Branches'] 
           ? prevCompany.extraData['Eligible Branches'].split(',').map((b: string) => b.trim()) 
-          : []
+          : [],
+        rawPastData: prevCompany.extraData
       };
     }
 

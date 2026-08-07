@@ -159,6 +159,61 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   }, contactLogs[0]) : null;
   const callingStatus = latestLog?.outcome;
 
+  // Data Merging Logic for Additional Company Details
+  const extraData = company.extraData || {};
+  const rawExternalData = externalInsights?.rawExternalData || {};
+
+  const findKey = (obj: any, keywords: string[], exactMatch?: boolean) => {
+    if (!obj) return null;
+    const keys = Object.keys(obj);
+    return keys.find(k => {
+      const lowerK = k.toLowerCase();
+      if (exactMatch) {
+         return keywords.some(kw => lowerK === kw.toLowerCase());
+      }
+      return keywords.every(kw => lowerK.includes(kw.toLowerCase()));
+    });
+  };
+
+  const rawPastData = externalInsights?.pastYear?.rawPastData || {};
+
+  const localDriveDateKey = findKey(extraData, ['drive', 'date']) || findKey(extraData, ['date'], true);
+  const extDriveDateKey = findKey(rawExternalData, ['drive', 'date']) || findKey(rawExternalData, ['date'], true);
+  const pastDriveDateKey = findKey(rawPastData, ['drive', 'date']) || findKey(rawPastData, ['date'], true);
+  const driveDateVal = localDriveDateKey ? extraData[localDriveDateKey] : (extDriveDateKey ? rawExternalData[extDriveDateKey] : (pastDriveDateKey ? rawPastData[pastDriveDateKey] : null));
+
+  const localYearsVisitedKey = findKey(extraData, ['visit']) || findKey(extraData, ['year'], true);
+  const extYearsVisitedKey = findKey(rawExternalData, ['visit']) || findKey(rawExternalData, ['year'], true);
+  const pastYearsVisitedKey = findKey(rawPastData, ['visit']) || findKey(rawPastData, ['year'], true);
+  const yearsVisitedVal = localYearsVisitedKey ? extraData[localYearsVisitedKey] : (extYearsVisitedKey ? rawExternalData[extYearsVisitedKey] : (pastYearsVisitedKey ? rawPastData[pastYearsVisitedKey] : null));
+
+  const localCtcKey = findKey(extraData, ['package'], true) || findKey(extraData, ['ctc'], true) || findKey(extraData, ['salary'], true) || findKey(extraData, ['ctc']);
+  const localBranchesKey = findKey(extraData, ['branch']);
+
+  const mergedCtc = externalInsights?.currentYear?.ctc || externalInsights?.pastYear?.ctc || (localCtcKey ? extraData[localCtcKey] : null) || 'Not Specified';
+  
+  let mergedBranches = 'Not Specified';
+  if (externalInsights?.currentYear?.eligibleBranches?.length > 0) {
+    mergedBranches = externalInsights.currentYear.eligibleBranches.join(', ');
+  } else if (externalInsights?.pastYear?.eligibleBranches?.length > 0) {
+    mergedBranches = externalInsights.pastYear.eligibleBranches.join(', ');
+  } else if (localBranchesKey && extraData[localBranchesKey]) {
+    mergedBranches = String(extraData[localBranchesKey]);
+  }
+
+  const usedLocalKeys = new Set([localDriveDateKey, localYearsVisitedKey, localCtcKey, localBranchesKey].filter(Boolean));
+  const usedExtKeys = new Set([extDriveDateKey, extYearsVisitedKey].filter(Boolean));
+  const usedPastKeys = new Set([pastDriveDateKey, pastYearsVisitedKey, findKey(rawPastData, ['package'], true), findKey(rawPastData, ['eligible branches'], true)].filter(Boolean));
+
+  const isHrContact = (k: string) => /^OTHER HR NAME\s*(\d*)$/i.test(k) || 
+                                     /^OTHER HR EMAIL\s*(\d*)$/i.test(k) || /^OTHER HR MAIL\s*(\d*)$/i.test(k) || 
+                                     /^OTHER HR MOBILE\s*(\d*)$/i.test(k) || /^OTHER HR PHONE\s*(\d*)$/i.test(k) || /^OTHER HR NUMBER\s*(\d*)$/i.test(k) || 
+                                     /^OTHER HR VERIFIED\s*(\d*)$/i.test(k) || 
+                                     /^OTHER HR FLAGGED\s*(\d*)$/i.test(k);
+
+  const remainingExtraData = Object.entries(extraData).filter(([k]) => !usedLocalKeys.has(k) && !isHrContact(k));
+  const remainingRawExternal = Object.entries(rawExternalData).filter(([k]) => !usedExtKeys.has(k));
+  const remainingRawPast = Object.entries(rawPastData).filter(([k]) => !usedPastKeys.has(k) && !isHrContact(k));
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -198,13 +253,18 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                   </span>
                 )}
               </h2>
-              {company.academic_year && (
-                <div className="shrink-0">
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                {driveDateVal && (
+                  <span className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                    <Calendar className="w-3.5 h-3.5" /> Drive Date: {String(driveDateVal)}
+                  </span>
+                )}
+                {company.academic_year && (
                   <span className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200 text-blue-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
                     <Calendar className="w-3.5 h-3.5" /> Visited: {company.academic_year}
                   </span>
-                </div>
-              )}
+                )}
+              </div>
             </div>
             <p className="text-sm text-slate-500 mt-1">Branch: <span className="font-semibold text-slate-700">{company.assignedBranch}</span></p>
           </div>
@@ -458,105 +518,86 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             </div>
           </div>
 
-          {/* Platform Insights */}
-          {(loadingInsights || externalInsights?.currentYear || externalInsights?.pastYear) && (
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl shadow-sm">
-              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                <GitMerge className="w-5 h-5 text-indigo-600" /> Platform Insights
-              </h3>
-              {loadingInsights ? (
-                <div className="flex items-center justify-center p-4">
-                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500 font-medium">External Drive Status:</span>
-                    <span className="font-bold text-slate-900 bg-indigo-50 px-2 py-0.5 rounded text-indigo-700">{externalInsights?.driveStatus || 'Unknown'}</span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                    {/* Current Year (Dynamic) */}
-                    {(externalInsights?.currentYear || externalInsights?.rawExternalData) && (
-                      <div className="bg-white border border-indigo-200 p-3 rounded-lg shadow-sm">
-                        <h4 className="text-[10px] font-bold text-indigo-600 uppercase mb-2 tracking-wider">Current Year (Platform)</h4>
-                        <div className="space-y-1 text-sm">
-                          {externalInsights.currentYear && (
-                            <>
-                              {externalInsights.currentYear.ctc && <p className="flex justify-between"><span className="text-slate-500">CTC:</span> <span className="font-semibold text-slate-800">{externalInsights.currentYear.ctc}</span></p>}
-                              {externalInsights.currentYear.eligibleBranches?.length > 0 && <p className="flex justify-between"><span className="text-slate-500">Branches:</span> <span className="font-semibold text-slate-800 text-right">{externalInsights.currentYear.eligibleBranches.join(', ')}</span></p>}
-                            </>
-                          )}
-                          {externalInsights.rawExternalData && Object.entries(externalInsights.rawExternalData).map(([key, value]) => {
-                            // Format key (e.g., 'drive_type' -> 'Drive Type', 'onCampus' -> 'On Campus')
-                            const formattedKey = key
-                              .replace(/([A-Z])/g, ' $1') // insert a space before all caps
-                              .replace(/_/g, ' ') // replace underscores with spaces
-                              .replace(/^./, str => str.toUpperCase()) // capitalize the first letter
-                              .trim();
-                            
-                            // Format value
-                            let formattedValue = String(value);
-                            if (Array.isArray(value)) formattedValue = value.join(', ');
-                            else if (typeof value === 'boolean') formattedValue = value ? 'Yes' : 'No';
-                            else if (typeof value === 'object' && value !== null) formattedValue = JSON.stringify(value);
-
-                            return (
-                              <p key={key} className="flex justify-between gap-4">
-                                <span className="text-slate-500 shrink-0">{formattedKey}:</span> 
-                                <span className="font-semibold text-slate-800 text-right break-words">{formattedValue}</span>
-                              </p>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Past Year */}
-                    {externalInsights?.pastYear && (
-                      <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-sm opacity-90">
-                        <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-2 tracking-wider">Past Year (Local DB)</h4>
-                        <div className="space-y-1 text-sm">
-                          <p className="flex justify-between"><span className="text-slate-500">CTC:</span> <span className="font-semibold text-slate-800">{externalInsights.pastYear.ctc || 'N/A'}</span></p>
-                          <p className="flex justify-between gap-4"><span className="text-slate-500 shrink-0">Branches:</span> <span className="font-semibold text-slate-800 text-right">{externalInsights.pastYear.eligibleBranches?.join(', ') || 'N/A'}</span></p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Additional Information (from Extra Data) */}
-          {company.extraData && Object.keys(company.extraData).length > 0 && (
+          {/* Additional Company Details (Merged) */}
+          {((loadingInsights) || remainingExtraData.length > 0 || remainingRawExternal.length > 0 || mergedCtc !== 'Not Specified' || externalInsights?.driveStatus) && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-slate-500" />
-                  <h3 className="font-semibold text-slate-900">Additional Information</h3>
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  <h3 className="text-lg font-bold text-slate-900">Additional Company Details</h3>
                 </div>
+                {yearsVisitedVal && (
+                  <span className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                    <Calendar className="w-3.5 h-3.5" /> Previously Visited: {String(yearsVisitedVal)}
+                  </span>
+                )}
               </div>
-              <div className="flex flex-col divide-y divide-slate-100">
-                {Object.entries(company.extraData)
-                  .filter(([k]) => {
-                    const isHrContact = /^OTHER HR NAME\s*(\d*)$/i.test(k) || 
-                                        /^OTHER HR EMAIL\s*(\d*)$/i.test(k) || /^OTHER HR MAIL\s*(\d*)$/i.test(k) || 
-                                        /^OTHER HR MOBILE\s*(\d*)$/i.test(k) || /^OTHER HR PHONE\s*(\d*)$/i.test(k) || /^OTHER HR NUMBER\s*(\d*)$/i.test(k) || 
-                                        /^OTHER HR VERIFIED\s*(\d*)$/i.test(k) || 
-                                        /^OTHER HR FLAGGED\s*(\d*)$/i.test(k);
-                    return !isHrContact;
-                  })
-                  .map(([key, value], idx) => (
-                  <div key={idx} className="flex flex-col sm:flex-row gap-1 sm:gap-4 p-4 hover:bg-slate-50/30 transition-colors">
-                    <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">
-                      {key}
-                    </div>
-                    <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words bg-slate-50 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none border border-slate-100 sm:border-transparent">
-                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                    </div>
+              
+              <div className="p-5">
+                {loadingInsights ? (
+                  <div className="flex items-center justify-center p-4">
+                    <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-6">
+                    {/* Key Metrics Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {externalInsights?.driveStatus && (
+                        <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">External Drive Status</p>
+                          <p className="font-semibold text-indigo-700">{externalInsights.driveStatus}</p>
+                        </div>
+                      )}
+
+                      
+                      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">CTC</p>
+                        <p className="font-semibold text-slate-900">{mergedCtc}</p>
+                      </div>
+
+                      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Eligible Branches</p>
+                        <p className="font-semibold text-slate-900">{mergedBranches}</p>
+                      </div>
+                    </div>
+
+                    {/* Remaining Details List */}
+                    {(remainingExtraData.length > 0 || remainingRawExternal.length > 0 || remainingRawPast.length > 0) && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col divide-y divide-slate-100">
+                        {remainingRawExternal.map(([key, value], idx) => {
+                          const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, str => str.toUpperCase()).trim();
+                          let formattedValue = String(value);
+                          if (Array.isArray(value)) formattedValue = value.join(', ');
+                          else if (typeof value === 'boolean') formattedValue = value ? 'Yes' : 'No';
+                          else if (typeof value === 'object' && value !== null) formattedValue = JSON.stringify(value);
+                          
+                          return (
+                            <div key={`ext-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-3 hover:bg-slate-50/30 transition-colors">
+                              <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{formattedKey} <span className="text-[9px] uppercase bg-indigo-50 text-indigo-600 px-1 rounded ml-1">Platform</span></div>
+                              <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">{formattedValue}</div>
+                            </div>
+                          );
+                        })}
+                        {remainingRawPast.map(([key, value], idx) => (
+                          <div key={`past-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-3 hover:bg-slate-50/30 transition-colors">
+                            <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{key} <span className="text-[9px] uppercase bg-amber-50 text-amber-600 px-1 rounded ml-1">Past DB</span></div>
+                            <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">
+                              {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                            </div>
+                          </div>
+                        ))}
+                        {remainingExtraData.map(([key, value], idx) => (
+                          <div key={`loc-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-3 hover:bg-slate-50/30 transition-colors">
+                            <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{key}</div>
+                            <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">
+                              {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
