@@ -1448,7 +1448,7 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
     const { companies } = req.body;
     if (!Array.isArray(companies)) return res.status(400).json({ error: 'Companies array is required' });
 
-    const existingCompanies = await Company.find().select('normalizedName assignedBranch contactOwner').lean();
+    const existingCompanies = await Company.find().select('normalizedName assignedBranch contactOwner companyName').lean();
     const existingMap = new Map(existingCompanies.map((c: any) => [c.normalizedName, c]));
 
     const validCompaniesMap = new Map<string, any>();
@@ -1462,11 +1462,42 @@ router.post('/branch/:branch_id/bulk-validate-companies', async (req, res) => {
       const existing = existingMap.get(normalized);
       if (existing) {
         if (existing.assignedBranch && existing.assignedBranch !== branch.name) {
+          
+          const searchTerms = c.companyName.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(t => t.length > 2);
+          let related = [];
+          if (searchTerms.length > 0) {
+            related = existingCompanies.filter((ec: any) => {
+              if (!ec.companyName || !ec.assignedBranch) return false;
+              if (ec.assignedBranch === branch.name) return false; // don't suggest our own companies
+              if (ec._id.toString() === existing._id.toString()) return false; // already exact match
+              const ecName = ec.companyName.toLowerCase();
+              return searchTerms.some(term => ecName.includes(term));
+            });
+          }
+
+          const potentialMatches = [
+            {
+              companyId: existing._id,
+              companyName: existing.companyName || c.companyName,
+              conflictBranch: existing.assignedBranch,
+              conflictOwner: existing.contactOwner || 'Unknown',
+              isExact: true
+            },
+            ...related.slice(0, 5).map((m: any) => ({
+              companyId: m._id,
+              companyName: m.companyName,
+              conflictBranch: m.assignedBranch,
+              conflictOwner: m.contactOwner || 'Unknown',
+              isExact: false
+            }))
+          ];
+
           conflictCompanies.push({
             ...c,
             companyId: existing._id,
             conflictBranch: existing.assignedBranch,
-            conflictOwner: existing.contactOwner || 'Unknown'
+            conflictOwner: existing.contactOwner || 'Unknown',
+            potentialMatches
           });
         } else {
           duplicateCompanies.push(c);
