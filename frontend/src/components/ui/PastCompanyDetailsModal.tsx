@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, History, AlertCircle, Edit2, Save, Trash2, Loader2, ShieldCheck, PhoneCall, ChevronDown, XCircle, ShieldAlert } from 'lucide-react';
+import { X, Building2, User, Phone, Mail, FileText, Calendar, CheckCircle2, History, AlertCircle, Edit2, Save, Trash2, Loader2, ShieldCheck, PhoneCall, ChevronDown, XCircle, ShieldAlert, Plus, Wand2, ChevronRight, Building } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -62,6 +62,14 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
   const [assignTpoName, setAssignTpoName] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
 
+  // Nested Edit States
+  const [isEditingPrimaryHR, setIsEditingPrimaryHR] = useState(false);
+  const [smartPasteText, setSmartPasteText] = useState('');
+  const [tempPrimaryHR, setTempPrimaryHR] = useState({ name: '', phone: '', email: '' });
+
+  const [editingExtraDataId, setEditingExtraDataId] = useState<string | null>(null);
+  const [tempExtraData, setTempExtraData] = useState<{ id: string; typeKey: string; customKey: string; value: string } | null>(null);
+
   const currentYear = new Date().getFullYear();
   const selectedYears = formData.academicYear ? formData.academicYear.split(',').map(y => y.trim()).filter(Boolean) : [];
 
@@ -107,6 +115,52 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
     },
     enabled: isEditing
   });
+
+  // Handle Smart Paste parsing for Primary HR
+  useEffect(() => {
+    if (!smartPasteText.trim()) return;
+
+    const parseContact = (text: string) => {
+      let name = '';
+      let phone = '';
+      let email = '';
+
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+      const phoneRegex = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/;
+
+      for (const line of lines) {
+        if (!email) {
+          const emailMatch = line.match(emailRegex);
+          if (emailMatch) email = emailMatch[0];
+        }
+        if (!phone) {
+          const phoneMatch = line.match(phoneRegex);
+          if (phoneMatch) phone = phoneMatch[0];
+        }
+        
+        if (!emailRegex.test(line) && !phoneRegex.test(line) && !name && line.length > 2 && line.length < 50) {
+          if (!line.toLowerCase().includes('http') && !line.toLowerCase().includes('www')) {
+            name = line;
+          }
+        }
+      }
+
+      return { name, phone, email };
+    };
+
+    const delayDebounceFn = setTimeout(() => {
+      const parsed = parseContact(smartPasteText);
+      setTempPrimaryHR(prev => ({
+        name: parsed.name || prev.name,
+        phone: parsed.phone || prev.phone,
+        email: parsed.email || prev.email
+      }));
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [smartPasteText]);
 
   useEffect(() => {
     if (company) {
@@ -525,6 +579,16 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
               </div>
               {isEditing ? (
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                  <button 
+                    onClick={() => {
+                      setTempPrimaryHR({ name: formData.hrName || '', phone: formData.hrPhone || '', email: formData.hrEmail || '' });
+                      setSmartPasteText('');
+                      setIsEditingPrimaryHR(true);
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-medium rounded-lg transition-colors border border-indigo-200"
+                  >
+                    <Edit2 className="w-4 h-4" /> Edit Contact
+                  </button>
                   <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100 w-full sm:w-auto">
                     <input 
                       type="checkbox" 
@@ -577,46 +641,28 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">HR Name</label>
                   <div className="mt-1 flex items-center gap-2 text-slate-900">
                     <User className="w-4 h-4 text-slate-400" />
-                    {isEditing ? (
-                      <input 
-                        type="text" 
-                        value={formData.hrName || ''}
-                        onChange={e => setFormData({...formData, hrName: e.target.value})}
-                        className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-sm"
-                      />
-                    ) : (
-                      <div className="font-medium flex items-center gap-2 flex-wrap">
-                        {formData.primary_contact_flagged && (
-                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                            <XCircle className="w-3 h-3" /> Incorrect
-                          </span>
-                        )}
-                        {company.hrName || 'Not provided'}
-                      </div>
-                    )}
+                    <div className="font-medium flex items-center gap-2 flex-wrap">
+                      {formData.primary_contact_flagged && (
+                        <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> Incorrect
+                        </span>
+                      )}
+                      {(isEditing ? formData.hrName : company.hrName) || 'Not provided'}
+                    </div>
                   </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Phone</label>
                   <div className="mt-1 flex items-center gap-2 text-slate-900">
                     <Phone className="w-4 h-4 text-slate-400" />
-                    {isEditing ? (
-                      <input 
-                        type="text" 
-                        value={formData.hrPhone || ''}
-                        onChange={e => setFormData({...formData, hrPhone: e.target.value})}
-                        className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-sm"
-                      />
-                    ) : (
-                      <span className="flex items-center gap-2 flex-wrap">
-                        {formData.primary_contact_flagged && (
-                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                            <XCircle className="w-3 h-3" /> Incorrect
-                          </span>
-                        )}
-                        {company.hrPhone || 'Not provided'}
-                      </span>
-                    )}
+                    <span className="flex items-center gap-2 flex-wrap">
+                      {formData.primary_contact_flagged && (
+                        <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> Incorrect
+                        </span>
+                      )}
+                      {(isEditing ? formData.hrPhone : company.hrPhone) || 'Not provided'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -625,38 +671,21 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                   <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Email</label>
                   <div className="mt-1 flex items-center gap-2 text-slate-900">
                     <Mail className="w-4 h-4 text-slate-400" />
-                    {isEditing ? (
-                      <input 
-                        type="email" 
-                        value={formData.hrEmail || ''}
-                        onChange={e => setFormData({...formData, hrEmail: e.target.value})}
-                        className="flex-1 border border-slate-300 rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 text-sm"
-                      />
-                    ) : (
-                      <span className={`flex items-center gap-2 flex-wrap ${company.hrEmail ? "" : "text-slate-400 italic"}`}>
-                        {formData.primary_contact_flagged && (
-                          <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
-                            <XCircle className="w-3 h-3" /> Incorrect
-                          </span>
-                        )}
-                        {company.hrEmail || 'Not provided'}
-                      </span>
-                    )}
+                    <span className={`flex items-center gap-2 flex-wrap ${(isEditing ? formData.hrEmail : company.hrEmail) ? "" : "text-slate-400 italic"}`}>
+                      {formData.primary_contact_flagged && (
+                        <span className="bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1">
+                          <XCircle className="w-3 h-3" /> Incorrect
+                        </span>
+                      )}
+                      {(isEditing ? formData.hrEmail : company.hrEmail) || 'Not provided'}
+                    </span>
                   </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-500 uppercase tracking-wider">Notes</label>
-                  {isEditing ? (
-                    <textarea 
-                      value={formData.notes || ''}
-                      onChange={e => setFormData({...formData, notes: e.target.value})}
-                      className="mt-1 w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-indigo-500 text-sm min-h-[60px]"
-                    />
-                  ) : (
-                    <div className="mt-1 text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 min-h-[60px]">
-                      {company.notes || 'No notes available.'}
-                    </div>
-                  )}
+                  <div className="mt-1 text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 min-h-[60px]">
+                    {(isEditing ? formData.notes : company.notes) || 'No notes available.'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -680,122 +709,42 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
                 )}
               </div>
               
-              <div className="flex flex-col divide-y divide-slate-100">
+              <div className={isEditing ? "grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 bg-slate-50/50" : "flex flex-col divide-y divide-slate-100"}>
                 {isEditing ? (
-                  editExtraData.map((item, idx) => (
-                    <div key={item.id} className="flex flex-col sm:flex-row gap-3 p-4 hover:bg-slate-50/30 transition-colors items-start">
-                      <div className="w-full sm:w-1/3 shrink-0 space-y-2">
-                        <select
-                          value={item.typeKey}
-                          onChange={(e) => handleExtraDataChange(item.id, 'typeKey', e.target.value)}
-                          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 bg-white"
+                  editExtraData.map((item) => {
+                    const displayKey = item.typeKey === 'Custom' ? (item.customKey || 'New Custom Field') : (item.typeKey || 'New Field');
+                    return (
+                      <div key={item.id} className="relative group animate-in fade-in zoom-in-95 duration-200">
+                        <button
+                          onClick={() => {
+                            setTempExtraData({ ...item });
+                            setEditingExtraDataId(item.id);
+                          }}
+                          className="w-full flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:border-indigo-300 hover:bg-indigo-50/50 transition-all text-left bg-white shadow-sm"
                         >
-                          <option value="" disabled>Select Option</option>
-                          <option value="Drive Date">Drive Date</option>
-                          <option value="Package">Package</option>
-                          <option value="Eligible Branches">Eligible Branches</option>
-                          <option value="Role">Role</option>
-                          <option value="Custom">Other (Custom)</option>
-                        </select>
-                        {item.typeKey === 'Custom' && (
-                          <input 
-                            type="text" 
-                            value={item.customKey}
-                            onChange={(e) => handleExtraDataChange(item.id, 'customKey', e.target.value)}
-                            placeholder="Enter custom name"
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-700 bg-white"
-                          />
-                        )}
-                      </div>
-                      <div className="w-full sm:flex-1 flex items-start gap-2">
-                        {item.typeKey === 'Drive Date' ? (
-                          <input
-                            type="date"
-                            value={item.value}
-                            onChange={(e) => handleExtraDataChange(item.id, 'value', e.target.value)}
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 min-h-[42px]"
-                          />
-                        ) : item.typeKey === 'Eligible Branches' ? (
-                          (() => {
-                            const val = item.value || '';
-                            const isBTech = val.startsWith('B.Tech');
-                            const isMTech = val.startsWith('M.Tech');
-                            const isOpenToAll = val === 'Open to all';
-                            
-                            const currentProgram = isOpenToAll ? 'Open to all' : (isBTech ? 'B.Tech' : (isMTech ? 'M.Tech' : ''));
-                            const currentBranchesStr = (isBTech || isMTech) ? val.split(' - ')[1] || '' : '';
-                            const selectedBranches = currentBranchesStr ? currentBranchesStr.split(', ').filter(Boolean) : [];
-                            
-                            const handleProgramChange = (prog: string) => {
-                              if (prog === 'Open to all') {
-                                handleExtraDataChange(item.id, 'value', 'Open to all');
-                              } else {
-                                handleExtraDataChange(item.id, 'value', `${prog} - `);
-                              }
-                            };
-                            
-                            const toggleBranch = (branchName: string) => {
-                              let newBranches = [...selectedBranches];
-                              if (newBranches.includes(branchName)) {
-                                newBranches = newBranches.filter(b => b !== branchName);
-                              } else {
-                                newBranches.push(branchName);
-                              }
-                              handleExtraDataChange(item.id, 'value', `${currentProgram} - ${newBranches.join(', ')}`);
-                            };
-
-                            const availableBranches = currentProgram === 'M.Tech'
-                              ? ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE']
-                              : (branches?.filter((b: any) => b.name !== 'Central Admin' && !b.name.includes('M.Tech')).map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE']);
-
-                            return (
-                              <div className="space-y-3 p-3 bg-white border border-slate-200 rounded-lg w-full">
-                                <select 
-                                  value={currentProgram}
-                                  onChange={(e) => handleProgramChange(e.target.value)}
-                                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                                >
-                                  <option value="" disabled>Select Program</option>
-                                  <option value="Open to all">Open to all</option>
-                                  <option value="B.Tech">B.Tech</option>
-                                  <option value="M.Tech">M.Tech</option>
-                                </select>
-                                
-                                {(currentProgram === 'B.Tech' || currentProgram === 'M.Tech') && (
-                                  <div className="flex flex-wrap gap-2 pt-1">
-                                    {availableBranches.map((bName: string) => (
-                                      <button
-                                        key={bName}
-                                        type="button"
-                                        onClick={() => toggleBranch(bName)}
-                                        className={`px-2.5 py-1 text-xs font-medium rounded-full transition-colors border ${selectedBranches.includes(bName) ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                                      >
-                                        {bName}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()
-                        ) : (
-                          <textarea 
-                            value={item.value}
-                            onChange={(e) => handleExtraDataChange(item.id, 'value', e.target.value)}
-                            placeholder="Value"
-                            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 min-h-[42px]"
-                          />
-                        )}
-                        <button 
-                          onClick={() => handleRemoveExtraData(item.id)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 mt-0.5"
-                          title="Delete Field"
+                          <div className="min-w-0 flex-1 pr-4">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 truncate">{displayKey}</p>
+                            <p className="text-sm font-semibold text-slate-900 truncate">
+                              {item.value || <span className="text-slate-400 italic font-normal">Click to edit value</span>}
+                            </p>
+                          </div>
+                          <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                            <Edit2 className="w-4 h-4 text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                          </div>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveExtraData(item.id);
+                          }}
+                          className="absolute -top-2 -right-2 bg-red-100 text-red-600 p-1.5 rounded-full hover:bg-red-200 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
+                          title="Remove Field"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   Object.entries(company.extraData || {})
                     .filter(([k]) => {
@@ -1246,6 +1195,248 @@ export function PastCompanyDetailsModal({ isOpen, onClose, company }: PastCompan
           </button>
         </div>
       </div>
+
+      {/* Primary HR Edit Overlay */}
+      {isEditingPrimaryHR && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Edit2 className="w-5 h-5 text-indigo-600" />
+                Edit Primary HR
+              </h3>
+              <button onClick={() => setIsEditingPrimaryHR(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5 bg-slate-50/30">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                  <Wand2 className="w-16 h-16 text-blue-600" />
+                </div>
+                <label className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <Wand2 className="w-3.5 h-3.5" /> Smart Paste
+                </label>
+                <textarea
+                  value={smartPasteText}
+                  onChange={(e) => setSmartPasteText(e.target.value)}
+                  placeholder="Paste raw text containing name, email, or phone... (e.g., 'John Doe john@example.com +91 9876543210')"
+                  className="w-full text-sm border-0 bg-white/60 focus:bg-white rounded-lg p-3 min-h-[80px] resize-y placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 transition-all backdrop-blur-sm"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1 block">Name</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={tempPrimaryHR.name}
+                      onChange={(e) => setTempPrimaryHR({ ...tempPrimaryHR, name: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+                      placeholder="HR Name"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1 block">Email</label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      value={tempPrimaryHR.email}
+                      onChange={(e) => setTempPrimaryHR({ ...tempPrimaryHR, email: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+                      placeholder="Email Address"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-1 block">Phone</label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={tempPrimaryHR.phone}
+                      onChange={(e) => setTempPrimaryHR({ ...tempPrimaryHR, phone: e.target.value })}
+                      className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-white"
+                      placeholder="Phone Number"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-white">
+              <button onClick={() => setIsEditingPrimaryHR(false)} className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setFormData({
+                    ...formData,
+                    hrName: tempPrimaryHR.name,
+                    hrPhone: tempPrimaryHR.phone,
+                    hrEmail: tempPrimaryHR.email
+                  });
+                  setIsEditingPrimaryHR(false);
+                }} 
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" /> Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Extra Data Edit Overlay */}
+      {editingExtraDataId !== null && tempExtraData !== null && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/50">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                Edit Detail
+              </h3>
+              <button onClick={() => setEditingExtraDataId(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5 bg-slate-50/30">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Field Type</label>
+                <select
+                  value={tempExtraData.typeKey}
+                  onChange={(e) => setTempExtraData({ ...tempExtraData, typeKey: e.target.value })}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800 bg-white shadow-sm"
+                >
+                  <option value="" disabled>Select Option</option>
+                  <option value="Drive Date">Drive Date</option>
+                  <option value="Package">Package</option>
+                  <option value="Eligible Branches">Eligible Branches</option>
+                  <option value="Role">Role</option>
+                  <option value="Custom">Other (Custom)</option>
+                </select>
+              </div>
+
+              {tempExtraData.typeKey === 'Custom' && (
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Custom Field Name</label>
+                  <input 
+                    type="text" 
+                    value={tempExtraData.customKey}
+                    onChange={(e) => setTempExtraData({ ...tempExtraData, customKey: e.target.value })}
+                    placeholder="Enter custom name"
+                    className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800 bg-white shadow-sm"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Field Value</label>
+                {tempExtraData.typeKey === 'Drive Date' ? (
+                  <input
+                    type="date"
+                    value={tempExtraData.value}
+                    onChange={(e) => setTempExtraData({ ...tempExtraData, value: e.target.value })}
+                    className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800 bg-white shadow-sm"
+                  />
+                ) : tempExtraData.typeKey === 'Eligible Branches' ? (
+                  (() => {
+                    const val = tempExtraData.value || '';
+                    const isBTech = val.startsWith('B.Tech');
+                    const isMTech = val.startsWith('M.Tech');
+                    const isOpenToAll = val === 'Open to all';
+                    
+                    const currentProgram = isOpenToAll ? 'Open to all' : (isBTech ? 'B.Tech' : (isMTech ? 'M.Tech' : ''));
+                    const currentBranchesStr = (isBTech || isMTech) ? val.split(' - ')[1] || '' : '';
+                    const selectedBranches = currentBranchesStr ? currentBranchesStr.split(', ').filter(Boolean) : [];
+                    
+                    const handleProgramChange = (prog: string) => {
+                      if (prog === 'Open to all') {
+                        setTempExtraData({ ...tempExtraData, value: 'Open to all' });
+                      } else {
+                        setTempExtraData({ ...tempExtraData, value: `${prog} - ` });
+                      }
+                    };
+                    
+                    const toggleBranch = (branchName: string) => {
+                      let newBranches = [...selectedBranches];
+                      if (newBranches.includes(branchName)) {
+                        newBranches = newBranches.filter(b => b !== branchName);
+                      } else {
+                        newBranches.push(branchName);
+                      }
+                      setTempExtraData({ ...tempExtraData, value: `${currentProgram} - ${newBranches.join(', ')}` });
+                    };
+
+                    const availableBranches = currentProgram === 'M.Tech'
+                      ? ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE']
+                      : (branches?.filter((b: any) => b.name !== 'Central Admin' && !b.name.includes('M.Tech')).map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE']);
+
+                    return (
+                      <div className="space-y-4 p-4 bg-white border border-slate-200 rounded-xl shadow-sm w-full">
+                        <select 
+                          value={currentProgram}
+                          onChange={(e) => handleProgramChange(e.target.value)}
+                          className="w-full px-4 py-3 text-sm bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-medium text-slate-800"
+                        >
+                          <option value="" disabled>Select Program</option>
+                          <option value="Open to all">Open to all</option>
+                          <option value="B.Tech">B.Tech</option>
+                          <option value="M.Tech">M.Tech</option>
+                        </select>
+                        
+                        {(currentProgram === 'B.Tech' || currentProgram === 'M.Tech') && (
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            {availableBranches.map((bName: string) => (
+                              <button
+                                key={bName}
+                                type="button"
+                                onClick={() => toggleBranch(bName)}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-full transition-all border ${selectedBranches.includes(bName) ? 'bg-indigo-100 text-indigo-700 border-indigo-200 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                              >
+                                {bName}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <textarea 
+                    value={tempExtraData.value}
+                    onChange={(e) => setTempExtraData({ ...tempExtraData, value: e.target.value })}
+                    placeholder="Enter value..."
+                    className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800 bg-white min-h-[100px] shadow-sm"
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-white">
+              <button onClick={() => setEditingExtraDataId(null)} className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setEditExtraData(editExtraData.map(item => item.id === editingExtraDataId ? tempExtraData : item));
+                  setEditingExtraDataId(null);
+                }} 
+                className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Save className="w-4 h-4" /> Save Detail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 }

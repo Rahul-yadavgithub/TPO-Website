@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
-import { X, CheckCircle2, Loader2, Calendar, PhoneCall, Mail, User, History, GitMerge, ShieldAlert, Edit2, Save, FileText } from 'lucide-react';
+import { X, CheckCircle2, Loader2, Calendar, PhoneCall, Mail, User, History, GitMerge, ShieldAlert, Edit2, Save, FileText, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -22,6 +22,12 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   const [isEditingPlacement, setIsEditingPlacement] = useState(false);
   const [editDriveType, setEditDriveType] = useState('');
   const [editAcademicYear, setEditAcademicYear] = useState('');
+
+  // Editing Company Details State
+  const [isEditingCompanyDetails, setIsEditingCompanyDetails] = useState(false);
+  const [editingExtraDataId, setEditingExtraDataId] = useState<string | null>(null);
+  const [tempExtraData, setTempExtraData] = useState<any>(null);
+  const [editExtraData, setEditExtraData] = useState<any[]>([]);
 
   const [localCompany, setLocalCompany] = useState(company);
 
@@ -64,7 +70,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
 
   const [assignBranchId, setAssignBranchId] = useState('');
   const [assignProgram, setAssignProgram] = useState('');
-  
+
   const [assignMode, setAssignMode] = useState<'branch' | 'tpo'>('branch');
   const [assignTpoType, setAssignTpoType] = useState<'Faculty' | 'Staff' | ''>('');
   const [assignTpoName, setAssignTpoName] = useState('');
@@ -82,23 +88,23 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
 
   const assignMutation = useMutation({
     mutationFn: async () => {
-      const payload = assignMode === 'branch' 
+      const payload = assignMode === 'branch'
         ? {
-            branch_id: assignBranchId,
-            program: assignProgram,
-            extractedData: pendingDuplicateData || null
-          }
+          branch_id: assignBranchId,
+          program: assignProgram,
+          extractedData: pendingDuplicateData || null
+        }
         : {
-            tpoType: assignTpoType,
-            assignedTPO: assignTpoName,
-            extractedData: pendingDuplicateData || null
-          };
+          tpoType: assignTpoType,
+          assignedTPO: assignTpoName,
+          extractedData: pendingDuplicateData || null
+        };
       const res = await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company._id}/override-assign`, payload, { withCredentials: true });
       return res.data;
     },
     onSuccess: () => {
       toast.success(pendingDuplicateData ? 'Company overridden and assigned successfully!' : 'Assignment updated successfully!');
-      
+
       if (assignMode === 'branch') {
         const branchName = branches?.find((b: any) => b._id === assignBranchId)?.name;
         if (branchName) {
@@ -109,7 +115,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
       }
 
       queryClient.invalidateQueries({ queryKey: ['companies-branch-overview'] });
-      
+
       if (pendingDuplicateData && onAssignComplete) {
         onAssignComplete();
       }
@@ -137,9 +143,28 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
     }
   });
 
+  const updateCompanyDetailsMutation = useMutation({
+    mutationFn: async (payloadExtraData: Record<string, string>) => {
+      const res = await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/companies/${company._id}/placement-details`, {
+        extraData: payloadExtraData
+      }, { withCredentials: true });
+      return res.data;
+    },
+    onSuccess: (updatedCompany) => {
+      toast.success('Company details updated!');
+      setIsEditingCompanyDetails(false);
+      setLocalCompany(updatedCompany);
+      queryClient.invalidateQueries({ queryKey: ['companies-branch-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['external-insights', company._id] });
+    },
+    onError: () => {
+      toast.error('Failed to update company details');
+    }
+  });
+
   if (!isOpen || !company) return null;
 
-  const hrContacts = [
+  let hrContacts = [
     ...(company.hr_contacts || []),
     ...(company.additionalContacts || []).map((ac: any, idx: number) => ({
       _id: ac._id || `addl-${idx}`,
@@ -153,7 +178,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
     }))
   ];
   const contactLogs = company.contact_logs || [];
-  
+
   const latestLog = contactLogs.length > 0 ? contactLogs.reduce((latest: any, current: any) => {
     return new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest;
   }, contactLogs[0]) : null;
@@ -169,7 +194,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
     return keys.find(k => {
       const lowerK = k.toLowerCase();
       if (exactMatch) {
-         return keywords.some(kw => lowerK === kw.toLowerCase());
+        return keywords.some(kw => lowerK === kw.toLowerCase());
       }
       return keywords.every(kw => lowerK.includes(kw.toLowerCase()));
     });
@@ -185,13 +210,13 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   const localYearsVisitedKey = findKey(extraData, ['visit']) || findKey(extraData, ['year'], true);
   const extYearsVisitedKey = findKey(rawExternalData, ['visit']) || findKey(rawExternalData, ['year'], true);
   const pastYearsVisitedKey = findKey(rawPastData, ['visit']) || findKey(rawPastData, ['year'], true);
-  const yearsVisitedVal = localYearsVisitedKey ? extraData[localYearsVisitedKey] : (extYearsVisitedKey ? rawExternalData[extYearsVisitedKey] : (pastYearsVisitedKey ? rawPastData[pastYearsVisitedKey] : null));
+  const yearsVisitedVal = localYearsVisitedKey ? extraData[localYearsVisitedKey] : (extYearsVisitedKey ? rawExternalData[extYearsVisitedKey] : (pastYearsVisitedKey ? rawPastData[pastYearsVisitedKey] : (rawPastData?.academic_year || null)));
 
   const localCtcKey = findKey(extraData, ['package'], true) || findKey(extraData, ['ctc'], true) || findKey(extraData, ['salary'], true) || findKey(extraData, ['ctc']);
   const localBranchesKey = findKey(extraData, ['branch']);
 
   const mergedCtc = externalInsights?.currentYear?.ctc || externalInsights?.pastYear?.ctc || (localCtcKey ? extraData[localCtcKey] : null) || 'Not Specified';
-  
+
   let mergedBranches = 'Not Specified';
   if (externalInsights?.currentYear?.eligibleBranches?.length > 0) {
     mergedBranches = externalInsights.currentYear.eligibleBranches.join(', ');
@@ -205,11 +230,51 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   const usedExtKeys = new Set([extDriveDateKey, extYearsVisitedKey].filter(Boolean));
   const usedPastKeys = new Set([pastDriveDateKey, pastYearsVisitedKey, findKey(rawPastData, ['package'], true), findKey(rawPastData, ['eligible branches'], true)].filter(Boolean));
 
-  const isHrContact = (k: string) => /^OTHER HR NAME\s*(\d*)$/i.test(k) || 
-                                     /^OTHER HR EMAIL\s*(\d*)$/i.test(k) || /^OTHER HR MAIL\s*(\d*)$/i.test(k) || 
-                                     /^OTHER HR MOBILE\s*(\d*)$/i.test(k) || /^OTHER HR PHONE\s*(\d*)$/i.test(k) || /^OTHER HR NUMBER\s*(\d*)$/i.test(k) || 
-                                     /^OTHER HR VERIFIED\s*(\d*)$/i.test(k) || 
-                                     /^OTHER HR FLAGGED\s*(\d*)$/i.test(k);
+  // Extract Past Primary HR
+  const pastPrimaryHrNameKey = findKey(rawPastData, ['hr name'], true) || findKey(rawPastData, ['name'], true);
+  const pastPrimaryHrEmailKey = findKey(rawPastData, ['email'], true) || findKey(rawPastData, ['mail'], true);
+  const pastPrimaryHrPhoneKey = findKey(rawPastData, ['phone'], true) || findKey(rawPastData, ['mobile'], true) || findKey(rawPastData, ['number'], true);
+
+  if (pastPrimaryHrNameKey || pastPrimaryHrEmailKey || pastPrimaryHrPhoneKey) {
+    if (pastPrimaryHrNameKey) usedPastKeys.add(pastPrimaryHrNameKey);
+    if (pastPrimaryHrEmailKey) usedPastKeys.add(pastPrimaryHrEmailKey);
+    if (pastPrimaryHrPhoneKey) usedPastKeys.add(pastPrimaryHrPhoneKey);
+
+    hrContacts.push({
+      _id: 'past-primary',
+      name: pastPrimaryHrNameKey ? rawPastData[pastPrimaryHrNameKey] : 'Unknown',
+      email: pastPrimaryHrEmailKey ? rawPastData[pastPrimaryHrEmailKey] : '',
+      mobile: pastPrimaryHrPhoneKey ? rawPastData[pastPrimaryHrPhoneKey] : '',
+      designation: 'HR (Past DB)',
+      is_past: true
+    });
+  }
+
+  // Extract Local Primary HR from extraData
+  const localPrimaryHrNameKey = findKey(extraData, ['hr name'], true) || findKey(extraData, ['name'], true);
+  const localPrimaryHrEmailKey = findKey(extraData, ['email'], true) || findKey(extraData, ['mail'], true);
+  const localPrimaryHrPhoneKey = findKey(extraData, ['phone'], true) || findKey(extraData, ['mobile'], true) || findKey(extraData, ['number'], true);
+
+  if (localPrimaryHrNameKey || localPrimaryHrEmailKey || localPrimaryHrPhoneKey) {
+    if (localPrimaryHrNameKey) usedLocalKeys.add(localPrimaryHrNameKey);
+    if (localPrimaryHrEmailKey) usedLocalKeys.add(localPrimaryHrEmailKey);
+    if (localPrimaryHrPhoneKey) usedLocalKeys.add(localPrimaryHrPhoneKey);
+
+    hrContacts.push({
+      _id: 'local-primary',
+      name: localPrimaryHrNameKey ? extraData[localPrimaryHrNameKey] : 'Unknown',
+      email: localPrimaryHrEmailKey ? extraData[localPrimaryHrEmailKey] : '',
+      mobile: localPrimaryHrPhoneKey ? extraData[localPrimaryHrPhoneKey] : '',
+      designation: 'HR (Custom Field)',
+      is_past: false
+    });
+  }
+
+  const isHrContact = (k: string) => /^OTHER HR NAME\s*(\d*)$/i.test(k) ||
+    /^OTHER HR EMAIL\s*(\d*)$/i.test(k) || /^OTHER HR MAIL\s*(\d*)$/i.test(k) ||
+    /^OTHER HR MOBILE\s*(\d*)$/i.test(k) || /^OTHER HR PHONE\s*(\d*)$/i.test(k) || /^OTHER HR NUMBER\s*(\d*)$/i.test(k) ||
+    /^OTHER HR VERIFIED\s*(\d*)$/i.test(k) ||
+    /^OTHER HR FLAGGED\s*(\d*)$/i.test(k);
 
   const remainingExtraData = Object.entries(extraData).filter(([k]) => !usedLocalKeys.has(k) && !isHrContact(k));
   const remainingRawExternal = Object.entries(rawExternalData).filter(([k]) => !usedExtKeys.has(k));
@@ -217,7 +282,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-        
+
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-start sm:items-center justify-between bg-slate-50 gap-4">
           <div className="flex-1 min-w-0">
@@ -231,20 +296,20 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                 )}
                 {callingStatus && (
                   <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider
-                    ${callingStatus === 'call_again' ? 'bg-amber-100 text-amber-800' : 
+                    ${callingStatus === 'call_again' ? 'bg-amber-100 text-amber-800' :
                       callingStatus === 'accepted' ? 'bg-green-100 text-green-800' :
-                      callingStatus === 'rejected' ? 'bg-red-100 text-red-800' : 
-                      callingStatus === 'brochure_jnf' ? (company.emailDeliveryStatus === 'sent' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800') :
-                      callingStatus === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
-                      'bg-slate-100 text-slate-800'}`}
+                        callingStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                          callingStatus === 'brochure_jnf' ? (company.emailDeliveryStatus === 'sent' ? 'bg-emerald-100 text-emerald-800' : 'bg-purple-100 text-purple-800') :
+                            callingStatus === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
+                              'bg-slate-100 text-slate-800'}`}
                   >
                     {callingStatus === 'brochure_jnf' && company.emailDeliveryStatus === 'sent' ? <CheckCircle2 className="w-3 h-3" /> : <PhoneCall className="w-3 h-3" />}
                     {callingStatus === 'brochure_jnf' ? (company.emailDeliveryStatus === 'sent' ? 'Brochure Sent' : 'Brochure + JNF') :
-                     callingStatus === 'tpo_talk' ? 'TPO Talk' :
-                     callingStatus === 'call_again' ? 'Call Again' :
-                     callingStatus === 'rejected' ? 'Rejected' :
-                     callingStatus === 'accepted' ? 'Accepted' :
-                     callingStatus}
+                      callingStatus === 'tpo_talk' ? 'TPO Talk' :
+                        callingStatus === 'call_again' ? 'Call Again' :
+                          callingStatus === 'rejected' ? 'Rejected' :
+                            callingStatus === 'accepted' ? 'Accepted' :
+                              callingStatus}
                   </span>
                 )}
                 {pendingDuplicateData && (
@@ -275,7 +340,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
-          
+
           {/* Assignment & Routing Section (Fold-in/Fold-out) */}
           <div className={`p-4 rounded-xl border transition-all duration-300 ${pendingDuplicateData ? 'bg-amber-50 border-amber-200' : 'bg-indigo-50 border-indigo-200'} ${isAssignOpen ? 'space-y-4' : ''}`}>
             <div className="flex justify-between items-start gap-4">
@@ -286,132 +351,129 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                 </h3>
                 {isAssignOpen && (
                   <p className={`text-xs mt-1 transition-opacity duration-300 ${pendingDuplicateData ? 'text-amber-700' : 'text-indigo-600'}`}>
-                    {pendingDuplicateData 
+                    {pendingDuplicateData
                       ? 'This company already exists. Select a branch or TPO and click Override to update its HR details with your new AI extraction and assign it.'
                       : 'Assign this company to a Branch TPR or a TPO (Faculty/Staff). A company can be assigned to both simultaneously for shared outreach.'}
                   </p>
                 )}
               </div>
-              <button 
+              <button
                 onClick={() => setIsAssignOpen(!isAssignOpen)}
-                className={`shrink-0 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-2 ${
-                  isAssignOpen 
-                    ? 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300' 
+                className={`shrink-0 px-4 py-2 text-xs font-bold rounded-lg transition-all shadow-sm flex items-center gap-2 ${isAssignOpen
+                    ? 'bg-slate-200 text-slate-700 hover:bg-slate-300 border border-slate-300'
                     : 'bg-indigo-600 text-white hover:bg-indigo-700 border border-indigo-600'
-                }`}
+                  }`}
               >
                 {isAssignOpen ? 'Close' : 'Assign'}
               </button>
             </div>
-            
+
             {isAssignOpen && (
               <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4 pt-2">
                 <div className="flex gap-2 bg-white/50 p-1 rounded-lg border border-slate-200 mb-1 w-fit">
-              <button
-                onClick={() => setAssignMode('branch')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'branch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
-              >
-                Assign to Branch
-              </button>
-              <button
-                onClick={() => setAssignMode('tpo')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'tpo' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
-              >
-                Assign to TPO
-              </button>
-            </div>
+                  <button
+                    onClick={() => setAssignMode('branch')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'branch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+                  >
+                    Assign to Branch
+                  </button>
+                  <button
+                    onClick={() => setAssignMode('tpo')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${assignMode === 'tpo' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
+                  >
+                    Assign to TPO
+                  </button>
+                </div>
 
-            {assignMode === 'branch' ? (
-              <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
-                <select 
-                  value={assignProgram}
-                  onChange={(e) => {
-                    setAssignProgram(e.target.value);
-                    setAssignBranchId('');
-                  }}
-                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                >
-                  <option value="" disabled>Select Course...</option>
-                  <option value="B.Tech">B.Tech</option>
-                  <option value="M.Tech">M.Tech</option>
-                </select>
-                <select 
-                  value={assignBranchId}
-                  onChange={(e) => setAssignBranchId(e.target.value)}
-                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                >
-                  <option value="" disabled>Select Branch...</option>
-                  {assignProgram === 'M.Tech' ? (
-                    ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
-                      const branch = branches?.find((b: any) => b.name === name);
-                      if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
-                      return null;
-                    })
-                  ) : (
-                    branches
-                      ?.filter((b: any) => b.name !== 'Central Admin')
-                      .filter((b: any) => {
-                        if (assignProgram === 'B.Tech') {
-                          return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
-                        }
-                        return true;
-                      })
-                      .map((b: any) => (
-                        <option key={b._id} value={b._id}>{b.name}</option>
-                      ))
-                  )}
-                </select>
-                <button
-                  onClick={() => assignMutation.mutate()}
-                  disabled={!assignBranchId || !assignProgram || assignMutation.isPending}
-                  className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                    pendingDuplicateData 
-                      ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
-                      : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
-                  }`}
-                >
-                  {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
-                </button>
-              </div>
-            ) : (
-              <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
-                <select
-                  value={assignTpoType}
-                  onChange={(e) => {
-                    setAssignTpoType(e.target.value as 'Faculty' | 'Staff');
-                    setAssignTpoName('');
-                  }}
-                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
-                >
-                  <option value="" disabled>Select Category...</option>
-                  <option value="Faculty">Faculty</option>
-                  <option value="Staff">Staff</option>
-                </select>
-                <select
-                  value={assignTpoName}
-                  onChange={(e) => setAssignTpoName(e.target.value)}
-                  disabled={!assignTpoType}
-                  className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px] disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="" disabled>Select Name...</option>
-                  {assignTpoType === 'Faculty' && facultyTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)}
-                  {assignTpoType === 'Staff' && staffTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)}
-                </select>
-                <button
-                  onClick={() => assignMutation.mutate()}
-                  disabled={!assignTpoType || !assignTpoName || assignMutation.isPending}
-                  className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                    pendingDuplicateData 
-                      ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300' 
-                      : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
-                  }`}
-                >
-                  {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
-                </button>
-              </div>
-            )}
+                {assignMode === 'branch' ? (
+                  <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
+                    <select
+                      value={assignProgram}
+                      onChange={(e) => {
+                        setAssignProgram(e.target.value);
+                        setAssignBranchId('');
+                      }}
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                    >
+                      <option value="" disabled>Select Course...</option>
+                      <option value="B.Tech">B.Tech</option>
+                      <option value="M.Tech">M.Tech</option>
+                    </select>
+                    <select
+                      value={assignBranchId}
+                      onChange={(e) => setAssignBranchId(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                    >
+                      <option value="" disabled>Select Branch...</option>
+                      {assignProgram === 'M.Tech' ? (
+                        ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE'].map(name => {
+                          const branch = branches?.find((b: any) => b.name === name);
+                          if (branch) return <option key={branch._id} value={branch._id}>{branch.name}</option>;
+                          return null;
+                        })
+                      ) : (
+                        branches
+                          ?.filter((b: any) => b.name !== 'Central Admin')
+                          .filter((b: any) => {
+                            if (assignProgram === 'B.Tech') {
+                              return !b.name.toLowerCase().includes('m.tech') && !b.name.toLowerCase().includes('mtech');
+                            }
+                            return true;
+                          })
+                          .map((b: any) => (
+                            <option key={b._id} value={b._id}>{b.name}</option>
+                          ))
+                      )}
+                    </select>
+                    <button
+                      onClick={() => assignMutation.mutate()}
+                      disabled={!assignBranchId || !assignProgram || assignMutation.isPending}
+                      className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${pendingDuplicateData
+                          ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300'
+                          : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
+                        }`}
+                    >
+                      {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 items-center flex-wrap sm:flex-nowrap">
+                    <select
+                      value={assignTpoType}
+                      onChange={(e) => {
+                        setAssignTpoType(e.target.value as 'Faculty' | 'Staff');
+                        setAssignTpoName('');
+                      }}
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px]"
+                    >
+                      <option value="" disabled>Select Category...</option>
+                      <option value="Faculty">Faculty</option>
+                      <option value="Staff">Staff</option>
+                    </select>
+                    <select
+                      value={assignTpoName}
+                      onChange={(e) => setAssignTpoName(e.target.value)}
+                      disabled={!assignTpoType}
+                      className="flex-1 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all min-w-[140px] disabled:bg-slate-50 disabled:text-slate-400"
+                    >
+                      <option value="" disabled>Select Name...</option>
+                      {assignTpoType === 'Faculty' && facultyTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)}
+                      {assignTpoType === 'Staff' && staffTpos.map((t: any) => <option key={t._id} value={t.name}>{t.name}</option>)}
+                    </select>
+                    <button
+                      onClick={() => assignMutation.mutate()}
+                      disabled={!assignTpoType || !assignTpoName || assignMutation.isPending}
+                      className={`px-4 py-2 text-white text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${pendingDuplicateData
+                          ? 'bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300'
+                          : 'bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300'
+                        }`}
+                    >
+                      {assignMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {pendingDuplicateData ? 'Override & Assign' : 'Assign Now'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -420,7 +482,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                <User className="w-4 h-4 text-indigo-500" /> 
+                <User className="w-4 h-4 text-indigo-500" />
                 TPR Information
               </h3>
               <div className="space-y-2">
@@ -450,12 +512,12 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm relative group">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-500" /> 
+                  <Calendar className="w-4 h-4 text-indigo-500" />
                   Placement Details
                 </h3>
                 {isEditingPlacement ? (
                   <div className="flex items-center gap-2">
-                    <button 
+                    <button
                       onClick={() => setIsEditingPlacement(false)}
                       className="text-[10px] text-slate-500 hover:text-slate-700 font-semibold uppercase tracking-wider"
                     >
@@ -470,7 +532,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                     </button>
                   </div>
                 ) : (
-                  <button 
+                  <button
                     onClick={() => {
                       setIsEditingPlacement(true);
                       setEditDriveType(company.drive_type || '');
@@ -500,7 +562,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500">Drive Type:</span>
                   {isEditingPlacement ? (
-                    <select 
+                    <select
                       value={editDriveType}
                       onChange={(e) => setEditDriveType(e.target.value)}
                       className="bg-white border border-indigo-300 text-sm font-semibold text-slate-800 rounded-lg p-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:outline-none shadow-sm"
@@ -518,89 +580,110 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             </div>
           </div>
 
-          {/* Additional Company Details (Merged) */}
-          {((loadingInsights) || remainingExtraData.length > 0 || remainingRawExternal.length > 0 || mergedCtc !== 'Not Specified' || externalInsights?.driveStatus) && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-indigo-600" />
-                  <h3 className="text-lg font-bold text-slate-900">Additional Company Details</h3>
-                </div>
+          {/* Company Details */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-lg font-bold text-slate-900">Company Details</h3>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 {yearsVisitedVal && (
-                  <span className="inline-flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                    <Calendar className="w-3.5 h-3.5" /> Previously Visited: {String(yearsVisitedVal)}
+                  <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-700 text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-sm animate-in fade-in zoom-in duration-300">
+                    <History className="w-3.5 h-3.5 text-amber-500" /> Previously Visited: {String(yearsVisitedVal)}
                   </span>
                 )}
-              </div>
-              
-              <div className="p-5">
-                {loadingInsights ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Key Metrics Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {externalInsights?.driveStatus && (
-                        <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">External Drive Status</p>
-                          <p className="font-semibold text-indigo-700">{externalInsights.driveStatus}</p>
-                        </div>
-                      )}
+                <button
+                  onClick={() => {
+                    const genericExtra: any[] = [];
+                    Object.entries(localCompany.extraData || {}).forEach(([k, v]) => {
+                      if (!isHrContact(k) && !k.toLowerCase().includes('hr name') && !k.toLowerCase().includes('email') && !k.toLowerCase().includes('phone') && !k.toLowerCase().includes('mobile')) {
+                        const isPredefined = ['Drive Date', 'Package', 'Eligible Branches', 'Role', 'Drive Status', 'Visited Year'].includes(k);
+                        genericExtra.push({
+                          id: `extra-${Date.now()}-${Math.random()}`,
+                          typeKey: isPredefined ? k : 'Custom',
+                          customKey: isPredefined ? '' : k,
+                          value: typeof v === 'object' ? JSON.stringify(v) : String(v)
+                        });
+                      }
+                    });
 
-                      
-                      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">CTC</p>
-                        <p className="font-semibold text-slate-900">{mergedCtc}</p>
-                      </div>
+                    ['Drive Date', 'Package', 'Eligible Branches', 'Role', 'Drive Status', 'Visited Year'].forEach(k => {
+                      if (!genericExtra.find(e => e.typeKey === k)) {
+                        genericExtra.push({
+                          id: `extra-${Date.now()}-${Math.random()}`,
+                          typeKey: k,
+                          customKey: '',
+                          value: ''
+                        });
+                      }
+                    });
 
-                      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Eligible Branches</p>
-                        <p className="font-semibold text-slate-900">{mergedBranches}</p>
-                      </div>
-                    </div>
-
-                    {/* Remaining Details List */}
-                    {(remainingExtraData.length > 0 || remainingRawExternal.length > 0 || remainingRawPast.length > 0) && (
-                      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col divide-y divide-slate-100">
-                        {remainingRawExternal.map(([key, value], idx) => {
-                          const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, str => str.toUpperCase()).trim();
-                          let formattedValue = String(value);
-                          if (Array.isArray(value)) formattedValue = value.join(', ');
-                          else if (typeof value === 'boolean') formattedValue = value ? 'Yes' : 'No';
-                          else if (typeof value === 'object' && value !== null) formattedValue = JSON.stringify(value);
-                          
-                          return (
-                            <div key={`ext-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-3 hover:bg-slate-50/30 transition-colors">
-                              <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{formattedKey} <span className="text-[9px] uppercase bg-indigo-50 text-indigo-600 px-1 rounded ml-1">Platform</span></div>
-                              <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">{formattedValue}</div>
-                            </div>
-                          );
-                        })}
-                        {remainingRawPast.map(([key, value], idx) => (
-                          <div key={`past-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-3 hover:bg-slate-50/30 transition-colors">
-                            <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{key} <span className="text-[9px] uppercase bg-amber-50 text-amber-600 px-1 rounded ml-1">Past DB</span></div>
-                            <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">
-                              {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                            </div>
-                          </div>
-                        ))}
-                        {remainingExtraData.map(([key, value], idx) => (
-                          <div key={`loc-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 py-3 hover:bg-slate-50/30 transition-colors">
-                            <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{key}</div>
-                            <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">
-                              {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                    setEditExtraData(genericExtra);
+                    setIsEditingCompanyDetails(true);
+                  }}
+                  className="flex items-center gap-1 text-[10px] uppercase font-bold text-green-700 bg-green-100 hover:bg-green-600 hover:text-white border border-green-200 hover:border-green-600 px-3 py-1.5 rounded-full shadow-sm transition-all ml-auto sm:ml-0"
+                >
+                  <Edit2 className="w-3 h-3" /> Edit
+                </button>
               </div>
             </div>
-          )}
+
+            <div className="p-5">
+              {loadingInsights ? (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {externalInsights?.driveStatus && (
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">External Drive Status</p>
+                      <p className="font-semibold text-indigo-700">{externalInsights.driveStatus}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">CTC (Package)</p>
+                    <p className="font-semibold text-slate-900">{mergedCtc}</p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Eligible Branches</p>
+                    <p className="font-semibold text-slate-900">{mergedBranches}</p>
+                  </div>
+
+                  {driveDateVal && (
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Drive Date</p>
+                      <p className="font-semibold text-slate-900">{String(driveDateVal)}</p>
+                    </div>
+                  )}
+
+                  {localCompany.extraData?.['Role'] && (
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Role</p>
+                      <p className="font-semibold text-slate-900">{String(localCompany.extraData['Role'])}</p>
+                    </div>
+                  )}
+
+                  {localCompany.extraData?.['Drive Status'] && (
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Local Drive Status</p>
+                      <p className="font-semibold text-slate-900">{String(localCompany.extraData['Drive Status'])}</p>
+                    </div>
+                  )}
+                  
+                  {localCompany.extraData?.['Visited Year'] && !yearsVisitedVal && (
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg shadow-sm">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Visited Year</p>
+                      <p className="font-semibold text-slate-900">{String(localCompany.extraData['Visited Year'])}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* HR Contacts */}
           <div>
@@ -615,6 +698,11 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                       {(hr.is_additional && !hr.is_incorrect) && (
                         <div className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-blue-200">
                           Additional Contact
+                        </div>
+                      )}
+                      {hr.is_past && (
+                        <div className="flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[10px] font-bold shadow-sm border border-amber-200">
+                          PAST DB
                         </div>
                       )}
                       {(hr.is_verified && !hr.is_incorrect) && (
@@ -650,6 +738,47 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             )}
           </div>
 
+          {/* Extra Details */}
+          {(remainingExtraData.length > 0 || remainingRawExternal.length > 0 || remainingRawPast.length > 0) && (
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-indigo-600" /> Extra Details
+              </h3>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col divide-y divide-slate-100">
+                {remainingRawExternal.map(([key, value], idx) => {
+                  const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, str => str.toUpperCase()).trim();
+                  let formattedValue = String(value);
+                  if (Array.isArray(value)) formattedValue = value.join(', ');
+                  else if (typeof value === 'boolean') formattedValue = value ? 'Yes' : 'No';
+                  else if (typeof value === 'object' && value !== null) formattedValue = JSON.stringify(value);
+
+                  return (
+                    <div key={`ext-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 p-4 hover:bg-slate-50/30 transition-colors">
+                      <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{formattedKey} <span className="text-[9px] uppercase bg-indigo-50 text-indigo-600 px-1 rounded ml-1">Platform</span></div>
+                      <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">{formattedValue}</div>
+                    </div>
+                  );
+                })}
+                {remainingRawPast.map(([key, value], idx) => (
+                  <div key={`past-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 p-4 hover:bg-slate-50/30 transition-colors">
+                    <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{key} <span className="text-[9px] uppercase bg-amber-50 text-amber-600 px-1 rounded ml-1">Past DB</span></div>
+                    <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">
+                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                    </div>
+                  </div>
+                ))}
+                {remainingExtraData.map(([key, value], idx) => (
+                  <div key={`loc-${idx}`} className="flex flex-col sm:flex-row gap-1 sm:gap-4 p-4 hover:bg-slate-50/30 transition-colors">
+                    <div className="w-full sm:w-1/3 font-medium text-slate-600 text-sm">{key}</div>
+                    <div className="w-full sm:flex-1 text-slate-900 text-sm whitespace-pre-wrap break-words">
+                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* View Interactions Button */}
           <div className="pt-4 border-t border-slate-100">
             <button
@@ -663,7 +792,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
 
         {/* Footer */}
         <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-          <button 
+          <button
             onClick={onClose}
             className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-100 transition-colors"
           >
@@ -685,8 +814,8 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
       {/* Slide-over Panel for Interaction History */}
       {showInteractionPanel && (
         <>
-          <div 
-            className="fixed inset-0 bg-slate-900/20 z-[60] backdrop-blur-sm animate-in fade-in duration-200" 
+          <div
+            className="fixed inset-0 bg-slate-900/20 z-[60] backdrop-blur-sm animate-in fade-in duration-200"
             onClick={() => setShowInteractionPanel(false)}
           />
           <div className="fixed inset-y-0 right-0 z-[70] w-full max-w-md bg-slate-50 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
@@ -698,7 +827,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                 <X className="w-5 h-5 text-slate-500" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {contactLogs.length > 0 ? (
                 // Sort logs by newest first
@@ -707,49 +836,50 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
                   const canViewFullLog = !isTpoLog || log.show_to_tpr;
 
                   return (
-                  <div key={log._id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-                    {canViewFullLog ? (
-                      <>
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{log.created_by}</p>
-                            <p className="text-xs font-medium text-slate-500">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
+                    <div key={log._id} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+                      {canViewFullLog ? (
+                        <>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{log.created_by}</p>
+                              <p className="text-xs font-medium text-slate-500">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                            ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' :
+                                log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
+                                  log.outcome === 'rejected' ? 'bg-red-100 text-red-800' :
+                                    log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
+                                      log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
+                                        'bg-slate-100 text-slate-800'}`}
+                            >
+                              {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
+                                log.outcome === 'tpo_talk' ? 'TPO Talk' :
+                                  log.outcome === 'call_again' ? 'Call Again' :
+                                    log.outcome === 'rejected' ? 'Rejected' :
+                                      log.outcome === 'accepted' ? 'Accepted' :
+                                        log.outcome || 'Logged'}
+                            </span>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
-                            ${log.outcome === 'call_again' ? 'bg-amber-100 text-amber-800' : 
-                              log.outcome === 'accepted' ? 'bg-green-100 text-green-800' :
-                              log.outcome === 'rejected' ? 'bg-red-100 text-red-800' : 
-                              log.outcome === 'brochure_jnf' ? 'bg-purple-100 text-purple-800' :
-                              log.outcome === 'tpo_talk' ? 'bg-indigo-100 text-indigo-800' :
-                              'bg-slate-100 text-slate-800'}`}
-                          >
-                            {log.outcome === 'brochure_jnf' ? 'Brochure + JNF' :
-                             log.outcome === 'tpo_talk' ? 'TPO Talk' :
-                             log.outcome === 'call_again' ? 'Call Again' :
-                             log.outcome === 'rejected' ? 'Rejected' :
-                             log.outcome === 'accepted' ? 'Accepted' :
-                             log.outcome || 'Logged'}
+                          <div className="mt-3">
+                            <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{log.notes || 'No notes provided.'}</p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="flex justify-between items-start">
+                          <div className="flex flex-col">
+                            <p className="text-xs font-medium text-slate-500 mb-2">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
+                            <p className="text-sm text-slate-800">
+                              This company was called by TPO Staff <span className="font-semibold text-indigo-600">{log.tpo_name}</span>.
+                            </p>
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800">
+                            TPO Call
                           </span>
                         </div>
-                        <div className="mt-3">
-                          <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100">{log.notes || 'No notes provided.'}</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex justify-between items-start">
-                        <div className="flex flex-col">
-                          <p className="text-xs font-medium text-slate-500 mb-2">{format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}</p>
-                          <p className="text-sm text-slate-800">
-                            This company was called by TPO Staff <span className="font-semibold text-indigo-600">{log.tpo_name}</span>.
-                          </p>
-                        </div>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800">
-                          TPO Call
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )})
+                      )}
+                    </div>
+                  )
+                })
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 text-center px-4">
                   <History className="w-10 h-10 text-slate-300 mb-3" />
@@ -760,7 +890,7 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             </div>
 
             <div className="p-6 bg-white border-t border-slate-200">
-              <button 
+              <button
                 onClick={() => {
                   const url = `/branch-portal?branchName=${encodeURIComponent(company.assignedBranch)}&companyId=${company._id}&view=single_contact&returnTo=unified`;
                   router.push(url);
@@ -772,6 +902,348 @@ export function BranchCompanyDetailsModal({ isOpen, onClose, company, pendingDup
             </div>
           </div>
         </>
+      )}
+
+      {/* Editing Company Details Overlay */}
+      {isEditingCompanyDetails && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-50 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-white flex items-center justify-between sticky top-0 z-10 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 text-indigo-700 rounded-lg">
+                  <Edit2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Edit Company Details</h2>
+                  <p className="text-xs font-medium text-slate-500 mt-0.5">Manage additional fields and placement details</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsEditingCompanyDetails(false)}
+                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {editExtraData.map((field, idx) => (
+                  <div
+                    key={field.id}
+                    className={`bg-white border p-4 rounded-xl shadow-sm transition-all relative group cursor-pointer ${editingExtraDataId === field.id
+                        ? 'border-indigo-400 ring-4 ring-indigo-50 shadow-md scale-[1.02] z-10'
+                        : 'border-slate-200 hover:border-indigo-200 hover:shadow-md'
+                      }`}
+                    onClick={() => {
+                      if (editingExtraDataId !== field.id) {
+                        setEditingExtraDataId(field.id);
+                        setTempExtraData({ ...field });
+                      }
+                    }}
+                  >
+                    {/* Delete button (only for non-predefined custom fields) */}
+                    {field.typeKey === 'Custom' && editingExtraDataId !== field.id && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditExtraData(prev => prev.filter(f => f.id !== field.id));
+                        }}
+                        className="absolute -top-2 -right-2 p-1.5 bg-red-100 text-red-600 hover:bg-red-600 hover:text-white rounded-full opacity-0 group-hover:opacity-100 transition-all shadow-sm z-20"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Predefined Field Badge */}
+                    {['Drive Date', 'Package', 'Eligible Branches', 'Role'].includes(field.typeKey) && (
+                      <span className="absolute top-3 right-3 text-[9px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Core Field</span>
+                    )}
+
+                    {editingExtraDataId === field.id ? (
+                      // Edit Mode for this card
+                      <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Field Name</label>
+                          {field.typeKey === 'Custom' ? (
+                            <input
+                              type="text"
+                              value={tempExtraData?.customKey || ''}
+                              onChange={(e) => setTempExtraData({ ...tempExtraData, customKey: e.target.value })}
+                              placeholder="e.g. Website URL"
+                              className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-800 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                              autoFocus
+                            />
+                          ) : (
+                            <div className="w-full bg-slate-50 border border-slate-200 text-sm font-semibold text-slate-500 rounded-lg p-2 cursor-not-allowed">
+                              {field.typeKey}
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Field Value</label>
+                          {field.typeKey === 'Drive Date' ? (
+                            <input
+                              type="date"
+                              value={tempExtraData?.value || ''}
+                              onChange={(e) => setTempExtraData({ ...tempExtraData, value: e.target.value })}
+                              className="w-full bg-white border border-slate-200 text-sm font-semibold text-slate-800 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                            />
+                          ) : field.typeKey === 'Eligible Branches' ? (
+                            (() => {
+                              const val = tempExtraData?.value || '';
+                              const isBTech = val.startsWith('B.Tech');
+                              const isMTech = val.startsWith('M.Tech');
+                              const isOpenToAll = val === 'Open to all';
+                              
+                              const currentProgram = isOpenToAll ? 'Open to all' : (isBTech ? 'B.Tech' : (isMTech ? 'M.Tech' : ''));
+                              const currentBranchesStr = (isBTech || isMTech) ? val.split(' - ')[1] || '' : '';
+                              const selectedBranches = currentBranchesStr ? currentBranchesStr.split(', ').filter(Boolean) : [];
+                              
+                              const handleProgramChange = (prog: string) => {
+                                if (prog === 'Open to all') {
+                                  setTempExtraData({ ...tempExtraData, value: 'Open to all' });
+                                } else {
+                                  setTempExtraData({ ...tempExtraData, value: `${prog} - ` });
+                                }
+                              };
+                              
+                              const toggleBranch = (branchName: string) => {
+                                let newBranches = [...selectedBranches];
+                                if (newBranches.includes(branchName)) {
+                                  newBranches = newBranches.filter(b => b !== branchName);
+                                } else {
+                                  newBranches.push(branchName);
+                                }
+                                setTempExtraData({ ...tempExtraData, value: `${currentProgram} - ${newBranches.join(', ')}` });
+                              };
+
+                              const availableBranches = currentProgram === 'M.Tech'
+                                ? ['M.Tech CSE', 'M.Tech CH', 'M.Tech ECE', 'M.Tech EE', 'M.Tech MSE']
+                                : (branches?.filter((b: any) => b.name !== 'Central Admin' && !b.name.includes('M.Tech')).map((b: any) => b.name) || ['CE', 'CH', 'CSE', 'ECE', 'EE', 'EP', 'ME', 'MNC', 'MSE']);
+
+                              return (
+                                <div className="space-y-4 p-3 bg-white border border-slate-200 rounded-xl shadow-sm w-full">
+                                  <select 
+                                    value={currentProgram}
+                                    onChange={(e) => handleProgramChange(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all font-medium text-slate-800"
+                                  >
+                                    <option value="" disabled>Select Program</option>
+                                    <option value="Open to all">Open to all</option>
+                                    <option value="B.Tech">B.Tech</option>
+                                    <option value="M.Tech">M.Tech</option>
+                                  </select>
+                                  
+                                  {(currentProgram === 'B.Tech' || currentProgram === 'M.Tech') && (
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                      {availableBranches.map((bName: string) => (
+                                        <button
+                                          key={bName}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleBranch(bName);
+                                          }}
+                                          className={`px-2 py-1 text-xs font-medium rounded-full transition-all border ${selectedBranches.includes(bName) ? 'bg-indigo-100 text-indigo-700 border-indigo-200 shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
+                                        >
+                                          {bName}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          ) : field.typeKey === 'Drive Status' ? (
+                            (() => {
+                              const standardStatuses = ['Not Coming', 'Completed', 'Ongoing'];
+                              const isCustom = tempExtraData?.value && !standardStatuses.includes(tempExtraData.value);
+                              return (
+                                <div className="space-y-3">
+                                  <select
+                                    value={isCustom ? 'Custom' : (tempExtraData?.value || '')}
+                                    onChange={(e) => {
+                                      if (e.target.value === 'Custom') {
+                                        setTempExtraData({...tempExtraData, value: ' '});
+                                      } else {
+                                        setTempExtraData({...tempExtraData, value: e.target.value});
+                                      }
+                                    }}
+                                    className="w-full bg-white border border-slate-200 text-sm font-semibold text-slate-800 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                                  >
+                                    <option value="" disabled>Select Status</option>
+                                    {standardStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                                    <option value="Custom">Custom (Type your own)</option>
+                                  </select>
+                                  {isCustom && (
+                                    <input 
+                                      type="text"
+                                      value={tempExtraData?.value?.trim() || ''}
+                                      onChange={(e) => setTempExtraData({...tempExtraData, value: e.target.value})}
+                                      placeholder="Enter custom drive status..."
+                                      className="w-full bg-white border border-slate-200 text-sm font-semibold text-slate-800 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                                      autoFocus
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })()
+                          ) : field.typeKey === 'Visited Year' ? (
+                            (() => {
+                              const currentYear = new Date().getFullYear();
+                              const selectedYears = tempExtraData?.value ? String(tempExtraData.value).split(',').map(y => y.trim()).filter(Boolean) : [];
+                              const toggleYear = (yearStr: string) => {
+                                let newYears = [...selectedYears];
+                                if (newYears.includes(yearStr)) {
+                                  newYears = newYears.filter(y => y !== yearStr);
+                                } else {
+                                  newYears.push(yearStr);
+                                  newYears.sort((a, b) => parseInt(b) - parseInt(a));
+                                  newYears = newYears.slice(0, 3);
+                                }
+                                setTempExtraData({ ...tempExtraData, value: newYears.join(', ') });
+                              };
+                              return (
+                                <div className="flex flex-wrap gap-2">
+                                  {[currentYear, currentYear - 1, currentYear - 2, currentYear - 3].map((y) => {
+                                    const yearStr = y.toString();
+                                    const isSelected = selectedYears.includes(yearStr);
+                                    return (
+                                      <label key={yearStr} className={`flex items-center gap-1.5 cursor-pointer px-2.5 py-1.5 rounded-lg border transition-all ${isSelected ? 'bg-indigo-50 border-indigo-300 shadow-sm' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}>
+                                        <div className="relative flex items-center justify-center">
+                                          <input
+                                            type="checkbox"
+                                            className="sr-only"
+                                            checked={isSelected}
+                                            onChange={() => toggleYear(yearStr)}
+                                          />
+                                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-colors ${isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-slate-400 bg-white'}`}>
+                                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                          </div>
+                                        </div>
+                                        <span className={`text-xs font-semibold ${isSelected ? 'text-indigo-900' : 'text-slate-600'}`}>{yearStr}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()
+                          ) : (
+                            <textarea
+                              value={tempExtraData?.value || ''}
+                              onChange={(e) => setTempExtraData({ ...tempExtraData, value: e.target.value })}
+                              placeholder="Enter value..."
+                              rows={2}
+                              className="w-full bg-white border border-slate-200 text-sm font-semibold text-slate-800 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all resize-none"
+                            />
+                          )}
+                        </div>
+                        <div className="flex gap-2 pt-2 border-t border-slate-100">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingExtraDataId(null);
+                            }}
+                            className="flex-1 py-1.5 px-3 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (tempExtraData.typeKey === 'Custom' && !tempExtraData.customKey.trim()) {
+                                toast.error('Custom field name cannot be empty');
+                                return;
+                              }
+                              setEditExtraData(prev => prev.map(f => f.id === field.id ? tempExtraData : f));
+                              setEditingExtraDataId(null);
+                            }}
+                            className="flex-1 py-1.5 px-3 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors flex items-center justify-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // View Mode for this card
+                      <div className="h-full flex flex-col justify-center">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 line-clamp-1 pr-12">
+                          {field.typeKey === 'Custom' ? field.customKey || 'Unnamed Field' : field.typeKey}
+                        </p>
+                        <p className="text-sm font-semibold text-slate-900 line-clamp-2">
+                          {field.value || <span className="text-slate-400 italic font-normal">No value set</span>}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Add New Field Card */}
+                <button
+                  onClick={() => {
+                    const newField = {
+                      id: `extra-${Date.now()}-${Math.random()}`,
+                      typeKey: 'Custom',
+                      customKey: '',
+                      value: ''
+                    };
+                    setEditExtraData([...editExtraData, newField]);
+                    setEditingExtraDataId(newField.id);
+                    setTempExtraData(newField);
+                  }}
+                  className="bg-slate-50 border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl p-4 flex flex-col items-center justify-center text-slate-500 hover:text-indigo-600 transition-all min-h-[100px] group"
+                >
+                  <div className="p-2 bg-white rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold uppercase tracking-wider">Add Custom Field</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end gap-3 sticky bottom-0">
+              <button
+                onClick={() => setIsEditingCompanyDetails(false)}
+                className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const payloadExtraData: Record<string, string> = {};
+                  // Preserve existing extra data that isn't being edited here
+                  Object.entries(localCompany.extraData || {}).forEach(([k, v]) => {
+                    if (isHrContact(k) || k.toLowerCase().includes('hr name') || k.toLowerCase().includes('email') || k.toLowerCase().includes('phone') || k.toLowerCase().includes('mobile')) {
+                      payloadExtraData[k] = String(v);
+                    }
+                  });
+                  // Apply edits
+                  editExtraData.forEach(field => {
+                    const key = field.typeKey === 'Custom' ? field.customKey : field.typeKey;
+                    if (key && key.trim()) {
+                      payloadExtraData[key.trim()] = field.value;
+                    }
+                  });
+
+                  updateCompanyDetailsMutation.mutate(payloadExtraData);
+                }}
+                disabled={updateCompanyDetailsMutation.isPending}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {updateCompanyDetailsMutation.isPending ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Save className="w-5 h-5" />
+                )}
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

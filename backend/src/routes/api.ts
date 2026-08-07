@@ -1171,7 +1171,7 @@ router.patch('/companies/:id/confirmation', async (req, res) => {
 router.patch('/companies/:id/placement-details', async (req, res) => {
   try {
     const companyId = req.params.id;
-    const { drive_type, role, academic_year } = req.body;
+    const { drive_type, role, academic_year, extraData } = req.body;
 
     const company = await Company.findById(companyId);
     if (!company) {
@@ -1181,6 +1181,11 @@ router.patch('/companies/:id/placement-details', async (req, res) => {
     if (drive_type !== undefined) company.drive_type = drive_type;
     if (role !== undefined) company.role = role;
     if (academic_year !== undefined) company.academic_year = academic_year;
+    
+    if (extraData !== undefined && typeof extraData === 'object') {
+      company.extraData = { ...(company.extraData || {}), ...extraData };
+      company.markModified('extraData');
+    }
 
     await company.save();
 
